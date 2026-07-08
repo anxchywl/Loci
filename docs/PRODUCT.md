@@ -305,3 +305,5 @@ Admin-only (`is_admin`), all writing an immutable audit log:
 - Reports by the story's own author don't count toward auto-hide.
 - Stories at the antimeridian / poles: geometry queries must not assume a
   simple bounding box.
+- Backdated stories (`happened_on` in the past): displayed on the timeline at
+  their event date, but sorted in the feed by `created_at` to prevent spam.
