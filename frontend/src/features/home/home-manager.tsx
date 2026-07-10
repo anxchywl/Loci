@@ -184,7 +184,8 @@ export function HomeManager() {
           <button
             aria-label={t.locateMe}
             onClick={locateMe}
-            className={`absolute right-4 rounded-full border border-border bg-bg p-3 text-muted shadow-sm transition-transform duration-150 ease-lm active:scale-95 ${authenticated ? "bottom-24" : "bottom-6"}`}
+            style={{ bottom: authenticated ? '6rem' : '1.5rem' }}
+            className="absolute right-4 z-10 rounded-full border border-border bg-bg p-3 text-muted shadow-sm transition-transform duration-150 ease-lm active:scale-95"
           >
             <Navigation size={20} />
           </button>

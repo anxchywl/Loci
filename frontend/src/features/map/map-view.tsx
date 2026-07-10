@@ -49,9 +49,12 @@ export function MapView({ categories, stories, onBoundsChange }: MapViewProps) {
     map.on("load", () => {
       addCategoryGlyphImages(map, categories)
         .then(() => {
-          addStoryLayers(map, categories, (storyId) => {
+          addStoryLayers(map, categories, (storyId, lat, lon) => {
             if (useUiStore.getState().mode === "browse") {
               useUiStore.getState().openStory(storyId);
+              if (lat !== undefined && lon !== undefined) {
+                useUiStore.getState().requestPanTo(lat, lon);
+              }
             }
           });
           readyRef.current = true;

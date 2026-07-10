@@ -29,7 +29,7 @@ export function storiesToGeoJson(
 export function addStoryLayers(
   map: MapLibreMap,
   categories: CategoryStyle[],
-  onStoryClick: (storyId: string) => void,
+  onStoryClick: (storyId: string, lat?: number, lon?: number) => void,
 ): void {
   map.addSource(STORIES_SOURCE, {
     type: "geojson",
@@ -114,7 +114,8 @@ export function addStoryLayers(
   map.on("click", POINT_LAYER, (event) => {
     const feature = event.features?.[0];
     const storyId = feature?.properties?.id as string | undefined;
-    if (storyId) onStoryClick(storyId);
+    const coordinates = (feature?.geometry as GeoJSON.Point)?.coordinates;
+    if (storyId) onStoryClick(storyId, coordinates?.[1], coordinates?.[0]);
   });
 
   for (const layer of [CLUSTER_LAYER, POINT_LAYER]) {
