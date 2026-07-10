@@ -66,6 +66,31 @@ export function HomeManager() {
   const searching = searchQuery.trim().length >= 2;
 
   const locateMe = () => {
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg?.LocationManager) {
+      const lm = tg.LocationManager;
+      const fetchLocation = () => {
+        if (!lm.isLocationAvailable) {
+          useUiStore.getState().showToast(t.errorLocationDenied);
+          return;
+        }
+        lm.getLocation((data: any) => {
+          if (data && data.latitude !== undefined) {
+            requestPanTo(data.latitude, data.longitude, 14);
+          } else {
+            useUiStore.getState().showToast(t.errorGeneric);
+          }
+        });
+      };
+
+      if (!lm.isInited) {
+        lm.init(() => fetchLocation());
+      } else {
+        fetchLocation();
+      }
+      return;
+    }
+
     if (!navigator.geolocation) {
       useUiStore.getState().showToast(t.errorGeneric);
       return;
