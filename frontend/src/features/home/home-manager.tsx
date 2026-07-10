@@ -70,15 +70,11 @@ export function HomeManager() {
     if (tg?.LocationManager) {
       const lm = tg.LocationManager;
       const fetchLocation = () => {
-        if (!lm.isLocationAvailable) {
-          useUiStore.getState().showToast(t.errorLocationDenied);
-          return;
-        }
         lm.getLocation((data: any) => {
           if (data && data.latitude !== undefined) {
             requestPanTo(data.latitude, data.longitude, 14);
           } else {
-            useUiStore.getState().showToast(t.errorGeneric);
+            useUiStore.getState().showToast(t.errorLocationDenied);
           }
         });
       };
