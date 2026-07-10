@@ -1,10 +1,11 @@
 "use client";
 
-import { Flame, Navigation, Plus, Search, UserRound, X } from "lucide-react";
+import { Flame, Menu, Navigation, Plus, Search, UserRound, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useTelegramAuth } from "@/features/auth/hooks";
+import { DesktopSidebar } from "@/features/home/desktop-sidebar";
 import { MapView, type MapBounds } from "@/features/map/map-view";
 import { AddStorySheet } from "@/features/stories/add-story-sheet";
 import { BottomSheet } from "@/features/stories/components/bottom-sheet";
@@ -56,6 +57,8 @@ export function HomeManager() {
 
   const [bounds, setBounds] = useState<MapBounds | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const { data: categories = [] } = useCategories();
   const { data: stories = [] } = useBboxStories(
@@ -67,6 +70,10 @@ export function HomeManager() {
   const searching = searchQuery.trim().length >= 2;
 
   const [locating, setLocating] = useState(false);
+
+  const focusSearch = useCallback(() => {
+    searchInputRef.current?.focus();
+  }, []);
 
   const locateMe = async () => {
     if (locating) return;
@@ -89,12 +96,38 @@ export function HomeManager() {
     <main className="fixed inset-0 overflow-hidden bg-bg">
       <MapView categories={categories} stories={stories} onBoundsChange={setBounds} />
 
+      {/* Desktop sidebar */}
+      <DesktopSidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        onTrending={() => setTrendingOpen(true)}
+        onNearby={locateMe}
+        onSearchFocus={focusSearch}
+      />
+
+      {/* Desktop hamburger toggle — hidden on mobile */}
       {mode !== "compose" && (
-        <div className="absolute inset-x-0 top-0 space-y-2 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <button
+          aria-label={sidebarOpen ? t.cancel : "Menu"}
+          aria-expanded={sidebarOpen}
+          onClick={() => setSidebarOpen((o) => !o)}
+          className={[
+            "absolute z-50 hidden rounded-lg border border-border bg-bg p-2 text-text shadow-sm",
+            "transition-all duration-[230ms] ease-lm lg:flex",
+            sidebarOpen ? "left-[332px] top-3" : "left-3 top-3",
+          ].join(" ")}
+        >
+          <Menu size={20} />
+        </button>
+      )}
+
+      {mode !== "compose" && (
+        <div className="absolute inset-x-0 top-0 space-y-2 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] lg:pl-14">
           <div className="flex items-center gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-border bg-bg px-3 py-2">
               <Search size={16} className="shrink-0 text-muted" />
               <input
+                ref={searchInputRef}
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder={t.searchPlaceholder}
