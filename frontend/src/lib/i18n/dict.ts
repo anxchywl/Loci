@@ -22,6 +22,7 @@ interface Dict {
   appName: string;
   loading: string;
   errorGeneric: string;
+  errorLocationDenied: string;
   retry: string;
   searchPlaceholder: string;
   trending: string;
