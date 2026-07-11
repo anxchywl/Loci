@@ -47,6 +47,7 @@ export type Panel =
   | "story"
   | "trending"
   | "nearby"
+  | "settings"
   | null;
 
 interface DesktopSidebarProps {
@@ -211,9 +212,8 @@ function StoryPanel({ storyId, authenticated }: { storyId: string; authenticated
   );
 }
 
-export function ProfilePanel() {
+export function SettingsPanel() {
   const t = useDict();
-  const { user } = useTelegramAuth();
   const locale = useUiStore((s) => s.locale);
   const setLocale = useUiStore((s) => s.setLocale);
   const theme = useUiStore((s) => s.theme);
@@ -225,6 +225,53 @@ export function ProfilePanel() {
     { value: "light", label: t.themeLight, icon: <Sun size={14} /> },
     { value: "dark", label: t.themeDark, icon: <Moon size={14} /> },
   ];
+
+  return (
+    <div className="space-y-4 px-4 py-2">
+      <div>
+        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+          <Globe size={12} /> {t.languageLabel}
+        </div>
+        <div className="flex gap-1.5">
+          {locales.map((l) => (
+            <button key={l} onClick={() => setLocale(l)}
+              className={[
+                "flex-1 rounded-lg py-1.5 text-[13px] font-medium transition-colors",
+                locale === l
+                  ? "bg-accent text-accent-text"
+                  : "bg-surface text-text hover:bg-border",
+              ].join(" ")}>
+              {localeLabels[l]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+          <Settings size={12} /> {t.themeLabel}
+        </div>
+        <div className="flex gap-1.5">
+          {themes.map(({ value, label, icon }) => (
+            <button key={value} onClick={() => setTheme(value)}
+              className={[
+                "flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-[13px] font-medium transition-colors",
+                theme === value
+                  ? "bg-accent text-accent-text"
+                  : "bg-surface text-text hover:bg-border",
+              ].join(" ")}>
+              {icon} {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void }) {
+  const t = useDict();
+  const { user } = useTelegramAuth();
 
   return (
     <div className="flex flex-col gap-5 px-4 py-2">
@@ -241,50 +288,21 @@ export function ProfilePanel() {
             <div className="text-[15px] font-bold text-text">{user.first_name} {user.last_name}</div>
             <div className="text-[13px] text-muted">{user.username ? `@${user.username}` : t.profile}</div>
           </div>
+          {onSettingsClick && (
+            <button
+              onClick={onSettingsClick}
+              aria-label={t.themeLabel}
+              className="ml-auto flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-bg hover:text-accent focus-visible:bg-bg focus-visible:text-accent"
+            >
+              <Settings size={18} />
+            </button>
+          )}
         </div>
       ) : (
         <div className="py-4 text-center text-[13px] text-muted">{t.profile}</div>
       )}
 
-      <div className="space-y-4">
-        <div>
-          <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
-            <Globe size={12} /> {t.languageLabel}
-          </div>
-          <div className="flex gap-1.5">
-            {locales.map((l) => (
-              <button key={l} onClick={() => setLocale(l)}
-                className={[
-                  "flex-1 rounded-lg py-1.5 text-[13px] font-medium transition-colors",
-                  locale === l
-                    ? "bg-accent text-accent-text"
-                    : "bg-surface text-text hover:bg-border",
-                ].join(" ")}>
-                {localeLabels[l]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
-            <Settings size={12} /> {t.themeLabel}
-          </div>
-          <div className="flex gap-1.5">
-            {themes.map(({ value, label, icon }) => (
-              <button key={value} onClick={() => setTheme(value)}
-                className={[
-                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-[13px] font-medium transition-colors",
-                  theme === value
-                    ? "bg-accent text-accent-text"
-                    : "bg-surface text-text hover:bg-border",
-                ].join(" ")}>
-                {icon} {label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+      {!onSettingsClick && <SettingsPanel />}
     </div>
   );
 }
@@ -366,6 +384,7 @@ export function DesktopSidebar({
     story: openedStory?.title ?? t.loading,
     trending: t.trending,
     nearby: t.nearby,
+    settings: t.themeLabel,
   };
 
   return (

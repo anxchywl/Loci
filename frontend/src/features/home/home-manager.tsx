@@ -23,6 +23,7 @@ import {
   AboutPanel,
   DesktopSidebar,
   ProfilePanel,
+  SettingsPanel,
   type Panel,
 } from "@/features/home/desktop-sidebar";
 import { MapView, type MapBounds, type MapViewHandle } from "@/features/map/map-view";
@@ -172,12 +173,13 @@ export function HomeManager() {
   };
 
   const mobilePanelTitles: Record<Exclude<Panel, "story" | null>, string> = {
-    saved: t.savedStories,
     "my-stories": t.myStories,
-    profile: t.profile,
+    saved: t.savedStories,
     about: t.about,
-    trending: t.trending,
+    profile: t.profile,
     nearby: t.nearby,
+    trending: t.trending,
+    settings: t.themeLabel,
   };
 
   const mobileMenuItems: {
@@ -384,10 +386,15 @@ export function HomeManager() {
         <BottomSheet
           open={mobileMenuOpen}
           onClose={closeMobileMenu}
+          onBack={mobilePanel ? () => setMobilePanel(null) : undefined}
           title={mobilePanel ? mobilePanelTitles[mobilePanel as Exclude<Panel, "story" | null>] : ""}
         >
           {!mobilePanel && (
             <div className="space-y-0.5 px-1 pb-1">
+              <div className="-mx-3 -mt-2 mb-2">
+                <ProfilePanel onSettingsClick={() => setMobilePanel("settings")} />
+              </div>
+              <div className="mx-2 mb-2 h-px bg-border" />
               {mobileMenuItems.map((item) => (
                 <button
                   key={item.panel}
@@ -401,24 +408,11 @@ export function HomeManager() {
                   <ChevronRight size={16} className="text-muted/50 transition-colors group-hover:text-accent" />
                 </button>
               ))}
-              <div className="mx-2 mt-2 h-px bg-border" />
-              <div className="-mx-3 -mb-4">
-                <ProfilePanel />
-              </div>
             </div>
           )}
 
           {mobilePanel && (
             <div>
-              <button
-                aria-label={t.cancel}
-                onClick={() => setMobilePanel(null)}
-                className="mb-2 flex items-center gap-2 rounded-lg px-2 py-2 text-[13px] font-medium text-muted transition-[color,transform] duration-150 ease-lm hover:text-accent focus-visible:text-accent active:scale-95"
-              >
-                <ChevronLeft size={17} />
-                {t.cancel}
-              </button>
-
               {mobilePanel === "trending" && (
                 <div className="px-1">
                   {trendingStories?.length === 0 && (
@@ -454,6 +448,11 @@ export function HomeManager() {
               )}
               {mobilePanel === "my-stories" && (
                 <div className="flex min-h-40 items-center justify-center py-12 text-[13px] text-muted">{t.myStories}</div>
+              )}
+              {mobilePanel === "settings" && (
+                <div className="-mx-4">
+                  <SettingsPanel />
+                </div>
               )}
             </div>
           )}
