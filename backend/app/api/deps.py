@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -46,6 +47,12 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token"
         )
+    if user.is_blocked or user.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Account is blocked"
+        )
+    user.last_active_at = datetime.now(UTC)
+    await db.commit()
     return user
 
 

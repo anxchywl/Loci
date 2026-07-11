@@ -198,7 +198,10 @@ function StoryPanel({
   const canInteract = story.moderation_status === "approved";
 
   return (
-    <div className="space-y-4 px-4 py-3">
+    <div
+      key={confirming ?? "story"}
+      className="space-y-4 px-4 py-3 motion-safe:animate-story-state"
+    >
       <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
         {category && Icon && (
           <span className="flex items-center gap-1 rounded-full px-2.5 py-1 font-medium text-white"
@@ -229,7 +232,7 @@ function StoryPanel({
       <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{story.body}</p>
 
       {confirming ? (
-        <div className="space-y-3 rounded-lg border border-border p-3 animate-fade-in">
+        <div className="space-y-3 rounded-lg border border-border p-3">
           <div className="text-[15px] font-semibold">
             {confirming === "delete" ? t.confirmDeleteTitle : t.confirmReportTitle}
           </div>

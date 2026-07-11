@@ -115,6 +115,48 @@ interface Dict {
   confirmDeleteBody: string;
   confirmReportTitle: string;
   confirmReportBody: string;
+  adminDashboard: string;
+  adminUsers: string;
+  adminAuditLogs: string;
+  adminSearchUsers: string;
+  adminActive: string;
+  adminBlocked: string;
+  adminDeleted: string;
+  adminSortBy: string;
+  adminPrevious: string;
+  adminNext: string;
+  adminNoUsers: string;
+  adminBlock: string;
+  adminUnblock: string;
+  adminWarning: string;
+  adminDeleteAccount: string;
+  adminRestoreAccount: string;
+  adminReasonPlaceholder: string;
+  adminReasonRequired: string;
+  adminSessions: string;
+  adminHistory: string;
+  adminToday: string;
+  adminLast7Days: string;
+  adminLast30Days: string;
+  adminCustom: string;
+  adminTotalUsers: string;
+  adminActiveUsers: string;
+  adminNewUsers: string;
+  adminPendingModeration: string;
+  adminApprovedStories: string;
+  adminRejectedStories: string;
+  adminPublishedStories: string;
+  adminNoAuditLogs: string;
+  adminNoSessions: string;
+  adminStatus: string;
+  adminTelegramId: string;
+  adminUid: string;
+  adminLastActive: string;
+  adminCreated: string;
+  adminReports: string;
+  adminWarnings: string;
+  adminSaved: string;
+  adminRecentActions: string;
   categories: Record<CategorySlug, string>;
 }
 
@@ -216,6 +258,48 @@ export const dict: Record<Locale, Dict> = {
     confirmDeleteBody: "This permanently removes your story and all its comments and reactions for everyone. This can't be undone.",
     confirmReportTitle: "Report this story?",
     confirmReportBody: "Our team will review this story. Report it only if it breaks the rules.",
+    adminDashboard: "Dashboard",
+    adminUsers: "Users",
+    adminAuditLogs: "Audit logs",
+    adminSearchUsers: "Search by UID, Telegram ID, username, or name",
+    adminActive: "Active",
+    adminBlocked: "Blocked",
+    adminDeleted: "Deleted",
+    adminSortBy: "Sort by",
+    adminPrevious: "Previous",
+    adminNext: "Next",
+    adminNoUsers: "No users found",
+    adminBlock: "Block",
+    adminUnblock: "Unblock",
+    adminWarning: "Add warning",
+    adminDeleteAccount: "Delete account",
+    adminRestoreAccount: "Restore account",
+    adminReasonPlaceholder: "Reason required",
+    adminReasonRequired: "Enter a reason",
+    adminSessions: "Sessions",
+    adminHistory: "Moderation history",
+    adminToday: "Today",
+    adminLast7Days: "Last 7 days",
+    adminLast30Days: "Last 30 days",
+    adminCustom: "Custom",
+    adminTotalUsers: "Total users",
+    adminActiveUsers: "Active users",
+    adminNewUsers: "New users",
+    adminPendingModeration: "Pending moderation",
+    adminApprovedStories: "Approved stories",
+    adminRejectedStories: "Rejected stories",
+    adminPublishedStories: "Published stories",
+    adminNoAuditLogs: "No audit actions yet",
+    adminNoSessions: "No sessions recorded",
+    adminStatus: "Status",
+    adminTelegramId: "Telegram ID",
+    adminUid: "UID",
+    adminLastActive: "Last active",
+    adminCreated: "Registered",
+    adminReports: "Reports received",
+    adminWarnings: "Warnings",
+    adminSaved: "Saved stories",
+    adminRecentActions: "Recent admin actions",
     categories: {
       love: "Love",
       happy_moments: "Happy Moments",
@@ -328,6 +412,48 @@ export const dict: Record<Locale, Dict> = {
     confirmDeleteBody: "Бұл оқиғаңызды және оның барлық пікірлері мен реакцияларын барлығы үшін біржола жояды. Мұны қайтару мүмкін емес.",
     confirmReportTitle: "Бұл оқиғаға шағым жасау керек пе?",
     confirmReportBody: "Біздің команда бұл оқиғаны қарайды. Тек ережені бұзса ғана шағым жасаңыз.",
+    adminDashboard: "Басқару тақтасы",
+    adminUsers: "Пайдаланушылар",
+    adminAuditLogs: "Аудит журналы",
+    adminSearchUsers: "UID, Telegram ID, username немесе атпен іздеу",
+    adminActive: "Белсенді",
+    adminBlocked: "Бұғатталған",
+    adminDeleted: "Жойылған",
+    adminSortBy: "Сұрыптау",
+    adminPrevious: "Алдыңғы",
+    adminNext: "Келесі",
+    adminNoUsers: "Пайдаланушылар табылмады",
+    adminBlock: "Бұғаттау",
+    adminUnblock: "Бұғаттан шығару",
+    adminWarning: "Ескерту қосу",
+    adminDeleteAccount: "Аккаунтты жою",
+    adminRestoreAccount: "Аккаунтты қалпына келтіру",
+    adminReasonPlaceholder: "Себеп міндетті",
+    adminReasonRequired: "Себеп енгізіңіз",
+    adminSessions: "Сессиялар",
+    adminHistory: "Модерация тарихы",
+    adminToday: "Бүгін",
+    adminLast7Days: "Соңғы 7 күн",
+    adminLast30Days: "Соңғы 30 күн",
+    adminCustom: "Арнайы",
+    adminTotalUsers: "Барлық пайдаланушы",
+    adminActiveUsers: "Белсенді пайдаланушы",
+    adminNewUsers: "Жаңа пайдаланушы",
+    adminPendingModeration: "Күтудегі модерация",
+    adminApprovedStories: "Мақұлданған оқиға",
+    adminRejectedStories: "Қабылданбаған оқиға",
+    adminPublishedStories: "Жарияланған оқиға",
+    adminNoAuditLogs: "Аудит әрекеттері жоқ",
+    adminNoSessions: "Сессиялар тіркелмеген",
+    adminStatus: "Күйі",
+    adminTelegramId: "Telegram ID",
+    adminUid: "UID",
+    adminLastActive: "Соңғы белсенділік",
+    adminCreated: "Тіркелген",
+    adminReports: "Алынған шағым",
+    adminWarnings: "Ескертулер",
+    adminSaved: "Сақталған оқиға",
+    adminRecentActions: "Соңғы әкімші әрекеттері",
     categories: {
       love: "Махаббат",
       happy_moments: "Бақытты сәттер",
@@ -440,6 +566,48 @@ export const dict: Record<Locale, Dict> = {
     confirmDeleteBody: "Это навсегда удалит вашу историю со всеми комментариями и реакциями для всех. Отменить нельзя.",
     confirmReportTitle: "Пожаловаться на эту историю?",
     confirmReportBody: "Наша команда проверит эту историю. Жалуйтесь только если она нарушает правила.",
+    adminDashboard: "Панель управления",
+    adminUsers: "Пользователи",
+    adminAuditLogs: "Журнал аудита",
+    adminSearchUsers: "Поиск по UID, Telegram ID, username или имени",
+    adminActive: "Активные",
+    adminBlocked: "Заблокированные",
+    adminDeleted: "Удалённые",
+    adminSortBy: "Сортировка",
+    adminPrevious: "Назад",
+    adminNext: "Далее",
+    adminNoUsers: "Пользователи не найдены",
+    adminBlock: "Заблокировать",
+    adminUnblock: "Разблокировать",
+    adminWarning: "Добавить предупреждение",
+    adminDeleteAccount: "Удалить аккаунт",
+    adminRestoreAccount: "Восстановить аккаунт",
+    adminReasonPlaceholder: "Причина обязательна",
+    adminReasonRequired: "Введите причину",
+    adminSessions: "Сессии",
+    adminHistory: "История модерации",
+    adminToday: "Сегодня",
+    adminLast7Days: "Последние 7 дней",
+    adminLast30Days: "Последние 30 дней",
+    adminCustom: "Период",
+    adminTotalUsers: "Всего пользователей",
+    adminActiveUsers: "Активные пользователи",
+    adminNewUsers: "Новые пользователи",
+    adminPendingModeration: "На модерации",
+    adminApprovedStories: "Одобренные истории",
+    adminRejectedStories: "Отклонённые истории",
+    adminPublishedStories: "Опубликованные истории",
+    adminNoAuditLogs: "Аудит пока пуст",
+    adminNoSessions: "Сессии не записаны",
+    adminStatus: "Статус",
+    adminTelegramId: "Telegram ID",
+    adminUid: "UID",
+    adminLastActive: "Последняя активность",
+    adminCreated: "Регистрация",
+    adminReports: "Жалоб получено",
+    adminWarnings: "Предупреждения",
+    adminSaved: "Сохранённые истории",
+    adminRecentActions: "Последние действия администраторов",
     categories: {
       love: "Любовь",
       happy_moments: "Счастливые моменты",
