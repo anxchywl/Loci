@@ -18,6 +18,9 @@ interface QueueState {
   error: string | null;
   loadMore: () => void;
   hasMore: boolean;
+  // false until the first page settles, so the UI can avoid flashing an empty
+  // state before the gated fetch has had a chance to run
+  initialized: boolean;
 }
 
 /**
@@ -25,12 +28,13 @@ interface QueueState {
  * next one on demand, de-duplicating by id so a story can never appear twice
  * even if the underlying list shifts between page loads.
  */
-export function useModerationQueue(): QueueState {
+export function useModerationQueue(enabled = true): QueueState {
   const [items, setItems] = useState<ModerationQueueItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
   const started = useRef(false);
 
   const load = useCallback(async (cursor: string | null) => {
@@ -48,20 +52,21 @@ export function useModerationQueue(): QueueState {
       setError(err instanceof ApiError ? err.message : "Failed to load queue");
     } finally {
       setLoading(false);
+      setInitialized(true);
     }
   }, []);
 
   useEffect(() => {
-    if (started.current) return;
+    if (!enabled || started.current) return;
     started.current = true;
     void load(null);
-  }, [load]);
+  }, [enabled, load]);
 
   const loadMore = useCallback(() => {
     if (!loading && nextCursor) void load(nextCursor);
   }, [load, loading, nextCursor]);
 
-  return { items, nextCursor, loading, error, loadMore, hasMore };
+  return { items, nextCursor, loading, error, loadMore, hasMore, initialized };
 }
 
 export function useModerate(onDone: (storyId: string) => void) {

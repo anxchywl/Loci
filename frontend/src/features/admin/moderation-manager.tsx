@@ -14,14 +14,34 @@ export function ModerationManager() {
   const t = useDict();
   const { status, user } = useTelegramAuth();
   const { data: categories = [] } = useCategories();
-  const { items, loading, error, loadMore, hasMore } = useModerationQueue();
+  // hold the queue fetch until auth completes, otherwise the request races the
+  // token exchange and 401s ("Not authenticated") on a cold page load
+  const { items, loading, error, loadMore, hasMore, initialized } = useModerationQueue(
+    status === "authenticated" && !!user?.is_admin,
+  );
   // once a story is approved/rejected, hide it from the list immediately
   const [resolved, setResolved] = useState<Set<string>>(new Set());
   const { approve, reject } = useModerate((id) =>
     setResolved((prev) => new Set(prev).add(id)),
   );
 
-  if (status === "authenticated" && user && !user.is_admin) {
+  if (status === "loading") {
+    return (
+      <main className="flex min-h-dvh items-center justify-center bg-bg px-6 text-center">
+        <span className="text-[15px] text-muted">{t.loading}</span>
+      </main>
+    );
+  }
+
+  if (status === "signed-out") {
+    return (
+      <main className="flex min-h-dvh items-center justify-center bg-bg px-6 text-center">
+        <span className="text-[15px] text-muted">{t.openInTelegram}</span>
+      </main>
+    );
+  }
+
+  if (user && !user.is_admin) {
     return (
       <main className="flex min-h-dvh items-center justify-center bg-bg px-6 text-center">
         <span className="text-[15px] text-muted">{t.adminOnly}</span>
@@ -45,7 +65,7 @@ export function ModerationManager() {
 
         {error && <div className="mt-6 text-center text-[13px] text-[#E5484D]">{error}</div>}
 
-        {!loading && visible.length === 0 && !error && (
+        {initialized && !loading && visible.length === 0 && !error && (
           <div className="flex flex-col items-center gap-2 py-16 text-center">
             <Check size={24} className="text-muted" />
             <span className="text-[13px] text-muted">{t.queueEmpty}</span>

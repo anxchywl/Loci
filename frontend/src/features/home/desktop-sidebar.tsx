@@ -22,6 +22,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { useTelegramAuth } from "@/features/auth/hooks";
@@ -377,7 +378,7 @@ export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void
             <div className="text-[13px] text-muted">{user.username ? `@${user.username}` : t.profile}</div>
           </div>
           {user.is_admin && (
-            <a
+            <Link
               href="/admin"
               className={[
                 "flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-bg hover:text-accent focus-visible:bg-bg focus-visible:text-accent",
@@ -386,7 +387,7 @@ export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void
               aria-label={t.moderation}
             >
               <ShieldCheck size={18} />
-            </a>
+            </Link>
           )}
           {onSettingsClick && (
             <button
