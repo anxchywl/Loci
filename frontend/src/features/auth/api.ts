@@ -7,6 +7,7 @@ export interface AuthUser {
   last_name: string | null;
   photo_url: string | null;
   language_code: string | null;
+  is_admin?: boolean;
 }
 
 export interface TokenResponse {

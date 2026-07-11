@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db_session, get_optional_user, get_redis
 from app.core.config import Settings, get_settings
 from app.core.security.rate_limit import check_rate_limit, client_identifier
+from app.core.security.text import clean_line
 from app.db.models import User
 from app.db.repositories import stories as stories_repo
 from app.modules.stories import interactions, photos, service
@@ -19,6 +20,7 @@ from app.modules.stories.schemas import (
     ReportCreateRequest,
     StoryCreateRequest,
     StoryResponse,
+    StoryUpdateRequest,
 )
 
 router = APIRouter(prefix="/stories", tags=["stories"])
@@ -109,7 +111,12 @@ async def search(
     identifier = str(viewer.id) if viewer else client_identifier(request, settings.trust_proxy_headers)
     await check_rate_limit(redis, "rl:search", identifier, 60, 30)
 
-    q = q.strip()
+    # normalise before querying: trim, collapse whitespace, strip control/zero-width
+    # characters. A query that is empty or too short after cleaning yields no rows
+    # rather than an error, so "   " or a lone character never hits the database.
+    q = clean_line(q)
+    if len(q) < 2:
+        return []
     rows = await stories_repo.search(
         db, viewer_id=viewer.id if viewer else None, query=q, limit=limit
     )
@@ -124,6 +131,27 @@ async def get_story(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> StoryResponse:
     return await service.get_story(db, story_id, viewer.id if viewer else None, settings)
+
+
+@router.patch("/{story_id}", response_model=StoryResponse)
+async def update_story(
+    story_id: uuid.UUID,
+    payload: StoryUpdateRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> StoryResponse:
+    return await service.update_story(db, story_id, user.id, payload, settings)
+
+
+@router.post("/{story_id}/resubmit", response_model=StoryResponse)
+async def resubmit_story(
+    story_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> StoryResponse:
+    return await service.resubmit_story(db, story_id, user.id, settings)
 
 
 @router.delete("/{story_id}", status_code=status.HTTP_204_NO_CONTENT)

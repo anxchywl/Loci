@@ -6,6 +6,10 @@ os.environ["TELEGRAM_BOT_TOKEN"] = "123456:TEST-TOKEN"
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-with-enough-length-for-hs256"
 os.environ.setdefault("POSTGRES_PORT", "5433")
 os.environ["POSTGRES_DB"] = "loci_test"
+# telegram id 999 is the moderation admin in tests; keep notifications from
+# trying to reach a broker/bot during the suite
+os.environ["ADMIN_TELEGRAM_IDS"] = "999"
+os.environ["NOTIFICATIONS_ENABLED"] = "false"
 
 import pytest
 from alembic import command

@@ -78,3 +78,27 @@ async def _optimize(photo_id: uuid.UUID) -> None:
 @celery_app.task(name="photos.optimize")
 def optimize_photo(photo_id: str) -> None:
     asyncio.run(_optimize(uuid.UUID(photo_id)))
+
+
+async def _send_telegram(telegram_id: int, text: str) -> None:
+    from aiogram import Bot
+
+    settings = get_settings()
+    if not settings.telegram_bot_token:
+        return
+    bot = Bot(token=settings.telegram_bot_token)
+    try:
+        await bot.send_message(chat_id=telegram_id, text=text)
+    finally:
+        await bot.session.close()
+
+
+@celery_app.task(
+    name="notifications.telegram",
+    max_retries=3,
+    default_retry_delay=30,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+)
+def send_telegram_message(telegram_id: int, text: str) -> None:
+    asyncio.run(_send_telegram(telegram_id, text))

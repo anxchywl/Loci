@@ -41,6 +41,24 @@ async def list_for_story(db: AsyncSession, story_id: uuid.UUID) -> list[StoryPho
     return list(result.scalars().all())
 
 
+async def list_for_stories(
+    db: AsyncSession, story_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, list[StoryPhoto]]:
+    """Ready photos for many stories in one query, grouped by story id.
+    Used by the moderation queue so it never issues a per-story photo query."""
+    if not story_ids:
+        return {}
+    result = await db.execute(
+        select(StoryPhoto)
+        .where(StoryPhoto.story_id.in_(story_ids), StoryPhoto.status == PhotoStatus.ready)
+        .order_by(StoryPhoto.story_id, StoryPhoto.position)
+    )
+    grouped: dict[uuid.UUID, list[StoryPhoto]] = {}
+    for photo in result.scalars().all():
+        grouped.setdefault(photo.story_id, []).append(photo)
+    return grouped
+
+
 async def count_for_story(db: AsyncSession, story_id: uuid.UUID) -> int:
     stmt = select(func.count()).select_from(StoryPhoto).where(StoryPhoto.story_id == story_id)
     return (await db.execute(stmt)).scalar_one()

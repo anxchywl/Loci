@@ -92,6 +92,20 @@ interface Dict {
   aboutPrivacyBody: string;
   aboutTelegram: string;
   aboutTelegramBody: string;
+  statusPending: string;
+  statusApproved: string;
+  statusRejected: string;
+  reasonLabel: string;
+  pendingHint: string;
+  resubmit: string;
+  edit: string;
+  moderation: string;
+  approve: string;
+  reject: string;
+  rejectReasonPlaceholder: string;
+  queueEmpty: string;
+  loadMore: string;
+  adminOnly: string;
   categories: Record<CategorySlug, string>;
 }
 
@@ -170,6 +184,20 @@ export const dict: Record<Locale, Dict> = {
     aboutPrivacyBody: "Your location is never tracked in the background. When posting, you choose between an exact pin or an approximate one — shown within ~500 m of the real place. Anonymous posting is always available.",
     aboutTelegram: "Built for Telegram",
     aboutTelegramBody: "Loci runs as a Telegram Mini App. Signing in is instant — no passwords, no forms. Your Telegram account is your identity, and your stories travel with you.",
+    statusPending: "Pending review",
+    statusApproved: "Approved",
+    statusRejected: "Rejected",
+    reasonLabel: "Reason",
+    pendingHint: "In review — visible only to you until approved.",
+    resubmit: "Resubmit",
+    edit: "Edit",
+    moderation: "Moderation",
+    approve: "Approve",
+    reject: "Reject",
+    rejectReasonPlaceholder: "Reason for rejection",
+    queueEmpty: "Nothing to review",
+    loadMore: "Load more",
+    adminOnly: "You don't have access to moderation.",
     categories: {
       love: "Love",
       happy_moments: "Happy Moments",
@@ -259,6 +287,20 @@ export const dict: Record<Locale, Dict> = {
     aboutPrivacyBody: "Орналасқан жеріңіз фонда ешқашан бақыланбайды. Жариялаған кезде нақты немесе шамамен орынды таңдайсыз — нақты жерден ~500 м шегінде көрсетіледі. Анонимді жариялау әрқашан қолжетімді.",
     aboutTelegram: "Telegram үшін жасалған",
     aboutTelegramBody: "Loci Telegram Mini App ретінде жұмыс істейді. Кіру лезде — пароль де, форма да жоқ. Telegram аккаунтыңыз — сіздің жеке куәлігіңіз.",
+    statusPending: "Тексерілуде",
+    statusApproved: "Мақұлданған",
+    statusRejected: "Қабылданбады",
+    reasonLabel: "Себебі",
+    pendingHint: "Тексерілуде — мақұлданғанша тек сізге көрінеді.",
+    resubmit: "Қайта жіберу",
+    edit: "Өңдеу",
+    moderation: "Модерация",
+    approve: "Мақұлдау",
+    reject: "Қабылдамау",
+    rejectReasonPlaceholder: "Қабылдамау себебі",
+    queueEmpty: "Тексеретін ештеңе жоқ",
+    loadMore: "Тағы жүктеу",
+    adminOnly: "Сізде модерацияға рұқсат жоқ.",
     categories: {
       love: "Махаббат",
       happy_moments: "Бақытты сәттер",
@@ -348,6 +390,20 @@ export const dict: Record<Locale, Dict> = {
     aboutPrivacyBody: "Ваше местоположение никогда не отслеживается в фоне. При публикации вы сами выбираете: точное место или приблизительное — в пределах ~500 м. Анонимная публикация всегда доступна.",
     aboutTelegram: "Создано для Telegram",
     aboutTelegramBody: "Loci работает как Telegram Mini App. Вход мгновенный — никаких паролей и форм. Ваш аккаунт Telegram — это ваша личность.",
+    statusPending: "На проверке",
+    statusApproved: "Одобрено",
+    statusRejected: "Отклонено",
+    reasonLabel: "Причина",
+    pendingHint: "На проверке — видно только вам до одобрения.",
+    resubmit: "Отправить снова",
+    edit: "Изменить",
+    moderation: "Модерация",
+    approve: "Одобрить",
+    reject: "Отклонить",
+    rejectReasonPlaceholder: "Причина отклонения",
+    queueEmpty: "Нечего проверять",
+    loadMore: "Загрузить ещё",
+    adminOnly: "У вас нет доступа к модерации.",
     categories: {
       love: "Любовь",
       happy_moments: "Счастливые моменты",

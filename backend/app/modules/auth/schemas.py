@@ -16,6 +16,7 @@ class UserResponse(BaseModel):
     last_name: str | None
     photo_url: str | None
     language_code: str | None
+    is_admin: bool = False
 
 
 class TokenResponse(BaseModel):

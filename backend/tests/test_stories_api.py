@@ -1,13 +1,26 @@
 import math
+import uuid
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.core.security.geo import EARTH_RADIUS_M
 from app.db.models import Story
+from app.db.models.story import ModerationStatus
 from tests.factories import build_init_data
 
 ALMATY = (43.238949, 76.889709)
+
+
+async def approve_story(db_session, story_id: str) -> None:
+    """Mark a freshly created (pending) story approved so it becomes publicly
+    discoverable — the moderation step every real story now goes through."""
+    await db_session.execute(
+        update(Story)
+        .where(Story.id == uuid.UUID(story_id))
+        .values(moderation_status=ModerationStatus.approved)
+    )
+    await db_session.commit()
 
 
 async def authenticate(client, telegram_id: int = 500) -> str:
@@ -65,6 +78,7 @@ async def test_approx_story_never_returns_exact_point(client, db_session):
     distance = haversine_m(ALMATY[0], ALMATY[1], body["lat"], body["lon"])
     assert 250 <= distance <= 750
 
+    await approve_story(db_session, body["id"])
     detail = await client.get(f"/api/v1/stories/{body['id']}")
     assert detail.json()["lat"] == pytest.approx(body["lat"])
 
@@ -83,12 +97,13 @@ async def test_approx_story_never_returns_exact_point(client, db_session):
     assert haversine_m(stored[0], stored[1], body["lat"], body["lon"]) >= 250
 
 
-async def test_anonymous_story_never_exposes_author(client):
+async def test_anonymous_story_never_exposes_author(client, db_session):
     await authenticate(client)
     created = await client.post("/api/v1/stories", json=story_payload(is_anonymous=True))
     story_id = created.json()["id"]
     assert created.json()["author"] is None
 
+    await approve_story(db_session, story_id)
     detail = await client.get(f"/api/v1/stories/{story_id}")
     assert detail.json()["author"] is None
     assert "author_id" not in detail.text
@@ -146,9 +161,10 @@ async def test_only_author_can_delete_story(client):
     assert (await client.get(f"/api/v1/stories/{story_id}")).status_code == 404
 
 
-async def test_nearby_excludes_out_of_radius_stories(client):
+async def test_nearby_excludes_out_of_radius_stories(client, db_session):
     await authenticate(client)
-    await client.post("/api/v1/stories", json=story_payload())
+    created = await client.post("/api/v1/stories", json=story_payload())
+    await approve_story(db_session, created.json()["id"])
 
     near = await client.get(
         "/api/v1/stories/nearby", params={"lat": ALMATY[0], "lon": ALMATY[1], "radius_meters": 1000}
@@ -161,9 +177,10 @@ async def test_nearby_excludes_out_of_radius_stories(client):
     assert far.json() == []
 
 
-async def test_nearby_wraps_antimeridian(client):
+async def test_nearby_wraps_antimeridian(client, db_session):
     await authenticate(client)
-    await client.post("/api/v1/stories", json=story_payload(lat=-36.5, lon=179.999))
+    created = await client.post("/api/v1/stories", json=story_payload(lat=-36.5, lon=179.999))
+    await approve_story(db_session, created.json()["id"])
 
     response = await client.get(
         "/api/v1/stories/nearby",
@@ -172,9 +189,12 @@ async def test_nearby_wraps_antimeridian(client):
     assert len(response.json()) == 1
 
 
-async def test_search_matches_title_and_body(client):
+async def test_search_matches_title_and_body(client, db_session):
     await authenticate(client)
-    await client.post("/api/v1/stories", json=story_payload(title="Aurora", body="northern lights"))
+    created = await client.post(
+        "/api/v1/stories", json=story_payload(title="Aurora", body="northern lights")
+    )
+    await approve_story(db_session, created.json()["id"])
 
     assert len((await client.get("/api/v1/stories/search", params={"q": "auro"})).json()) == 1
     assert len((await client.get("/api/v1/stories/search", params={"q": "lights"})).json()) == 1

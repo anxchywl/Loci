@@ -24,6 +24,8 @@ export interface StoryPhoto {
   height: number | null;
 }
 
+export type ModerationStatus = "pending" | "approved" | "rejected";
+
 export interface Story {
   id: string;
   category_id: number;
@@ -36,12 +38,23 @@ export interface Story {
   visibility: "public" | "private";
   is_anonymous: boolean;
   created_at: string;
+  moderation_status: ModerationStatus;
+  rejection_reason: string | null;
   author: StoryAuthor | null;
   reaction_count: number;
   comment_count: number;
   viewer_reacted: boolean;
   viewer_bookmarked: boolean;
   photos: StoryPhoto[];
+}
+
+export interface UpdateStoryInput {
+  category_id?: number;
+  title?: string;
+  body?: string;
+  visibility?: "public" | "private";
+  is_anonymous?: boolean;
+  happened_on?: string | null;
 }
 
 export interface StoryComment {
@@ -100,6 +113,14 @@ export function fetchStory(id: string): Promise<Story> {
 
 export function createStory(input: CreateStoryInput): Promise<Story> {
   return apiFetch<Story>("/stories", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function updateStory(id: string, input: UpdateStoryInput): Promise<Story> {
+  return apiFetch<Story>(`/stories/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export function resubmitStory(id: string): Promise<Story> {
+  return apiFetch<Story>(`/stories/${id}/resubmit`, { method: "POST" });
 }
 
 export function deleteStory(id: string): Promise<void> {

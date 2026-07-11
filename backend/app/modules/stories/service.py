@@ -11,13 +11,16 @@ from app.db.repositories import categories as categories_repo
 from app.db.repositories import comments as comments_repo
 from app.db.repositories import photos as photos_repo
 from app.db.repositories import stories as stories_repo
+from app.db.repositories import users as users_repo
 from app.integrations import storage
+from app.modules import notifications
 from app.modules.stories.schemas import (
     AuthorResponse,
     CommentResponse,
     PhotoResponse,
     StoryCreateRequest,
     StoryResponse,
+    StoryUpdateRequest,
 )
 
 
@@ -38,7 +41,12 @@ def _author_from_row(row) -> AuthorResponse | None:
     )
 
 
-def serialize_story(row, photos: list[PhotoResponse] | None = None) -> StoryResponse:
+def serialize_story(
+    row, photos: list[PhotoResponse] | None = None, viewer_id: int | None = None
+) -> StoryResponse:
+    # the rejection reason is private moderation feedback — only ever shown to the
+    # story's own author (My Stories), never leaked on public read paths.
+    is_owner = viewer_id is not None and row["author_id"] == viewer_id
     return StoryResponse(
         id=row["id"],
         category_id=row["category_id"],
@@ -51,6 +59,8 @@ def serialize_story(row, photos: list[PhotoResponse] | None = None) -> StoryResp
         visibility=row["visibility"],
         is_anonymous=row["is_anonymous"],
         created_at=row["created_at"],
+        moderation_status=row["moderation_status"],
+        rejection_reason=row["rejection_reason"] if is_owner else None,
         author=_author_from_row(row),
         reaction_count=row["reaction_count"],
         comment_count=row["comment_count"],
@@ -101,7 +111,65 @@ async def create_story(
     row = await stories_repo.get_for_viewer(db, story_id, author_id)
     if row is None:
         raise StoryNotFound()
-    return serialize_story(row)
+
+    author = await users_repo.get_by_id(db, author_id)
+    notifications.dispatch(
+        settings,
+        event=notifications.StoryEvent.submitted,
+        telegram_id=author.telegram_id if author else None,
+        title=payload.title,
+    )
+    return serialize_story(row, viewer_id=author_id)
+
+
+async def update_story(
+    db: AsyncSession,
+    story_id: uuid.UUID,
+    author_id: int,
+    payload: StoryUpdateRequest,
+    settings: Settings,
+) -> StoryResponse:
+    story = await stories_repo.get_owned(db, story_id, author_id)
+    if story is None:
+        raise StoryNotFound()
+
+    changes = payload.model_dump(exclude_unset=True)
+    if "category_id" in changes and not await categories_repo.exists(db, changes["category_id"]):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown category")
+
+    await stories_repo.apply_update(db, story, changes)
+    await db.commit()
+
+    row = await stories_repo.get_for_viewer(db, story_id, author_id)
+    if row is None:
+        raise StoryNotFound()
+    return serialize_story(row, await _photo_responses(db, story_id, settings), viewer_id=author_id)
+
+
+async def resubmit_story(
+    db: AsyncSession, story_id: uuid.UUID, author_id: int, settings: Settings
+) -> StoryResponse:
+    ok = await stories_repo.resubmit(db, story_id, author_id)
+    if not ok:
+        # not the owner, not currently rejected, or already gone
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only a rejected story you own can be resubmitted",
+        )
+    await db.commit()
+
+    row = await stories_repo.get_for_viewer(db, story_id, author_id)
+    if row is None:
+        raise StoryNotFound()
+
+    author = await users_repo.get_by_id(db, author_id)
+    notifications.dispatch(
+        settings,
+        event=notifications.StoryEvent.resubmitted,
+        telegram_id=author.telegram_id if author else None,
+        title=row["title"],
+    )
+    return serialize_story(row, await _photo_responses(db, story_id, settings), viewer_id=author_id)
 
 
 async def get_story(
@@ -111,7 +179,7 @@ async def get_story(
     if row is None:
         raise StoryNotFound()
     photos = await _photo_responses(db, story_id, settings)
-    return serialize_story(row, photos)
+    return serialize_story(row, photos, viewer_id=viewer_id)
 
 
 async def delete_story(db: AsyncSession, story_id: uuid.UUID, author_id: int) -> None:

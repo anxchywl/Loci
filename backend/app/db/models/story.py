@@ -32,6 +32,13 @@ class LocationPrecision(str, enum.Enum):
     approx = "approx"
 
 
+class ModerationStatus(str, enum.Enum):
+    # every story starts pending; only approved stories are ever discoverable
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
 class Story(Base):
     __tablename__ = "stories"
 
@@ -66,6 +73,18 @@ class Story(Base):
         Geometry("POINT", srid=4326, spatial_index=False), nullable=False
     )
     is_hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    # moderation gate — a story is public only when approved (and not hidden by reports)
+    moderation_status: Mapped[ModerationStatus] = mapped_column(
+        Enum(ModerationStatus, name="moderation_status"),
+        nullable=False,
+        server_default=ModerationStatus.pending.value,
+    )
+    rejection_reason: Mapped[str | None] = mapped_column(Text)
+    moderated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # the admin (user id) who last approved/rejected; kept for audit, nulled if they leave
+    moderated_by: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -74,4 +93,6 @@ class Story(Base):
     __table_args__ = (
         Index("ix_stories_location_public", "location_public", postgresql_using="gist"),
         Index("ix_stories_created_at", "created_at"),
+        # supports the moderation queue (pending, oldest first) and discovery filters
+        Index("ix_stories_moderation_status_created_at", "moderation_status", "created_at"),
     )

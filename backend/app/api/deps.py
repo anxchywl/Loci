@@ -49,6 +49,18 @@ async def get_current_user(
     return user
 
 
+async def get_current_admin(
+    user: Annotated[User, Depends(get_current_user)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> User:
+    # admins are identified by telegram id from config, re-checked on every request
+    if user.telegram_id not in settings.admin_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
+        )
+    return user
+
+
 async def get_optional_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     db: Annotated[AsyncSession, Depends(get_db_session)],

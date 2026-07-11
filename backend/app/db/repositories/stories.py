@@ -1,12 +1,12 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 
 from geoalchemy2 import Geography
-from sqlalchemy import Select, and_, cast, false, func, or_, select
+from sqlalchemy import Select, and_, cast, false, func, or_, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Bookmark, Comment, Reaction, Story, StoryVisibility, User
-from app.db.models.story import LocationPrecision
+from app.db.models.story import LocationPrecision, ModerationStatus
 
 # location_exact is never selected on any read path; when precision is exact the
 # public column already holds the same point
@@ -20,6 +20,8 @@ STORY_READ_COLUMNS = (
     Story.is_anonymous,
     Story.visibility,
     Story.location_precision,
+    Story.moderation_status,
+    Story.rejection_reason,
     Story.created_at,
     func.ST_Y(Story.location_public).label("lat"),
     func.ST_X(Story.location_public).label("lon"),
@@ -75,15 +77,24 @@ def _counts(viewer_id: int | None):
     return reactions, comments, reacted, bookmarked
 
 
+# a story is publicly discoverable only once an admin has approved it, it is
+# public, and it has not been auto-hidden by reports. This single predicate gates
+# the map, nearby, bbox, trending, search and every other public read path.
+_DISCOVERABLE = and_(
+    Story.moderation_status == ModerationStatus.approved,
+    Story.visibility == StoryVisibility.public,
+    Story.is_hidden.is_(False),
+)
+
+
 def _visible_to(viewer_id: int | None):
-    # private stories are only ever readable by their author; hidden ones by nobody
-    public = and_(
-        Story.visibility == StoryVisibility.public,
-        Story.is_hidden.is_(False),
-    )
+    # public reads see only approved+public stories; an author additionally sees
+    # their own story at any moderation status (so My Stories can show pending and
+    # rejected ones), but a story auto-hidden by reports stays hidden even from its
+    # author until an admin acts, and other people's private/pending stay invisible.
     if viewer_id is None:
-        return public
-    return or_(public, and_(Story.author_id == viewer_id, Story.is_hidden.is_(False)))
+        return _DISCOVERABLE
+    return or_(_DISCOVERABLE, and_(Story.author_id == viewer_id, Story.is_hidden.is_(False)))
 
 
 def _base_select(viewer_id: int | None) -> Select:
@@ -92,6 +103,17 @@ def _base_select(viewer_id: int | None) -> Select:
         select(*STORY_READ_COLUMNS, reactions, comments, reacted, bookmarked)
         .outerjoin(User, User.id == Story.author_id)
         .where(_visible_to(viewer_id))
+    )
+
+
+def _discoverable_select(viewer_id: int | None) -> Select:
+    # public discovery surfaces (map/search/trending) never leak an author's own
+    # pending or rejected stories, so they always use the strict predicate.
+    reactions, comments, reacted, bookmarked = _counts(viewer_id)
+    return (
+        select(*STORY_READ_COLUMNS, reactions, comments, reacted, bookmarked)
+        .outerjoin(User, User.id == Story.author_id)
+        .where(_DISCOVERABLE)
     )
 
 
@@ -140,6 +162,11 @@ async def get_owned(db: AsyncSession, story_id: uuid.UUID, author_id: int) -> St
     return story
 
 
+async def get_owned_any(db: AsyncSession, story_id: uuid.UUID) -> Story | None:
+    """Load a story ignoring visibility — for admin/notification code paths only."""
+    return await db.get(Story, story_id)
+
+
 async def get_for_viewer(db: AsyncSession, story_id: uuid.UUID, viewer_id: int | None):
     stmt = _base_select(viewer_id).where(Story.id == story_id)
     return (await db.execute(stmt)).mappings().one_or_none()
@@ -159,7 +186,7 @@ async def list_nearby(
     # geography cast makes the radius metric and wraps the antimeridian correctly
     story_geog = cast(Story.location_public, Geography)
     point_geog = cast(point, Geography)
-    stmt = _base_select(viewer_id).where(func.ST_DWithin(story_geog, point_geog, radius_meters))
+    stmt = _discoverable_select(viewer_id).where(func.ST_DWithin(story_geog, point_geog, radius_meters))
     if category_id is not None:
         stmt = stmt.where(Story.category_id == category_id)
     stmt = stmt.order_by(func.ST_Distance(story_geog, point_geog)).limit(limit)
@@ -178,7 +205,7 @@ async def list_in_bbox(
     limit: int,
 ):
     envelope = func.ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
-    stmt = _base_select(viewer_id).where(func.ST_Intersects(Story.location_public, envelope))
+    stmt = _discoverable_select(viewer_id).where(func.ST_Intersects(Story.location_public, envelope))
     if category_id is not None:
         stmt = stmt.where(Story.category_id == category_id)
     stmt = stmt.order_by(Story.created_at.desc()).limit(limit)
@@ -190,7 +217,7 @@ async def list_trending(db: AsyncSession, *, viewer_id: int | None, limit: int):
     stmt = (
         select(*STORY_READ_COLUMNS, reactions, comments, reacted, bookmarked)
         .outerjoin(User, User.id == Story.author_id)
-        .where(_visible_to(viewer_id))
+        .where(_DISCOVERABLE)
         .order_by((reactions + comments).desc(), Story.created_at.desc())
         .limit(limit)
     )
@@ -198,10 +225,19 @@ async def list_trending(db: AsyncSession, *, viewer_id: int | None, limit: int):
 
 
 async def search(db: AsyncSession, *, viewer_id: int | None, query: str, limit: int):
-    pattern = f"%{query}%"
+    # query is passed as a bound parameter (never string-interpolated into SQL);
+    # LIKE metacharacters are escaped so user input matches literally.
+    from app.core.security.text import escape_like
+
+    pattern = f"%{escape_like(query)}%"
     stmt = (
-        _base_select(viewer_id)
-        .where(or_(Story.title.ilike(pattern), Story.body.ilike(pattern)))
+        _discoverable_select(viewer_id)
+        .where(
+            or_(
+                Story.title.ilike(pattern, escape="\\"),
+                Story.body.ilike(pattern, escape="\\"),
+            )
+        )
         .order_by(Story.created_at.desc())
         .limit(limit)
     )
@@ -254,3 +290,117 @@ async def set_hidden(db: AsyncSession, story_id: uuid.UUID, hidden: bool) -> Non
     if story is not None:
         story.is_hidden = hidden
         await db.flush()
+
+
+# --- moderation ---------------------------------------------------------------
+
+_QUEUE_COLUMNS = (
+    Story.id,
+    Story.author_id,
+    Story.category_id,
+    Story.title,
+    Story.body,
+    Story.happened_on,
+    Story.is_anonymous,
+    Story.visibility,
+    Story.location_precision,
+    Story.moderation_status,
+    Story.created_at,
+    func.ST_Y(Story.location_public).label("lat"),
+    func.ST_X(Story.location_public).label("lon"),
+    User.username.label("author_username"),
+    User.first_name.label("author_first_name"),
+    User.photo_url.label("author_photo_url"),
+)
+
+
+async def list_for_moderation(
+    db: AsyncSession,
+    *,
+    status: ModerationStatus,
+    limit: int,
+    after: tuple[datetime, uuid.UUID] | None,
+):
+    """Keyset-paginated queue, oldest first. Keyset (created_at, id) is stable
+    even as rows are approved/rejected out from under a paging admin."""
+    stmt = (
+        select(*_QUEUE_COLUMNS)
+        .outerjoin(User, User.id == Story.author_id)
+        .where(Story.moderation_status == status)
+    )
+    if after is not None:
+        stmt = stmt.where(tuple_(Story.created_at, Story.id) > after)
+    stmt = stmt.order_by(Story.created_at.asc(), Story.id.asc()).limit(limit)
+    return (await db.execute(stmt)).mappings().all()
+
+
+async def approve(db: AsyncSession, story_id: uuid.UUID, admin_id: int) -> bool:
+    """Atomic pending -> approved. Returns False if the story was already
+    moderated (or gone), which prevents a double / racing approval."""
+    stmt = (
+        update(Story)
+        .where(
+            Story.id == story_id,
+            Story.moderation_status == ModerationStatus.pending,
+        )
+        .values(
+            moderation_status=ModerationStatus.approved,
+            rejection_reason=None,
+            moderated_by=admin_id,
+            moderated_at=func.now(),
+        )
+        .returning(Story.id)
+    )
+    return (await db.execute(stmt)).scalar_one_or_none() is not None
+
+
+async def reject(db: AsyncSession, story_id: uuid.UUID, admin_id: int, reason: str) -> bool:
+    """Atomic pending -> rejected with a reason. Same race guard as approve."""
+    stmt = (
+        update(Story)
+        .where(
+            Story.id == story_id,
+            Story.moderation_status == ModerationStatus.pending,
+        )
+        .values(
+            moderation_status=ModerationStatus.rejected,
+            rejection_reason=reason,
+            moderated_by=admin_id,
+            moderated_at=func.now(),
+        )
+        .returning(Story.id)
+    )
+    return (await db.execute(stmt)).scalar_one_or_none() is not None
+
+
+async def resubmit(db: AsyncSession, story_id: uuid.UUID, author_id: int) -> bool:
+    """Atomic rejected -> pending by the owner. Returns False if the story is
+    not the caller's, not currently rejected, or gone."""
+    stmt = (
+        update(Story)
+        .where(
+            Story.id == story_id,
+            Story.author_id == author_id,
+            Story.moderation_status == ModerationStatus.rejected,
+        )
+        .values(
+            moderation_status=ModerationStatus.pending,
+            rejection_reason=None,
+            moderated_by=None,
+            moderated_at=None,
+        )
+        .returning(Story.id)
+    )
+    return (await db.execute(stmt)).scalar_one_or_none() is not None
+
+
+async def apply_update(db: AsyncSession, story: Story, changes: dict) -> None:
+    """Apply owner edits to a loaded story and send it back to review."""
+    for field, value in changes.items():
+        setattr(story, field, value)
+    # any content edit re-enters moderation so changes are reviewed before going public
+    story.moderation_status = ModerationStatus.pending
+    story.rejection_reason = None
+    story.moderated_by = None
+    story.moderated_at = None
+    await db.flush()

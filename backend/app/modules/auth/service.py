@@ -28,11 +28,13 @@ async def authenticate_telegram_user(
     await refresh_tokens_repo.create(db, user.id, hash_token(refresh_value), refresh_expires_at)
     await db.commit()
 
+    user_response = UserResponse.model_validate(user)
+    user_response.is_admin = user.telegram_id in settings.admin_ids
     response = TokenResponse(
         access_token=access_token,
         access_token_expires_at=access_expires_at,
         refresh_token_expires_at=refresh_expires_at,
-        user=UserResponse.model_validate(user),
+        user=user_response,
     )
     return response, refresh_value
 

@@ -1,15 +1,19 @@
-from tests.test_stories_api import authenticate, story_payload
+from tests.test_stories_api import approve_story, authenticate, story_payload
 
 
-async def create_story(client, **overrides) -> str:
+async def create_story(client, db_session=None, **overrides) -> str:
     response = await client.post("/api/v1/stories", json=story_payload(**overrides))
     assert response.status_code == 201
-    return response.json()["id"]
+    story_id = response.json()["id"]
+    # approving makes the story readable by other users (reporters, reactors)
+    if db_session is not None:
+        await approve_story(db_session, story_id)
+    return story_id
 
 
-async def test_reaction_toggle_is_idempotent(client):
+async def test_reaction_toggle_is_idempotent(client, db_session):
     await authenticate(client, telegram_id=1)
-    story_id = await create_story(client)
+    story_id = await create_story(client, db_session)
 
     assert (await client.post(f"/api/v1/stories/{story_id}/reactions")).status_code == 204
     assert (await client.post(f"/api/v1/stories/{story_id}/reactions")).status_code == 204
@@ -24,9 +28,9 @@ async def test_reaction_toggle_is_idempotent(client):
     assert detail["viewer_reacted"] is False
 
 
-async def test_reaction_requires_auth(client):
+async def test_reaction_requires_auth(client, db_session):
     await authenticate(client, telegram_id=1)
-    story_id = await create_story(client)
+    story_id = await create_story(client, db_session)
     del client.headers["Authorization"]
     assert (await client.post(f"/api/v1/stories/{story_id}/reactions")).status_code == 401
 
@@ -38,9 +42,9 @@ async def test_cannot_react_to_private_story_of_another_user(client):
     assert (await client.post(f"/api/v1/stories/{story_id}/reactions")).status_code == 404
 
 
-async def test_comment_flow(client):
+async def test_comment_flow(client, db_session):
     await authenticate(client, telegram_id=1)
-    story_id = await create_story(client)
+    story_id = await create_story(client, db_session)
 
     created = await client.post(
         f"/api/v1/stories/{story_id}/comments", json={"body": "I remember this place"}
@@ -56,9 +60,9 @@ async def test_comment_flow(client):
     assert detail["comment_count"] == 1
 
 
-async def test_comment_length_validated(client):
+async def test_comment_length_validated(client, db_session):
     await authenticate(client, telegram_id=1)
-    story_id = await create_story(client)
+    story_id = await create_story(client, db_session)
     assert (
         await client.post(f"/api/v1/stories/{story_id}/comments", json={"body": ""})
     ).status_code == 422
@@ -67,9 +71,9 @@ async def test_comment_length_validated(client):
     ).status_code == 422
 
 
-async def test_only_comment_author_can_delete(client):
+async def test_only_comment_author_can_delete(client, db_session):
     await authenticate(client, telegram_id=1)
-    story_id = await create_story(client)
+    story_id = await create_story(client, db_session)
     comment_id = (
         await client.post(f"/api/v1/stories/{story_id}/comments", json={"body": "mine"})
     ).json()["id"]
@@ -90,9 +94,9 @@ async def test_comments_on_private_story_hidden_from_others(client):
     assert (await client.get(f"/api/v1/stories/{story_id}/comments")).status_code == 404
 
 
-async def test_bookmark_flow_and_profile_listing(client):
+async def test_bookmark_flow_and_profile_listing(client, db_session):
     await authenticate(client, telegram_id=1)
-    story_id = await create_story(client)
+    story_id = await create_story(client, db_session)
 
     assert (await client.post(f"/api/v1/stories/{story_id}/bookmark")).status_code == 204
     assert (await client.get(f"/api/v1/stories/{story_id}")).json()["viewer_bookmarked"] is True
@@ -114,13 +118,13 @@ async def test_profile_me_lists_own_anonymous_stories(client):
     assert mine[0]["author"] is None
 
 
-async def test_story_auto_hides_after_threshold_distinct_reporters(client, monkeypatch):
+async def test_story_auto_hides_after_threshold_distinct_reporters(client, db_session, monkeypatch):
     from app.core.config import get_settings
 
     monkeypatch.setattr(get_settings(), "report_auto_hide_threshold", 3)
 
     await authenticate(client, telegram_id=1)
-    story_id = await create_story(client)
+    story_id = await create_story(client, db_session)
 
     for reporter in (2, 3):
         await authenticate(client, telegram_id=reporter)
@@ -139,13 +143,13 @@ async def test_story_auto_hides_after_threshold_distinct_reporters(client, monke
     assert (await client.get(f"/api/v1/stories/{story_id}")).status_code == 404
 
 
-async def test_duplicate_reports_by_same_user_do_not_stack(client, monkeypatch):
+async def test_duplicate_reports_by_same_user_do_not_stack(client, db_session, monkeypatch):
     from app.core.config import get_settings
 
     monkeypatch.setattr(get_settings(), "report_auto_hide_threshold", 2)
 
     await authenticate(client, telegram_id=1)
-    story_id = await create_story(client)
+    story_id = await create_story(client, db_session)
 
     await authenticate(client, telegram_id=2)
     for _ in range(3):
@@ -156,13 +160,13 @@ async def test_duplicate_reports_by_same_user_do_not_stack(client, monkeypatch):
     assert (await client.get(f"/api/v1/stories/{story_id}")).status_code == 200
 
 
-async def test_author_self_reports_do_not_count_toward_auto_hide(client, monkeypatch):
+async def test_author_self_reports_do_not_count_toward_auto_hide(client, db_session, monkeypatch):
     from app.core.config import get_settings
 
     monkeypatch.setattr(get_settings(), "report_auto_hide_threshold", 1)
 
     await authenticate(client, telegram_id=1)
-    story_id = await create_story(client)
+    story_id = await create_story(client, db_session)
     assert (
         await client.post(f"/api/v1/stories/{story_id}/report", json={"reason": "oops"})
     ).status_code == 204
@@ -175,13 +179,13 @@ async def test_author_self_reports_do_not_count_toward_auto_hide(client, monkeyp
     assert (await client.get(f"/api/v1/stories/{story_id}")).status_code == 404
 
 
-async def test_comment_auto_hides_after_threshold(client, monkeypatch):
+async def test_comment_auto_hides_after_threshold(client, db_session, monkeypatch):
     from app.core.config import get_settings
 
     monkeypatch.setattr(get_settings(), "report_auto_hide_threshold", 2)
 
     await authenticate(client, telegram_id=1)
-    story_id = await create_story(client)
+    story_id = await create_story(client, db_session)
     comment_id = (
         await client.post(f"/api/v1/stories/{story_id}/comments", json={"body": "abuse"})
     ).json()["id"]

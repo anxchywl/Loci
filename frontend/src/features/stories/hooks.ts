@@ -21,11 +21,14 @@ import {
   removeBookmark,
   removeReaction,
   reportStory,
+  resubmitStory,
   searchStories,
+  updateStory,
   uploadStoryPhoto,
   type BboxParams,
   type CreateStoryInput,
   type Story,
+  type UpdateStoryInput,
 } from "@/features/stories/api";
 
 export function useCategories() {
@@ -83,6 +86,8 @@ export function useCreateStory() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["stories"] });
+      // a new story shows up in My Stories (as pending) right away
+      void queryClient.invalidateQueries({ queryKey: ["profile", "stories"] });
     },
   });
 }
@@ -91,8 +96,37 @@ export function useDeleteStory() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: deleteStory,
-    onSuccess: () => {
+    onSuccess: (_data, storyId) => {
+      // drop the detail cache and refresh the map + both profile lists so a
+      // deleted story can't linger anywhere or leave an orphaned view
+      queryClient.removeQueries({ queryKey: ["story", storyId] });
       void queryClient.invalidateQueries({ queryKey: ["stories"] });
+      void queryClient.invalidateQueries({ queryKey: ["profile", "stories"] });
+      void queryClient.invalidateQueries({ queryKey: ["profile", "bookmarks"] });
+    },
+  });
+}
+
+export function useUpdateStory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateStoryInput }) =>
+      updateStory(id, input),
+    onSuccess: (story) => {
+      queryClient.setQueryData(["story", story.id], story);
+      void queryClient.invalidateQueries({ queryKey: ["stories"] });
+      void queryClient.invalidateQueries({ queryKey: ["profile", "stories"] });
+    },
+  });
+}
+
+export function useResubmitStory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: resubmitStory,
+    onSuccess: (story) => {
+      queryClient.setQueryData(["story", story.id], story);
+      void queryClient.invalidateQueries({ queryKey: ["profile", "stories"] });
     },
   });
 }
@@ -143,6 +177,9 @@ export function useBookmark(storyId: string) {
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["story", storyId] });
+      // keep the Saved tab in sync so an unsave disappears immediately and a
+      // save shows up without a manual refresh
+      void queryClient.invalidateQueries({ queryKey: ["profile", "bookmarks"] });
     },
   });
 }

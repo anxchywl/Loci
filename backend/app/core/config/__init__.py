@@ -71,6 +71,8 @@ class Settings(BaseSettings):
     allowed_origins: list[str] = []
     admin_telegram_ids: str = ""
     trust_proxy_headers: bool = False
+    # when false, status-change notifications are computed but never enqueued
+    notifications_enabled: bool = True
 
     @computed_field
     @property
@@ -83,6 +85,18 @@ class Settings(BaseSettings):
             f"postgresql+asyncpg://{user}:{password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
+
+    @computed_field
+    @property
+    def admin_ids(self) -> frozenset[int]:
+        # comma/space separated telegram ids of users allowed into moderation
+        ids: set[int] = set()
+        for chunk in self.admin_telegram_ids.replace(",", " ").split():
+            try:
+                ids.add(int(chunk))
+            except ValueError:
+                continue
+        return frozenset(ids)
 
     @computed_field
     @property
