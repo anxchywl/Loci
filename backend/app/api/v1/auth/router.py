@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db_session, get_redis
 from app.core.config import Settings, get_settings
 from app.core.security.rate_limit import check_rate_limit, client_identifier
+from app.core.security.session_metadata import build_session_metadata
 from app.core.security.telegram import (
     TelegramInitDataError,
     reject_replayed_init_data,
@@ -87,7 +88,17 @@ async def telegram_auth(
             detail="Invalid Telegram authentication data",
         ) from exc
 
-    token_response, refresh_token = await authenticate_telegram_user(db, telegram_user, settings)
+    session_metadata = build_session_metadata(
+        request.headers.get("user-agent"),
+        request.client.host if request.client else None,
+        settings.jwt_secret_key,
+    )
+    try:
+        token_response, refresh_token = await authenticate_telegram_user(
+            db, telegram_user, settings, session_metadata
+        )
+    except AuthError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is blocked") from exc
     _set_refresh_cookie(response, refresh_token, token_response.refresh_token_expires_at, settings)
     return token_response
 

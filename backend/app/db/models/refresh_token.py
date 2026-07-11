@@ -23,3 +23,11 @@ class RefreshToken(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    last_used_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    user_agent_summary: Mapped[str | None] = mapped_column(Text)
+    device_type: Mapped[str | None] = mapped_column(Text)
+    browser: Mapped[str | None] = mapped_column(Text)
+    operating_system: Mapped[str | None] = mapped_column(Text)
+    ip_hash: Mapped[str | None] = mapped_column(Text)

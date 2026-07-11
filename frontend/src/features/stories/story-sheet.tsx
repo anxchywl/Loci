@@ -83,7 +83,10 @@ export function StorySheet({ authenticated }: StorySheetProps) {
   return (
     <BottomSheet open onClose={closeStory} title={story?.title ?? t.loading}>
       {story && (
-        <div className="space-y-4">
+        <div
+          key={confirming ?? "story"}
+          className="space-y-4 motion-safe:animate-story-state"
+        >
           <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
             {category && Icon && (
               <span
@@ -120,7 +123,7 @@ export function StorySheet({ authenticated }: StorySheetProps) {
           <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{story.body}</p>
 
           {confirming ? (
-            <div className="space-y-3 rounded-sheet border border-border p-3 animate-fade-in">
+            <div className="space-y-3 rounded-sheet border border-border p-3">
               <div className="text-[15px] font-semibold">
                 {confirming === "delete" ? t.confirmDeleteTitle : t.confirmReportTitle}
               </div>

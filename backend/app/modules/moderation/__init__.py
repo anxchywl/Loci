@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.db.models.story import ModerationStatus
+from app.db.models import AuditLog
 from app.db.repositories import photos as photos_repo
 from app.db.repositories import stories as stories_repo
 from app.db.repositories import users as users_repo
@@ -132,6 +133,7 @@ async def approve(
     ok = await stories_repo.approve(db, story_id, admin_id)
     if not ok:
         raise _already_moderated()
+    db.add(AuditLog(admin_id=admin_id, target_story_id=str(story_id), action="approved_story"))
     await db.commit()
     await _notify_author(db, story_id, settings, notifications.StoryEvent.approved)
 
@@ -142,6 +144,14 @@ async def reject(
     ok = await stories_repo.reject(db, story_id, admin_id, reason)
     if not ok:
         raise _already_moderated()
+    db.add(
+        AuditLog(
+            admin_id=admin_id,
+            target_story_id=str(story_id),
+            action="rejected_story",
+            reason=reason,
+        )
+    )
     await db.commit()
     await _notify_author(
         db, story_id, settings, notifications.StoryEvent.rejected, reason=reason

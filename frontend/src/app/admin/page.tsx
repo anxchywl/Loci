@@ -1,5 +1,5 @@
-import { ModerationManager } from "@/features/admin/moderation-manager";
+import { AdminPanelManager } from "@/features/admin/admin-panel-manager";
 
 export default function AdminPage() {
-  return <ModerationManager />;
+  return <AdminPanelManager />;
 }
