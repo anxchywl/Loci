@@ -1,7 +1,7 @@
 "use client";
 
 import maplibregl, { type Map as MapLibreMap } from "maplibre-gl";
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 import type { Category, Story } from "@/features/stories/api";
 import { addCategoryGlyphImages, createMap, MAP_STYLE_DARK_URL, MAP_STYLE_URL, setMapLanguage } from "@/lib/map/setup";
@@ -41,6 +41,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   const theme = useUiStore((state) => state.theme);
   const categoriesRef = useRef(categories);
   const storiesRef = useRef(stories);
+  const [mapLoading, setMapLoading] = useState(false);
 
   useImperativeHandle(ref, () => ({
     zoomIn: () => mapRef.current?.zoomIn({ duration: 250 }),
@@ -131,8 +132,10 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       theme === "dark" ||
       (theme === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
     const styleUrl = isDark ? MAP_STYLE_DARK_URL : MAP_STYLE_URL;
-    if (map.getStyle().sprite?.toString().includes(isDark ? "dark" : "positron")) return;
+    const currentSprite = map.getStyle().sprite?.toString() ?? "";
+    if (currentSprite.includes(isDark ? "dark" : "positron")) return;
     readyRef.current = false;
+    setMapLoading(true);
     map.setStyle(styleUrl);
     map.once("styledata", () => {
       const cats = categoriesRef.current;
@@ -148,6 +151,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
           readyRef.current = true;
           updateStoryData(map, storiesToGeoJson(storiesRef.current));
           setMapLanguage(map, useUiStore.getState().locale);
+          setMapLoading(false);
         })
         .catch(console.error);
     });
@@ -166,5 +170,20 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     }
   }, [panRequest]);
 
-  return <div ref={containerRef} className="absolute inset-0" data-testid="map" />;
+  const isDark =
+    theme === "dark" ||
+    (theme === "auto" &&
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+  return (
+    <div className="absolute inset-0">
+      <div ref={containerRef} className="absolute inset-0" data-testid="map" />
+      {/* Instant colour bridge while the tile style reloads */}
+      <div
+        className="pointer-events-none absolute inset-0 transition-opacity duration-300"
+        style={{ backgroundColor: isDark ? "#1c1c1e" : "#f8f8f8", opacity: mapLoading ? 1 : 0 }}
+      />
+    </div>
+  );
 });

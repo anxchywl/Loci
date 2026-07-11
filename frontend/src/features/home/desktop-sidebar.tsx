@@ -432,15 +432,6 @@ export function DesktopSidebar({
           ].join(" ")}>
             {activePanel ? panelLabels[activePanel] : ""}
           </div>
-
-          {/* Loci brand — right side, visible when sidebar open and no panel */}
-          <div className={[
-            "mr-3 flex items-center gap-1.5 transition-all duration-[230ms] ease-lm",
-            (open && !activePanel) ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2 pointer-events-none",
-          ].join(" ")}>
-            <MapPin size={15} className="text-accent" />
-            <span className="whitespace-nowrap text-[15px] font-semibold tracking-tight">{t.appName}</span>
-          </div>
         </div>
 
         <div className="mx-3 h-px shrink-0 bg-border" />
@@ -477,6 +468,14 @@ export function DesktopSidebar({
                     onClick={() => openPanel("about")} />
                   <Item icon={<UserRound size={17} />} label={t.profile} sidebarOpen={open}
                     onClick={() => openPanel("profile")} />
+                </div>
+                {/* Loci brand — centered at bottom, visible when sidebar open */}
+                <div className={[
+                  "flex items-center justify-center gap-1.5 pb-1 pt-3 transition-all duration-[230ms] ease-lm",
+                  open ? "opacity-100" : "opacity-0",
+                ].join(" ")}>
+                  <MapPin size={13} className="text-accent" />
+                  <span className="whitespace-nowrap text-[13px] font-semibold tracking-tight text-muted">{t.appName}</span>
                 </div>
               </div>
             </div>

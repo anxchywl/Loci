@@ -123,9 +123,9 @@ export function HomeManager() {
     }
   };
 
-  // locate button bottom, zoom buttons sit 52px above it (44px button + 8px gap)
+  // locate button bottom; zoom buttons sit 40px above it (36px button + 4px gap)
   const locateBottom = authenticated ? "5.5rem" : "1.5rem";
-  const zoomBottom = authenticated ? "calc(5.5rem + 52px)" : "calc(1.5rem + 52px)";
+  const zoomBottom = authenticated ? "calc(5.5rem + 40px)" : "calc(1.5rem + 40px)";
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-bg">
@@ -177,23 +177,51 @@ export function HomeManager() {
                 ))}
               </div>
             )}
+            {searching && (
+              <div className="max-h-[50dvh] overflow-y-auto rounded-sheet border border-border bg-bg">
+                <div className="px-4">
+                  {searchResults?.length === 0 && (
+                    <div className="py-6 text-center text-[13px] text-muted">{t.noResults}</div>
+                  )}
+                  {searchResults?.map((story) => (
+                    <StoryListItem key={story.id} story={story} categories={categories}
+                      onOpen={(id) => { setSearchQuery(""); openStory(id); requestPanTo(story.lat, story.lon); }} />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Desktop: single row — compact search + scrollable categories */}
-          <div className="hidden lg:flex items-center gap-2">
-            <div className="flex w-[200px] shrink-0 items-center gap-2 rounded-full border border-border bg-bg px-3 py-1.5">
-              <Search size={14} className="shrink-0 text-muted" />
-              <input
-                ref={searchInputRef}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t.searchPlaceholder}
-                className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-muted"
-              />
-              {searchQuery && (
-                <button aria-label={t.cancel} onClick={() => setSearchQuery("")}>
-                  <X size={14} className="text-muted" />
-                </button>
+          {/* Desktop: search anchored left + categories after */}
+          <div className="hidden lg:flex items-start gap-2">
+            <div className="relative shrink-0 w-[280px]">
+              <div className="flex items-center gap-2 rounded-full border border-border bg-bg px-3 py-1.5">
+                <Search size={14} className="shrink-0 text-muted" />
+                <input
+                  ref={searchInputRef}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t.searchPlaceholder}
+                  className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-muted"
+                />
+                {searchQuery && (
+                  <button aria-label={t.cancel} onClick={() => setSearchQuery("")}>
+                    <X size={14} className="text-muted" />
+                  </button>
+                )}
+              </div>
+              {searching && (
+                <div className="absolute left-0 top-full mt-1.5 w-full max-h-[50dvh] overflow-y-auto rounded-xl border border-border bg-bg shadow-lg">
+                  <div className="px-3">
+                    {searchResults?.length === 0 && (
+                      <div className="py-6 text-center text-[13px] text-muted">{t.noResults}</div>
+                    )}
+                    {searchResults?.map((story) => (
+                      <StoryListItem key={story.id} story={story} categories={categories}
+                        onOpen={(id) => { setSearchQuery(""); openStory(id); requestPanTo(story.lat, story.lon); }} />
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
             {!searching && (
@@ -205,21 +233,6 @@ export function HomeManager() {
               </div>
             )}
           </div>
-
-          {/* Search results (both layouts) */}
-          {searching && (
-            <div className="mt-2 max-h-[50dvh] overflow-y-auto rounded-sheet border border-border bg-bg">
-              <div className="px-4">
-                {searchResults?.length === 0 && (
-                  <div className="py-6 text-center text-[13px] text-muted">{t.noResults}</div>
-                )}
-                {searchResults?.map((story) => (
-                  <StoryListItem key={story.id} story={story} categories={categories}
-                    onOpen={(id) => { setSearchQuery(""); openStory(id); requestPanTo(story.lat, story.lon); }} />
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -257,23 +270,23 @@ export function HomeManager() {
             onClick={locateMe}
             disabled={locating}
             style={{ bottom: locateBottom }}
-            className="absolute right-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-bg text-muted shadow-sm transition-transform duration-150 ease-lm active:scale-95 disabled:opacity-50"
+            className="absolute right-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-bg text-muted shadow-sm transition-transform duration-150 ease-lm active:scale-95 disabled:opacity-50"
           >
-            <Navigation size={20} className={locating ? "animate-pulse" : undefined} />
+            <Navigation size={16} className={locating ? "animate-pulse" : undefined} />
           </button>
 
           {/* Zoom controls — above locate */}
           <div
-            className="absolute right-4 z-10 flex flex-col overflow-hidden rounded-lg border border-border bg-bg shadow-sm"
+            className="absolute right-3 z-10 flex flex-col overflow-hidden rounded-lg border border-border bg-bg shadow-sm"
             style={{ bottom: zoomBottom }}
           >
             <button aria-label="Zoom in" onClick={() => mapViewRef.current?.zoomIn()}
-              className="flex h-[42px] w-11 items-center justify-center text-[20px] leading-none text-text transition-colors hover:bg-surface active:bg-surface">
+              className="flex h-[34px] w-9 items-center justify-center text-[18px] leading-none text-text transition-colors hover:bg-surface active:bg-surface">
               +
             </button>
             <div className="h-px bg-border" />
             <button aria-label="Zoom out" onClick={() => mapViewRef.current?.zoomOut()}
-              className="flex h-[42px] w-11 items-center justify-center text-[20px] leading-none text-text transition-colors hover:bg-surface active:bg-surface">
+              className="flex h-[34px] w-9 items-center justify-center text-[18px] leading-none text-text transition-colors hover:bg-surface active:bg-surface">
               −
             </button>
           </div>
