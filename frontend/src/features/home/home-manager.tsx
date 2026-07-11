@@ -1,10 +1,29 @@
 "use client";
 
-import { Flame, Navigation, Plus, Search, UserRound, X } from "lucide-react";
+import {
+  Bookmark,
+  BookOpen,
+  ChevronLeft,
+  Flame,
+  Info,
+  MapPin,
+  Menu,
+  Navigation,
+  Plus,
+  Search,
+  UserRound,
+  X,
+} from "lucide-react";
+import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useTelegramAuth } from "@/features/auth/hooks";
-import { DesktopSidebar, ProfilePanel, type Panel } from "@/features/home/desktop-sidebar";
+import {
+  AboutPanel,
+  DesktopSidebar,
+  ProfilePanel,
+  type Panel,
+} from "@/features/home/desktop-sidebar";
 import { MapView, type MapBounds, type MapViewHandle } from "@/features/map/map-view";
 import { AddStorySheet } from "@/features/stories/add-story-sheet";
 import { BottomSheet } from "@/features/stories/components/bottom-sheet";
@@ -59,7 +78,8 @@ export function HomeManager() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<Panel>(null);
-  const [profileOpen, setProfileOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<Panel>(null);
   const [nearbyLocation, setNearbyLocation] = useState<{ lat: number; lon: number } | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mapViewRef = useRef<MapViewHandle>(null);
@@ -68,7 +88,17 @@ export function HomeManager() {
   const { data: stories = [] } = useBboxStories(
     bounds && { ...bounds, categoryId: categoryFilter },
   );
-  const { data: trendingStories } = useTrending(trendingOpen);
+  const nearbyBounds = nearbyLocation
+    ? {
+        minLat: nearbyLocation.lat - 0.018,
+        maxLat: nearbyLocation.lat + 0.018,
+        minLon: nearbyLocation.lon - 0.018,
+        maxLon: nearbyLocation.lon + 0.018,
+        categoryId: null,
+      }
+    : null;
+  const { data: nearbyStories = [] } = useBboxStories(nearbyBounds);
+  const { data: trendingStories } = useTrending(trendingOpen || mobilePanel === "trending");
   const { data: searchResults } = useSearch(searchQuery);
 
   const searching = searchQuery.trim().length >= 2;
@@ -128,6 +158,40 @@ export function HomeManager() {
   const locateBottom = "1.5rem";
   const zoomBottom = "calc(1.5rem + 40px)";
 
+  const openMobilePanel = (panel: Panel) => {
+    if (panel === "nearby") {
+      void handleNearby();
+    }
+    setMobilePanel(panel);
+  };
+
+  const closeMobileMenu = () => {
+    setMobileMenuOpen(false);
+    window.setTimeout(() => setMobilePanel(null), 250);
+  };
+
+  const mobilePanelTitles: Record<Exclude<Panel, "story" | null>, string> = {
+    saved: t.savedStories,
+    "my-stories": t.myStories,
+    profile: t.profile,
+    about: t.about,
+    trending: t.trending,
+    nearby: t.nearby,
+  };
+
+  const mobileMenuItems: {
+    panel: Exclude<Panel, "story" | null>;
+    label: string;
+    icon: React.ReactNode;
+  }[] = [
+    { panel: "trending", label: t.trending, icon: <Flame size={18} /> },
+    { panel: "nearby", label: t.nearby, icon: <Navigation size={18} /> },
+    { panel: "saved", label: t.savedStories, icon: <Bookmark size={18} /> },
+    { panel: "my-stories", label: t.myStories, icon: <BookOpen size={18} /> },
+    { panel: "about", label: t.about, icon: <Info size={18} /> },
+    { panel: "profile", label: t.profile, icon: <UserRound size={18} /> },
+  ];
+
   return (
     <main className="fixed inset-0 overflow-hidden bg-bg">
       <MapView ref={mapViewRef} categories={categories} stories={stories} onBoundsChange={setBounds} />
@@ -172,11 +236,11 @@ export function HomeManager() {
                 )}
               </div>
               <button
-                aria-label={t.profile}
-                onClick={() => setProfileOpen(true)}
+                aria-label={t.menu}
+                onClick={() => setMobileMenuOpen(true)}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-bg text-text shadow-sm transition-[color,border-color,transform] duration-150 ease-lm hover:border-accent hover:text-accent focus-visible:border-accent focus-visible:text-accent active:scale-95"
               >
-                <UserRound size={18} />
+                <Menu size={18} />
               </button>
             </div>
             {!searching && (
@@ -314,8 +378,83 @@ export function HomeManager() {
       </BottomSheet>
 
       <div className="lg:hidden">
-        <BottomSheet open={profileOpen} onClose={() => setProfileOpen(false)} title={t.profile}>
-          <ProfilePanel />
+        <BottomSheet
+          open={mobileMenuOpen}
+          onClose={closeMobileMenu}
+          title={mobilePanel ? mobilePanelTitles[mobilePanel as Exclude<Panel, "story" | null>] : t.appName}
+        >
+          {!mobilePanel && (
+            <div className="space-y-1 px-1 py-1">
+              {mobileMenuItems.map((item) => (
+                <button
+                  key={item.panel}
+                  onClick={() => openMobilePanel(item.panel)}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-[15px] font-medium text-text transition-[color,transform] duration-150 ease-lm hover:text-accent focus-visible:text-accent active:scale-[0.99]"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface text-muted">
+                    {item.icon}
+                  </span>
+                  <span className="min-w-0 flex-1">{item.label}</span>
+                </button>
+              ))}
+              <div className="flex items-center justify-center gap-1.5 pb-1 pt-4 text-[13px] font-semibold tracking-tight text-muted">
+                <MapPin size={13} className="text-accent" />
+                {t.appName}
+              </div>
+            </div>
+          )}
+
+          {mobilePanel && (
+            <div>
+              <button
+                aria-label={t.cancel}
+                onClick={() => setMobilePanel(null)}
+                className="mb-2 flex items-center gap-2 rounded-lg px-2 py-2 text-[13px] font-medium text-muted transition-[color,transform] duration-150 ease-lm hover:text-accent focus-visible:text-accent active:scale-95"
+              >
+                <ChevronLeft size={17} />
+                {t.cancel}
+              </button>
+
+              {mobilePanel === "trending" && (
+                <div className="px-1">
+                  {trendingStories?.length === 0 && (
+                    <div className="flex flex-col items-center gap-2 py-8 text-center">
+                      <Flame size={24} className="text-muted" />
+                      <span className="text-[13px] text-muted">{t.noStoriesYet}</span>
+                    </div>
+                  )}
+                  {trendingStories?.map((story) => (
+                    <StoryListItem key={story.id} story={story} categories={categories}
+                      onOpen={(id) => { closeMobileMenu(); openStory(id); requestPanTo(story.lat, story.lon); }} />
+                  ))}
+                </div>
+              )}
+
+              {mobilePanel === "nearby" && (
+                <div className="px-1">
+                  {!nearbyLocation && (
+                    <div className="py-8 text-center text-[13px] text-muted">{t.loading}</div>
+                  )}
+                  {nearbyLocation && nearbyStories.length === 0 && (
+                    <div className="py-8 text-center text-[13px] text-muted">{t.noNearby}</div>
+                  )}
+                  {nearbyLocation && nearbyStories.map((story) => (
+                    <StoryListItem key={story.id} story={story} categories={categories}
+                      onOpen={(id) => { closeMobileMenu(); openStory(id); requestPanTo(story.lat, story.lon); }} />
+                  ))}
+                </div>
+              )}
+
+              {mobilePanel === "saved" && (
+                <div className="flex min-h-40 items-center justify-center py-12 text-[13px] text-muted">{t.savedStories}</div>
+              )}
+              {mobilePanel === "my-stories" && (
+                <div className="flex min-h-40 items-center justify-center py-12 text-[13px] text-muted">{t.myStories}</div>
+              )}
+              {mobilePanel === "about" && <AboutPanel />}
+              {mobilePanel === "profile" && <ProfilePanel />}
+            </div>
+          )}
         </BottomSheet>
       </div>
 

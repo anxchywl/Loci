@@ -25,6 +25,7 @@ interface Dict {
   errorLocationDenied: string;
   retry: string;
   searchPlaceholder: string;
+  menu: string;
   trending: string;
   noResults: string;
   addStory: string;
@@ -102,6 +103,7 @@ export const dict: Record<Locale, Dict> = {
     errorLocationDenied: "Location permission denied. Please allow location access in your device/app settings.",
     retry: "Retry",
     searchPlaceholder: "Search stories",
+    menu: "Menu",
     trending: "Trending",
     noResults: "Nothing found",
     addStory: "Add story",
@@ -190,6 +192,7 @@ export const dict: Record<Locale, Dict> = {
     errorLocationDenied: "Орналасуды анықтауға рұқсат берілмеді. Құрылғы немесе қолданба параметрлерінде рұқсат беріңіз.",
     retry: "Қайталау",
     searchPlaceholder: "Оқиғаларды іздеу",
+    menu: "Мәзір",
     trending: "Танымал",
     noResults: "Ештеңе табылмады",
     addStory: "Оқиға қосу",
@@ -278,6 +281,7 @@ export const dict: Record<Locale, Dict> = {
     errorLocationDenied: "Доступ к геопозиции запрещен. Пожалуйста, разрешите доступ в настройках устройства или приложения.",
     retry: "Повторить",
     searchPlaceholder: "Поиск историй",
+    menu: "Меню",
     trending: "Популярное",
     noResults: "Ничего не найдено",
     addStory: "Добавить историю",

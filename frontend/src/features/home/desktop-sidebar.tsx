@@ -271,7 +271,7 @@ export function ProfilePanel() {
   );
 }
 
-function AboutPanel() {
+export function AboutPanel() {
   const t = useDict();
   const sections = [
     { title: t.aboutWhat, body: t.aboutWhatBody },
