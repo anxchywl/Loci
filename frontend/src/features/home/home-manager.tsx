@@ -52,6 +52,7 @@ export function HomeManager() {
   const trendingOpen = useUiStore((state) => state.trendingOpen);
   const setTrendingOpen = useUiStore((state) => state.setTrendingOpen);
   const openStory = useUiStore((state) => state.openStory);
+  const openStoryId = useUiStore((state) => state.openStoryId);
   const requestPanTo = useUiStore((state) => state.requestPanTo);
 
   const [bounds, setBounds] = useState<MapBounds | null>(null);
@@ -82,6 +83,15 @@ export function HomeManager() {
       return () => clearTimeout(id);
     }
   }, [sidebarOpen]);
+
+  // On desktop, open story in sidebar instead of bottom sheet
+  useEffect(() => {
+    if (!openStoryId) return;
+    const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
+    if (!isDesktop) return;
+    setSidebarOpen(true);
+    setActivePanel("story");
+  }, [openStoryId]);
 
   const locateMe = async () => {
     if (locating) return;
@@ -117,6 +127,8 @@ export function HomeManager() {
         onSearchFocus={focusSearch}
         activePanel={activePanel}
         onSetActivePanel={setActivePanel}
+        storyId={openStoryId}
+        authenticated={authenticated}
       />
 
       {/* Search + categories bar */}
@@ -269,7 +281,9 @@ export function HomeManager() {
         ))}
       </BottomSheet>
 
-      <StorySheet authenticated={authenticated} />
+      <div className="lg:hidden">
+        <StorySheet authenticated={authenticated} />
+      </div>
       <AddStorySheet />
       <Toast />
     </main>
