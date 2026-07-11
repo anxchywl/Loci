@@ -50,40 +50,101 @@ body {
 }
 
 .keyboard-sheet-editing {
-  max-height: min(85dvh, calc(100vh - var(--lm-keyboard-inset) - env(safe-area-inset-top)));
-  scroll-padding-block: 32px;
+  max-height: min(82dvh, 660px);
+  padding-bottom: calc(12px + min(env(safe-area-inset-bottom), 34px));
+  scroll-padding: 16px 0 calc(42px + min(env(safe-area-inset-bottom), 34px));
+  scroll-behavior: smooth;
 }
 
 .keyboard-sheet-title {
-  transition: opacity 220ms cubic-bezier(0.2, 0, 0, 1), transform 220ms cubic-bezier(0.2, 0, 0, 1);
+  max-height: 32px;
+  transition: max-height 220ms cubic-bezier(0.2, 0, 0, 1), opacity 220ms cubic-bezier(0.2, 0, 0, 1), transform 220ms cubic-bezier(0.2, 0, 0, 1), margin 220ms cubic-bezier(0.2, 0, 0, 1), padding 220ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 .keyboard-sheet-title-hidden {
+  max-height: 0;
+  margin: 0;
+  padding-block: 0;
   opacity: 0;
   transform: translateY(-8px);
   pointer-events: none;
 }
 
-.keyboard-form-section {
-  max-height: 500px;
-  opacity: 1;
-  overflow: hidden;
-  transform: translate3d(0, 0, 0);
-  transition: max-height 240ms cubic-bezier(0.2, 0, 0, 1), opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 240ms cubic-bezier(0.2, 0, 0, 1), margin 240ms cubic-bezier(0.2, 0, 0, 1);
+.keyboard-sheet-title-row-editing {
+  min-height: 0;
+  padding-bottom: 0;
 }
 
-.keyboard-form-section-hidden {
-  max-height: 0;
-  margin-top: -20px;
-  margin-bottom: 0;
-  opacity: 0;
-  transform: translate3d(0, -10px, 0);
-  pointer-events: none;
+.keyboard-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  transition: gap 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.keyboard-form-stack-focus {
+  gap: 4px;
+}
+
+.keyboard-form-section-active,
+.keyboard-form-section-collapsed {
+  max-height: 300px;
+  transform-origin: top;
+  transition:
+    max-height 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 200ms cubic-bezier(0.16, 1, 0.3, 1) 60ms,
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1) 40ms,
+    margin 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    padding 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.keyboard-form-section-active {
+  opacity: 1;
+  overflow: visible;
+  transform: translateY(0) scale(1);
+}
+
+.keyboard-form-section-active:has([data-active-section="true"]) {
+  margin-inline: 1px;
+  padding: 2px;
+}
+
+.keyboard-form-section-collapsed {
+  max-height: 0 !important;
+  margin: 0 !important;
+  padding-block: 0 !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  transform: translateY(-8px) scale(0.96) !important;
+  transition:
+    opacity 150ms cubic-bezier(0.4, 0, 1, 1),
+    transform 180ms cubic-bezier(0.4, 0, 1, 1),
+    max-height 240ms cubic-bezier(0.4, 0, 0.2, 1),
+    margin 240ms cubic-bezier(0.4, 0, 0.2, 1),
+    padding 240ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.keyboard-form-footer {
+  transition:
+    max-height 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    margin 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.keyboard-form-stack-switching .keyboard-form-section-active,
+.keyboard-form-stack-switching .keyboard-form-section-collapsed {
+  transition: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .keyboard-sheet-title,
-  .keyboard-form-section {
+  .keyboard-form-stack,
+  .keyboard-form-section-active,
+  .keyboard-form-section-collapsed,
+  .keyboard-form-footer {
     transition-duration: 1ms;
   }
 }

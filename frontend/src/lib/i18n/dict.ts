@@ -50,6 +50,7 @@ interface Dict {
   postAnonymously: string;
   publish: string;
   publishing: string;
+  done: string;
   anonymous: string;
   comments: string;
   commentPlaceholder: string;
@@ -193,6 +194,7 @@ export const dict: Record<Locale, Dict> = {
     postAnonymously: "Post anonymously",
     publish: "Publish",
     publishing: "Publishing…",
+    done: "Done",
     anonymous: "Anonymous",
     comments: "Comments",
     commentPlaceholder: "Add a comment",
@@ -347,6 +349,7 @@ export const dict: Record<Locale, Dict> = {
     postAnonymously: "Анонимді жариялау",
     publish: "Жариялау",
     publishing: "Жариялануда…",
+    done: "Дайын",
     anonymous: "Аноним",
     comments: "Пікірлер",
     commentPlaceholder: "Пікір қосу",
@@ -501,6 +504,7 @@ export const dict: Record<Locale, Dict> = {
     postAnonymously: "Опубликовать анонимно",
     publish: "Опубликовать",
     publishing: "Публикация…",
+    done: "Готово",
     anonymous: "Аноним",
     comments: "Комментарии",
     commentPlaceholder: "Добавить комментарий",

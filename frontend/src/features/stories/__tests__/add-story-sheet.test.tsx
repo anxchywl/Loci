@@ -25,6 +25,8 @@ import { createStory } from "@/features/stories/api";
 describe("AddStorySheet", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     useUiStore.setState({
       mode: "compose",
       pickedLocation: { lat: 43.2, lon: 76.9 },
@@ -93,21 +95,22 @@ describe("AddStorySheet", () => {
     const body = screen.getByLabelText("Story");
     const titleSection = title.closest("[data-keyboard-field]");
     const bodySection = body.closest("[data-keyboard-field]");
-    const categorySection = screen.getByText("Category").closest(".keyboard-form-section");
+    const categorySection = screen.getByText("Category").closest("[class*='keyboard-form-section']");
 
     fireEvent.focus(title);
-    expect(titleSection).not.toHaveClass("keyboard-form-section-hidden");
-    expect(bodySection).toHaveClass("keyboard-form-section-hidden");
-    expect(categorySection).toHaveClass("keyboard-form-section-hidden");
+    expect(titleSection).not.toHaveClass("keyboard-form-section-collapsed");
+    expect(bodySection).toHaveClass("keyboard-form-section-collapsed");
+    expect(categorySection).toHaveClass("keyboard-form-section-collapsed");
+    expect(screen.getByRole("button", { name: "Done" })).toBeInTheDocument();
 
     fireEvent.focus(body);
-    expect(titleSection).toHaveClass("keyboard-form-section-hidden");
-    expect(bodySection).not.toHaveClass("keyboard-form-section-hidden");
+    expect(titleSection).toHaveClass("keyboard-form-section-collapsed");
+    expect(bodySection).not.toHaveClass("keyboard-form-section-collapsed");
 
     fireEvent.blur(body);
     await waitFor(() => {
-      expect(titleSection).not.toHaveClass("keyboard-form-section-hidden");
-      expect(categorySection).not.toHaveClass("keyboard-form-section-hidden");
+      expect(titleSection).not.toHaveClass("keyboard-form-section-collapsed");
+      expect(categorySection).not.toHaveClass("keyboard-form-section-collapsed");
     });
   });
 
