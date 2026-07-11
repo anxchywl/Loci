@@ -7,6 +7,7 @@ import {
   Flame,
   Info,
   MapPin,
+  Menu,
   Navigation,
   Search,
   Settings,
@@ -20,6 +21,7 @@ import { useDict } from "@/lib/i18n/use-dict";
 interface DesktopSidebarProps {
   open: boolean;
   onClose: () => void;
+  onOpen: () => void;
   onTrending: () => void;
   onNearby: () => void;
   onSearchFocus: () => void;
@@ -73,6 +75,7 @@ function PanelPlaceholder({ label }: { label: string }) {
 export function DesktopSidebar({
   open,
   onClose,
+  onOpen,
   onTrending,
   onNearby,
   onSearchFocus,
@@ -123,6 +126,51 @@ export function DesktopSidebar({
   };
 
   return (
+    <>
+    {/* Mini icon strip — visible when sidebar is closed */}
+    <div
+      aria-hidden={open}
+      className={[
+        "pointer-events-none fixed left-0 top-0 z-40 hidden h-full w-12 select-none flex-col items-center py-2 lg:flex",
+        "bg-bg border-r border-border",
+        "transition-opacity duration-[230ms] ease-lm",
+        open ? "opacity-0" : "opacity-100 pointer-events-auto",
+      ].join(" ")}
+    >
+      <button
+        aria-label="Open menu"
+        onClick={onOpen}
+        className="flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface"
+      >
+        <Menu size={20} />
+      </button>
+      <div className="my-2 w-6 h-px bg-border" />
+      <div className="flex flex-col items-center gap-1">
+        <button title={t.searchPlaceholder} onClick={() => { onSearchFocus(); }} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface">
+          <Search size={18} />
+        </button>
+        <button title={t.trending} onClick={onTrending} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface">
+          <Flame size={18} />
+        </button>
+        <button title={t.nearby} onClick={onNearby} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface">
+          <Navigation size={18} />
+        </button>
+      </div>
+      <div className="my-2 w-6 h-px bg-border" />
+      <div className="flex flex-col items-center gap-1">
+        <button title={t.savedStories} onClick={onOpen} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface">
+          <Bookmark size={18} />
+        </button>
+        <button title={t.myStories} onClick={onOpen} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface">
+          <BookOpen size={18} />
+        </button>
+      </div>
+      <div className="flex-1" />
+      <Link href="/profile" title={t.profile} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface">
+        <UserRound size={18} />
+      </Link>
+    </div>
+
     <div
       ref={sidebarRef}
       role="navigation"
@@ -253,5 +301,6 @@ export function DesktopSidebar({
         </div>
       </div>
     </div>
+    </>
   );
 }

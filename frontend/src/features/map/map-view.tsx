@@ -114,5 +114,26 @@ export function MapView({ categories, stories, onBoundsChange }: MapViewProps) {
     }
   }, [panRequest]);
 
-  return <div ref={containerRef} className="absolute inset-0" data-testid="map" />;
+  return (
+    <div className="absolute inset-0">
+      <div ref={containerRef} className="absolute inset-0" data-testid="map" />
+      <div className="absolute bottom-20 left-4 z-10 flex flex-col overflow-hidden rounded-lg border border-border bg-bg shadow-sm lg:left-16">
+        <button
+          aria-label="Zoom in"
+          onClick={() => mapRef.current?.zoomIn({ duration: 250 })}
+          className="flex h-9 w-9 items-center justify-center text-[18px] font-light text-text transition-colors hover:bg-surface active:bg-surface"
+        >
+          +
+        </button>
+        <div className="h-px bg-border" />
+        <button
+          aria-label="Zoom out"
+          onClick={() => mapRef.current?.zoomOut({ duration: 250 })}
+          className="flex h-9 w-9 items-center justify-center text-[18px] font-light text-text transition-colors hover:bg-surface active:bg-surface"
+        >
+          −
+        </button>
+      </div>
+    </div>
+  );
 }
