@@ -59,6 +59,7 @@ export function HomeManager() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<Panel>(null);
+  const [nearbyLocation, setNearbyLocation] = useState<{ lat: number; lon: number } | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mapViewRef = useRef<MapViewHandle>(null);
 
@@ -110,6 +111,18 @@ export function HomeManager() {
     }
   };
 
+  const handleNearby = async () => {
+    const outcome = await locate();
+    if (outcome.kind === "located") {
+      setNearbyLocation({ lat: outcome.lat, lon: outcome.lon });
+      requestPanTo(outcome.lat, outcome.lon, 14);
+    } else {
+      useUiStore.getState().showToast(
+        outcome.kind === "denied" ? t.errorLocationDenied : t.errorGeneric
+      );
+    }
+  };
+
   // locate button bottom, zoom buttons sit 52px above it (44px button + 8px gap)
   const locateBottom = authenticated ? "5.5rem" : "1.5rem";
   const zoomBottom = authenticated ? "calc(5.5rem + 52px)" : "calc(1.5rem + 52px)";
@@ -122,12 +135,12 @@ export function HomeManager() {
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onOpen={() => setSidebarOpen(true)}
-        onTrending={() => setTrendingOpen(true)}
-        onNearby={locateMe}
         onSearchFocus={focusSearch}
         activePanel={activePanel}
         onSetActivePanel={setActivePanel}
         storyId={openStoryId}
+        nearbyLocation={nearbyLocation}
+        onNearby={handleNearby}
         authenticated={authenticated}
       />
 

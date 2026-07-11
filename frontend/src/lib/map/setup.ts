@@ -1,7 +1,7 @@
 import maplibregl, { Map as MapLibreMap } from "maplibre-gl";
 
 import { categoryGlyphSvg } from "@/lib/icons/category-glyphs";
-import type { CategorySlug } from "@/lib/i18n/dict";
+import type { CategorySlug, Locale } from "@/lib/i18n/dict";
 
 export const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
 
@@ -52,6 +52,21 @@ export async function addCategoryGlyphImages(
       }
     }),
   );
+}
+
+export function setMapLanguage(map: MapLibreMap, locale: Locale): void {
+  if (!map.isStyleLoaded()) return;
+  const nameKey = locale === "ru" ? "name:ru" : locale === "kk" ? "name" : "name:en";
+  for (const layer of map.getStyle().layers ?? []) {
+    if (layer.type !== "symbol") continue;
+    try {
+      map.setLayoutProperty(layer.id, "text-field", [
+        "coalesce",
+        ["get", nameKey],
+        ["get", "name"],
+      ]);
+    } catch { /* some layers may not accept this expression */ }
+  }
 }
 
 export function colorMatchExpression(

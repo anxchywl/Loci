@@ -4,8 +4,11 @@ import { defaultLocale, type Locale } from "@/lib/i18n/dict";
 
 type HomeMode = "browse" | "pick-location" | "compose";
 
+export type Theme = "auto" | "light" | "dark";
+
 interface UiState {
   locale: Locale;
+  theme: Theme;
   mode: HomeMode;
   pickedLocation: { lat: number; lon: number } | null;
   openStoryId: string | null;
@@ -14,6 +17,7 @@ interface UiState {
   toast: string | null;
   panRequest: { lat: number; lon: number; zoom?: number; id: number } | null;
   setLocale: (locale: Locale) => void;
+  setTheme: (theme: Theme) => void;
   startPickLocation: () => void;
   pickLocation: (lat: number, lon: number) => void;
   cancelCompose: () => void;
@@ -27,8 +31,14 @@ interface UiState {
   requestPanTo: (lat: number, lon: number, zoom?: number) => void;
 }
 
+function loadPref<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try { return (localStorage.getItem(key) as T) ?? fallback; } catch { return fallback; }
+}
+
 export const useUiStore = create<UiState>((set) => ({
-  locale: defaultLocale,
+  locale: loadPref("loci_locale", defaultLocale) as Locale,
+  theme: loadPref("loci_theme", "auto") as Theme,
   mode: "browse",
   pickedLocation: null,
   openStoryId: null,
@@ -36,7 +46,8 @@ export const useUiStore = create<UiState>((set) => ({
   categoryFilter: null,
   toast: null,
   panRequest: null,
-  setLocale: (locale) => set({ locale }),
+  setLocale: (locale) => { localStorage.setItem("loci_locale", locale); set({ locale }); },
+  setTheme: (theme) => { localStorage.setItem("loci_theme", theme); set({ theme }); },
   startPickLocation: () =>
     set({ mode: "pick-location", openStoryId: null, trendingOpen: false }),
   pickLocation: (lat, lon) => set({ mode: "compose", pickedLocation: { lat, lon } }),

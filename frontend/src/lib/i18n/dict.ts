@@ -74,8 +74,23 @@ interface Dict {
   openInTelegram: string;
   locateMe: string;
   nearby: string;
+  noNearby: string;
   settings: string;
   about: string;
+  languageLabel: string;
+  themeLabel: string;
+  themeAuto: string;
+  themeLight: string;
+  themeDark: string;
+  aboutTagline: string;
+  aboutWhat: string;
+  aboutWhatBody: string;
+  aboutHow: string;
+  aboutHowBody: string;
+  aboutPrivacy: string;
+  aboutPrivacyBody: string;
+  aboutTelegram: string;
+  aboutTelegramBody: string;
   categories: Record<CategorySlug, string>;
 }
 
@@ -136,8 +151,23 @@ export const dict: Record<Locale, Dict> = {
     openInTelegram: "Open in Telegram to sign in",
     locateMe: "Find my location",
     nearby: "Nearby",
+    noNearby: "No stories found nearby",
     settings: "Settings",
     about: "About",
+    languageLabel: "Language",
+    themeLabel: "Appearance",
+    themeAuto: "Auto",
+    themeLight: "Light",
+    themeDark: "Dark",
+    aboutTagline: "Your memories on the map.",
+    aboutWhat: "What is Loci?",
+    aboutWhatBody: "Loci is a place to pin your personal stories to the real world. Every corner of a city holds memories — a first date, a favourite café, a moment you'll never forget. Loci makes those invisible threads visible.",
+    aboutHow: "How it works",
+    aboutHowBody: "Browse the map to find stories from people around you. Tap any pin to read what happened there. To add your own story, drop a pin on a meaningful spot, write about it, and optionally attach photos. You can share it publicly or keep it just for yourself.",
+    aboutPrivacy: "Privacy first",
+    aboutPrivacyBody: "Your location is never tracked in the background. When posting, you choose between an exact pin or an approximate one — shown within ~500 m of the real place. Anonymous posting is always available.",
+    aboutTelegram: "Built for Telegram",
+    aboutTelegramBody: "Loci runs as a Telegram Mini App. Signing in is instant — no passwords, no forms. Your Telegram account is your identity, and your stories travel with you.",
     categories: {
       love: "Love",
       happy_moments: "Happy Moments",
@@ -209,8 +239,23 @@ export const dict: Record<Locale, Dict> = {
     openInTelegram: "Кіру үшін Telegram-да ашыңыз",
     locateMe: "Орналасқан жерімді табу",
     nearby: "Жақын маңда",
+    noNearby: "Жақын маңда оқиғалар табылмады",
     settings: "Параметрлер",
     about: "Қосымша туралы",
+    languageLabel: "Тіл",
+    themeLabel: "Сыртқы түр",
+    themeAuto: "Авто",
+    themeLight: "Жарық",
+    themeDark: "Қараңғы",
+    aboutTagline: "Естеліктеріңіз картада.",
+    aboutWhat: "Loci дегеніміз не?",
+    aboutWhatBody: "Loci — жеке оқиғаларды нақты орындарға бекітуге арналған платформа. Қаланың әрбір бұрышында естеліктер тұр: алғашқы кездесу, сүйікті кафе, ұмытылмас сәт. Loci осы көзге көрінбейтін байланыстарды айқын етеді.",
+    aboutHow: "Қалай жұмыс істейді",
+    aboutHowBody: "Картаны шолып, айналаңыздағы адамдардың оқиғаларын табыңыз. Кез келген таңбашаға басып, онда не болғанын оқыңыз. Өз оқиғаңызды қосу үшін мағыналы орынға таңбаша қойып, жазыңыз және фото қосыңыз. Оны жариялауға немесе өзіңізге қалдыруға болады.",
+    aboutPrivacy: "Құпиялылық бірінші",
+    aboutPrivacyBody: "Орналасқан жеріңіз фонда ешқашан бақыланбайды. Жариялаған кезде нақты немесе шамамен орынды таңдайсыз — нақты жерден ~500 м шегінде көрсетіледі. Анонимді жариялау әрқашан қолжетімді.",
+    aboutTelegram: "Telegram үшін жасалған",
+    aboutTelegramBody: "Loci Telegram Mini App ретінде жұмыс істейді. Кіру лезде — пароль де, форма да жоқ. Telegram аккаунтыңыз — сіздің жеке куәлігіңіз.",
     categories: {
       love: "Махаббат",
       happy_moments: "Бақытты сәттер",
@@ -282,8 +327,23 @@ export const dict: Record<Locale, Dict> = {
     openInTelegram: "Откройте в Telegram, чтобы войти",
     locateMe: "Где я?",
     nearby: "Рядом",
+    noNearby: "Рядом историй не найдено",
     settings: "Настройки",
     about: "О приложении",
+    languageLabel: "Язык",
+    themeLabel: "Оформление",
+    themeAuto: "Авто",
+    themeLight: "Светлая",
+    themeDark: "Тёмная",
+    aboutTagline: "Ваши воспоминания на карте.",
+    aboutWhat: "Что такое Loci?",
+    aboutWhatBody: "Loci — платформа для хранения личных историй, привязанных к реальным местам. В каждом уголке города живут воспоминания: первое свидание, любимое кафе, момент, который не забыть. Loci делает эти невидимые нити видимыми.",
+    aboutHow: "Как это работает",
+    aboutHowBody: "Листайте карту и находите истории людей вокруг вас. Нажмите на любую метку, чтобы прочитать, что там произошло. Чтобы добавить свою историю, поставьте метку в значимом месте, напишите о нём и прикрепите фото. Можно поделиться публично или оставить только для себя.",
+    aboutPrivacy: "Приватность прежде всего",
+    aboutPrivacyBody: "Ваше местоположение никогда не отслеживается в фоне. При публикации вы сами выбираете: точное место или приблизительное — в пределах ~500 м. Анонимная публикация всегда доступна.",
+    aboutTelegram: "Создано для Telegram",
+    aboutTelegramBody: "Loci работает как Telegram Mini App. Вход мгновенный — никаких паролей и форм. Ваш аккаунт Telegram — это ваша личность.",
     categories: {
       love: "Любовь",
       happy_moments: "Счастливые моменты",

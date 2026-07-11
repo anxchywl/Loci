@@ -4,7 +4,7 @@ import maplibregl, { type Map as MapLibreMap } from "maplibre-gl";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 
 import type { Category, Story } from "@/features/stories/api";
-import { addCategoryGlyphImages, createMap } from "@/lib/map/setup";
+import { addCategoryGlyphImages, createMap, setMapLanguage } from "@/lib/map/setup";
 import { addStoryLayers, storiesToGeoJson, updateStoryData } from "@/lib/map/story-layers";
 import { useUiStore } from "@/stores/ui-store";
 
@@ -37,6 +37,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
 
   const mode = useUiStore((state) => state.mode);
   const pickedLocation = useUiStore((state) => state.pickedLocation);
+  const locale = useUiStore((state) => state.locale);
 
   useImperativeHandle(ref, () => ({
     zoomIn: () => mapRef.current?.zoomIn({ duration: 250 }),
@@ -112,6 +113,10 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       pickMarkerRef.current = null;
     }
   }, [mode, pickedLocation]);
+
+  useEffect(() => {
+    if (mapRef.current && readyRef.current) setMapLanguage(mapRef.current, locale);
+  }, [locale]);
 
   const panRequest = useUiStore((state) => state.panRequest);
 

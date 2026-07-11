@@ -4,48 +4,64 @@ import {
   Bookmark,
   BookOpen,
   ChevronLeft,
-  ChevronRight,
-  Flag,
   Flame,
+  Flag,
+  Globe,
   Info,
   MapPin,
   Menu,
+  Moon,
   Navigation,
   Search,
   Send,
   Settings,
   Share2,
+  Sun,
+  SunMoon,
   UserRound,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { ReactionButton } from "@/features/stories/components/reaction-button";
+import { StoryListItem } from "@/features/stories/components/story-list-item";
 import {
   useBookmark,
   useCategories,
+  useBboxStories,
   useComments,
   usePostComment,
   useReportStory,
   useStory,
+  useTrending,
 } from "@/features/stories/hooks";
 import { categoryIcons } from "@/lib/icons/category-glyphs";
+import { type Locale, locales } from "@/lib/i18n/dict";
 import { useDict } from "@/lib/i18n/use-dict";
+import { setMapLanguage } from "@/lib/map/setup";
 import { openTelegramLink } from "@/lib/telegram/init";
-import { useUiStore } from "@/stores/ui-store";
+import { type Theme, useUiStore } from "@/stores/ui-store";
 
-export type Panel = "saved" | "my-stories" | "profile" | "settings" | "about" | "story" | null;
+export type Panel =
+  | "saved"
+  | "my-stories"
+  | "profile"
+  | "about"
+  | "story"
+  | "trending"
+  | "nearby"
+  | null;
 
 interface DesktopSidebarProps {
   open: boolean;
   onClose: () => void;
   onOpen: () => void;
-  onTrending: () => void;
-  onNearby: () => void;
   onSearchFocus: () => void;
   activePanel: Panel;
   onSetActivePanel: (p: Panel) => void;
   storyId: string | null;
+  nearbyLocation: { lat: number; lon: number } | null;
+  onNearby: () => void;
   authenticated: boolean;
 }
 
@@ -54,38 +70,69 @@ interface ItemProps {
   label: string;
   sidebarOpen: boolean;
   onClick: () => void;
-  chevron?: boolean;
 }
 
-function Item({ icon, label, sidebarOpen, onClick, chevron }: ItemProps) {
+function Item({ icon, label, sidebarOpen, onClick }: ItemProps) {
   return (
     <button
       onClick={onClick}
       className="mx-1 flex w-[calc(100%-8px)] items-center rounded-lg py-2.5 text-left transition-colors duration-100 hover:bg-surface active:bg-surface"
     >
-      <span className="flex w-10 shrink-0 items-center justify-center text-muted">
-        {icon}
-      </span>
+      <span className="flex w-10 shrink-0 items-center justify-center text-muted">{icon}</span>
       <span className={[
         "flex-1 whitespace-nowrap text-[14px] font-medium text-text transition-opacity duration-[230ms]",
         sidebarOpen ? "opacity-100" : "opacity-0",
       ].join(" ")}>
         {label}
       </span>
-      {chevron && (
-        <ChevronRight size={15} className={[
-          "mr-2 shrink-0 text-muted transition-opacity duration-[230ms]",
-          sidebarOpen ? "opacity-40" : "opacity-0",
-        ].join(" ")} />
-      )}
     </button>
   );
 }
 
-function PanelPlaceholder({ label }: { label: string }) {
+/* ── Panels ── */
+
+function TrendingPanel({ authenticated, onOpen }: { authenticated: boolean; onOpen: (id: string, lat: number, lon: number) => void }) {
+  const t = useDict();
+  const { data: categories = [] } = useCategories();
+  const { data: stories } = useTrending(true);
   return (
-    <div className="flex flex-1 flex-col items-center justify-center py-12 text-center">
-      <span className="text-[13px] text-muted">{label}</span>
+    <div className="px-2 py-2">
+      {stories?.length === 0 && (
+        <div className="py-8 text-center text-[13px] text-muted">{t.noStoriesYet}</div>
+      )}
+      {stories?.map((story) => (
+        <StoryListItem key={story.id} story={story} categories={categories}
+          onOpen={() => onOpen(story.id, story.lat, story.lon)} />
+      ))}
+    </div>
+  );
+}
+
+function NearbyPanel({ location, authenticated, onOpen }: {
+  location: { lat: number; lon: number } | null;
+  authenticated: boolean;
+  onOpen: (id: string, lat: number, lon: number) => void;
+}) {
+  const t = useDict();
+  const { data: categories = [] } = useCategories();
+  const DELTA = 0.018; // ~2 km
+  const bbox = location
+    ? { minLat: location.lat - DELTA, maxLat: location.lat + DELTA, minLon: location.lon - DELTA, maxLon: location.lon + DELTA, categoryId: null }
+    : null;
+  const { data: stories } = useBboxStories(bbox);
+
+  if (!location) return (
+    <div className="px-4 py-8 text-center text-[13px] text-muted">{t.loading}</div>
+  );
+  return (
+    <div className="px-2 py-2">
+      {stories?.length === 0 && (
+        <div className="py-8 text-center text-[13px] text-muted">{t.noNearby}</div>
+      )}
+      {stories?.map((story) => (
+        <StoryListItem key={story.id} story={story} categories={categories}
+          onOpen={() => onOpen(story.id, story.lat, story.lon)} />
+      ))}
     </div>
   );
 }
@@ -106,9 +153,7 @@ function StoryPanel({ storyId, authenticated }: { storyId: string; authenticated
 
   const share = async () => {
     const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME;
-    const link = botUsername
-      ? `https://t.me/${botUsername}?startapp=${storyId}`
-      : window.location.href;
+    const link = botUsername ? `https://t.me/${botUsername}?startapp=${storyId}` : window.location.href;
     if (!openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}`)) {
       await navigator.clipboard.writeText(link);
       showToast(t.linkCopied);
@@ -176,7 +221,7 @@ function StoryPanel({ storyId, authenticated }: { storyId: string; authenticated
 
       <div>
         <div className="mb-2 text-[15px] font-semibold">{t.comments} · {story.comment_count}</div>
-        {comments && comments.length === 0 && (
+        {comments?.length === 0 && (
           <div className="py-3 text-[13px] text-muted">{t.noCommentsYet}</div>
         )}
         <div className="space-y-3">
@@ -207,20 +252,108 @@ function StoryPanel({ storyId, authenticated }: { storyId: string; authenticated
   );
 }
 
+function ProfilePanel() {
+  const t = useDict();
+  const locale = useUiStore((s) => s.locale);
+  const setLocale = useUiStore((s) => s.setLocale);
+  const theme = useUiStore((s) => s.theme);
+  const setTheme = useUiStore((s) => s.setTheme);
+
+  const localeLabels: Record<Locale, string> = { en: "English", kk: "Қазақша", ru: "Русский" };
+  const themes: { value: Theme; label: string; icon: React.ReactNode }[] = [
+    { value: "auto", label: t.themeAuto, icon: <SunMoon size={15} /> },
+    { value: "light", label: t.themeLight, icon: <Sun size={15} /> },
+    { value: "dark", label: t.themeDark, icon: <Moon size={15} /> },
+  ];
+
+  return (
+    <div className="flex flex-col gap-6 px-4 py-4">
+      <div className="py-6 text-center text-[13px] text-muted">{t.profile}</div>
+
+      <div className="mt-auto space-y-5">
+        <div>
+          <div className="mb-2 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-muted">
+            <Globe size={13} /> {t.languageLabel}
+          </div>
+          <div className="flex gap-1.5">
+            {locales.map((l) => (
+              <button key={l} onClick={() => setLocale(l)}
+                className={[
+                  "flex-1 rounded-lg py-2 text-[13px] font-medium transition-colors",
+                  locale === l
+                    ? "bg-accent text-accent-text"
+                    : "bg-surface text-text hover:bg-border",
+                ].join(" ")}>
+                {localeLabels[l]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-2 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-muted">
+            <Settings size={13} /> {t.themeLabel}
+          </div>
+          <div className="flex gap-1.5">
+            {themes.map(({ value, label, icon }) => (
+              <button key={value} onClick={() => setTheme(value)}
+                className={[
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-[13px] font-medium transition-colors",
+                  theme === value
+                    ? "bg-accent text-accent-text"
+                    : "bg-surface text-text hover:bg-border",
+                ].join(" ")}>
+                {icon} {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AboutPanel() {
+  const t = useDict();
+  const sections = [
+    { title: t.aboutWhat, body: t.aboutWhatBody },
+    { title: t.aboutHow, body: t.aboutHowBody },
+    { title: t.aboutPrivacy, body: t.aboutPrivacyBody },
+    { title: t.aboutTelegram, body: t.aboutTelegramBody },
+  ];
+  return (
+    <div className="px-4 py-4">
+      <p className="mb-5 text-[15px] font-medium text-muted">{t.aboutTagline}</p>
+      <div className="space-y-5">
+        {sections.map(({ title, body }) => (
+          <div key={title}>
+            <div className="mb-1 text-[14px] font-semibold">{title}</div>
+            <p className="text-[14px] leading-relaxed text-muted">{body}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-8 text-center text-[12px] text-muted">Loci · v0.1</div>
+    </div>
+  );
+}
+
+/* ── Main sidebar ── */
+
 export function DesktopSidebar({
   open,
   onClose,
   onOpen,
-  onTrending,
-  onNearby,
   onSearchFocus,
   activePanel,
   onSetActivePanel,
   storyId,
+  nearbyLocation,
+  onNearby,
   authenticated,
 }: DesktopSidebarProps) {
   const t = useDict();
-  const sidebarRef = useRef<HTMLDivElement>(null);
+  const openStory = useUiStore((s) => s.openStory);
+  const requestPanTo = useUiStore((s) => s.requestPanTo);
   const { data: openedStory } = useStory(activePanel === "story" ? storyId : null);
 
   useEffect(() => {
@@ -234,29 +367,34 @@ export function DesktopSidebar({
     return () => document.removeEventListener("keydown", handleKey);
   }, [open, onClose, activePanel, onSetActivePanel]);
 
-  // Open the full sidebar before navigating to a panel (from the collapsed strip)
   const openPanel = (panel: Panel) => {
     if (!open) onOpen();
     onSetActivePanel(panel);
   };
 
+  const handleStoryOpen = (id: string, lat: number, lon: number) => {
+    openStory(id);
+    requestPanTo(lat, lon);
+    onSetActivePanel("story");
+  };
+
   const handleToggle = () => {
     if (activePanel) { onSetActivePanel(null); return; }
-    if (open) { onClose(); } else { onOpen(); }
+    if (open) onClose(); else onOpen();
   };
 
   const panelLabels: Record<Exclude<Panel, null>, string> = {
     saved: t.savedStories,
     "my-stories": t.myStories,
     profile: t.profile,
-    settings: t.settings,
     about: t.about,
     story: openedStory?.title ?? t.loading,
+    trending: t.trending,
+    nearby: t.nearby,
   };
 
   return (
     <div
-      ref={sidebarRef}
       role="navigation"
       aria-label="Main navigation"
       className={[
@@ -284,24 +422,25 @@ export function DesktopSidebar({
               (open && !activePanel) ? "opacity-100 rotate-0 scale-100" : "opacity-0 -rotate-90 scale-75",
             ].join(" ")}><X size={18} /></span>
             <span className={["absolute transition-all duration-[200ms]",
-              activePanel ? "opacity-100 scale-100 translate-x-0" : "opacity-0 scale-75 translate-x-2",
+              activePanel ? "opacity-100 scale-100" : "opacity-0 scale-75 translate-x-2",
             ].join(" ")}><ChevronLeft size={18} /></span>
           </button>
 
-          <div className="relative ml-2 h-6 flex-1 overflow-hidden">
-            <div className={["absolute inset-0 flex items-center gap-1.5 transition-all duration-[230ms] ease-lm",
-              activePanel ? "opacity-0 -translate-x-3 pointer-events-none" : "opacity-100 translate-x-0",
-            ].join(" ")}>
-              <MapPin size={15} className="shrink-0 text-accent" />
-              <span className="whitespace-nowrap text-[15px] font-semibold tracking-tight">{t.appName}</span>
-            </div>
-            <div className={["absolute inset-0 flex items-center transition-all duration-[230ms] ease-lm",
-              activePanel ? "opacity-100 translate-x-0" : "opacity-0 translate-x-3 pointer-events-none",
-            ].join(" ")}>
-              <span className="whitespace-nowrap text-[15px] font-semibold">
-                {activePanel ? panelLabels[activePanel] : ""}
-              </span>
-            </div>
+          {/* Panel name — left, fades in when panel active */}
+          <div className={[
+            "ml-2 flex-1 text-[15px] font-semibold transition-all duration-[230ms] ease-lm",
+            activePanel ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 pointer-events-none",
+          ].join(" ")}>
+            {activePanel ? panelLabels[activePanel] : ""}
+          </div>
+
+          {/* Loci brand — right side, visible when sidebar open and no panel */}
+          <div className={[
+            "mr-3 flex items-center gap-1.5 transition-all duration-[230ms] ease-lm",
+            (open && !activePanel) ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2 pointer-events-none",
+          ].join(" ")}>
+            <MapPin size={15} className="text-accent" />
+            <span className="whitespace-nowrap text-[15px] font-semibold tracking-tight">{t.appName}</span>
           </div>
         </div>
 
@@ -320,15 +459,15 @@ export function DesktopSidebar({
                   <Item icon={<Search size={17} />} label={t.searchPlaceholder} sidebarOpen={open}
                     onClick={() => { onSearchFocus(); onClose(); }} />
                   <Item icon={<Flame size={17} />} label={t.trending} sidebarOpen={open}
-                    onClick={() => { onTrending(); onClose(); }} />
+                    onClick={() => openPanel("trending")} />
                   <Item icon={<Navigation size={17} />} label={t.nearby} sidebarOpen={open}
-                    onClick={() => { onNearby(); onClose(); }} />
+                    onClick={() => { onNearby(); openPanel("nearby"); }} />
                 </div>
                 <div className="mx-3 my-2 h-px bg-border" />
                 <div className="space-y-0.5">
-                  <Item icon={<Bookmark size={17} />} label={t.savedStories} sidebarOpen={open} chevron
+                  <Item icon={<Bookmark size={17} />} label={t.savedStories} sidebarOpen={open}
                     onClick={() => openPanel("saved")} />
-                  <Item icon={<BookOpen size={17} />} label={t.myStories} sidebarOpen={open} chevron
+                  <Item icon={<BookOpen size={17} />} label={t.myStories} sidebarOpen={open}
                     onClick={() => openPanel("my-stories")} />
                 </div>
               </nav>
@@ -337,12 +476,10 @@ export function DesktopSidebar({
 
               <div className="shrink-0 py-2">
                 <div className="space-y-0.5">
-                  <Item icon={<UserRound size={17} />} label={t.profile} sidebarOpen={open} chevron
-                    onClick={() => openPanel("profile")} />
-                  <Item icon={<Settings size={17} />} label={t.settings} sidebarOpen={open} chevron
-                    onClick={() => openPanel("settings")} />
-                  <Item icon={<Info size={17} />} label={t.about} sidebarOpen={open} chevron
+                  <Item icon={<Info size={17} />} label={t.about} sidebarOpen={open}
                     onClick={() => openPanel("about")} />
+                  <Item icon={<UserRound size={17} />} label={t.profile} sidebarOpen={open}
+                    onClick={() => openPanel("profile")} />
                 </div>
               </div>
             </div>
@@ -352,11 +489,20 @@ export function DesktopSidebar({
               {activePanel === "story" && storyId && (
                 <StoryPanel storyId={storyId} authenticated={authenticated} />
               )}
-              {activePanel === "saved" && <PanelPlaceholder label={t.savedStories} />}
-              {activePanel === "my-stories" && <PanelPlaceholder label={t.myStories} />}
-              {activePanel === "profile" && <PanelPlaceholder label={t.profile} />}
-              {activePanel === "settings" && <PanelPlaceholder label={t.settings} />}
-              {activePanel === "about" && <PanelPlaceholder label={t.about} />}
+              {activePanel === "trending" && (
+                <TrendingPanel authenticated={authenticated} onOpen={handleStoryOpen} />
+              )}
+              {activePanel === "nearby" && (
+                <NearbyPanel location={nearbyLocation} authenticated={authenticated} onOpen={handleStoryOpen} />
+              )}
+              {activePanel === "saved" && (
+                <div className="flex flex-1 items-center justify-center py-12 text-[13px] text-muted">{t.savedStories}</div>
+              )}
+              {activePanel === "my-stories" && (
+                <div className="flex flex-1 items-center justify-center py-12 text-[13px] text-muted">{t.myStories}</div>
+              )}
+              {activePanel === "profile" && <ProfilePanel />}
+              {activePanel === "about" && <AboutPanel />}
             </div>
           </div>
         </div>

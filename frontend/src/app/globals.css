@@ -12,14 +12,33 @@
   --lm-border: color-mix(in srgb, var(--lm-text) 12%, transparent);
 }
 
-/* browser-only dark fallback; telegram theme params take over once data-tg is set */
+/* browser-only dark fallback */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-tg]) {
+  :root:not([data-tg]):not([data-theme="light"]) {
     --lm-bg: #1c1c1e;
     --lm-surface: #2c2c2e;
     --lm-text: #f2f2f7;
     --lm-muted: #8e8e93;
   }
+}
+
+/* explicit theme overrides — take precedence over Telegram theme vars */
+:root[data-theme="dark"] {
+  --lm-bg: #1c1c1e;
+  --lm-surface: #2c2c2e;
+  --lm-text: #f2f2f7;
+  --lm-muted: #8e8e93;
+  --lm-accent: #3390ec;
+  --lm-accent-text: #ffffff;
+}
+
+:root[data-theme="light"] {
+  --lm-bg: #ffffff;
+  --lm-surface: #f4f4f5;
+  --lm-text: #18181b;
+  --lm-muted: #71717a;
+  --lm-accent: #3390ec;
+  --lm-accent-text: #ffffff;
 }
 
 body {
