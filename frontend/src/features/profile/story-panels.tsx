@@ -1,10 +1,10 @@
 "use client";
 
-import { BookmarkX, MapPinned, RotateCw } from "lucide-react";
+import { BookmarkX, MapPinned } from "lucide-react";
 
 import type { Story } from "@/features/stories/api";
 import { StoryListItem } from "@/features/stories/components/story-list-item";
-import { useCategories, useResubmitStory } from "@/features/stories/hooks";
+import { useCategories } from "@/features/stories/hooks";
 import { useMyBookmarks, useMyStories } from "@/features/profile/hooks";
 import { useDict } from "@/lib/i18n/use-dict";
 
@@ -22,12 +22,11 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
   );
 }
 
-/** Author's own stories with moderation status + resubmit for rejected ones. */
+/** Author's own stories with moderation status. */
 export function MyStoriesPanel({ authenticated, onOpen }: PanelProps) {
   const t = useDict();
   const { data: categories = [] } = useCategories();
   const { data: stories, isLoading } = useMyStories(authenticated);
-  const resubmit = useResubmitStory();
 
   if (!authenticated) {
     return <EmptyState icon={<MapPinned size={24} className="text-muted" />} text={t.openInTelegram} />;
@@ -42,23 +41,13 @@ export function MyStoriesPanel({ authenticated, onOpen }: PanelProps) {
   return (
     <div className="px-1 animate-fade-in">
       {stories.map((story) => (
-        <div key={story.id}>
-          <StoryListItem
-            story={story}
-            categories={categories}
-            onOpen={() => onOpen(story)}
-            showStatus
-          />
-          {story.moderation_status === "rejected" && (
-            <button
-              onClick={() => resubmit.mutate(story.id)}
-              disabled={resubmit.isPending}
-              className="mb-2 flex items-center gap-1.5 text-[13px] font-medium text-accent disabled:opacity-50"
-            >
-              <RotateCw size={14} /> {t.resubmit}
-            </button>
-          )}
-        </div>
+        <StoryListItem
+          key={story.id}
+          story={story}
+          categories={categories}
+          onOpen={() => onOpen(story)}
+          showStatus
+        />
       ))}
     </div>
   );

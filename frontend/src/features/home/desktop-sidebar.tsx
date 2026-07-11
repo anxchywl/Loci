@@ -193,6 +193,10 @@ function StoryPanel({
 
   if (!story) return <div className="px-4 py-6 text-[13px] text-muted">{t.loading}</div>;
 
+  // only approved stories accept reactions/bookmarks — pending/rejected ones are
+  // author-only and must not be interactable
+  const canInteract = story.moderation_status === "approved";
+
   return (
     <div className="space-y-4 px-4 py-3">
       <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
@@ -248,9 +252,9 @@ function StoryPanel({
       ) : (
         <div className="flex items-center gap-2">
           <ReactionButton storyId={story.id} reacted={story.viewer_reacted}
-            count={story.reaction_count} disabled={!authenticated} />
+            count={story.reaction_count} disabled={!authenticated || !canInteract} />
           <button aria-label={story.viewer_bookmarked ? t.saved : t.save}
-            disabled={!authenticated}
+            disabled={!authenticated || !canInteract}
             onClick={() => bookmark.mutate(story.viewer_bookmarked)}
             className="rounded-full border border-border p-2 transition-transform duration-150 ease-lm active:scale-95 disabled:opacity-50">
             <Bookmark size={16} fill={story.viewer_bookmarked ? "currentColor" : "none"} />

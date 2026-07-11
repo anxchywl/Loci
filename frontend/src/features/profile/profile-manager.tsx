@@ -1,13 +1,13 @@
 "use client";
 
-import { ArrowLeft, BookmarkX, MapPinned, RotateCw, ShieldCheck } from "lucide-react";
+import { ArrowLeft, BookmarkX, MapPinned, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
 import { useTelegramAuth } from "@/features/auth/hooks";
 import { useMyBookmarks, useMyStories } from "@/features/profile/hooks";
 import { StoryListItem } from "@/features/stories/components/story-list-item";
-import { useCategories, useResubmitStory } from "@/features/stories/hooks";
+import { useCategories } from "@/features/stories/hooks";
 import { StorySheet } from "@/features/stories/story-sheet";
 import { useDict } from "@/lib/i18n/use-dict";
 import { useUiStore } from "@/stores/ui-store";
@@ -24,7 +24,6 @@ export function ProfileManager() {
   const { data: categories = [] } = useCategories();
   const { data: myStories } = useMyStories(authenticated);
   const { data: bookmarks } = useMyBookmarks(authenticated);
-  const resubmit = useResubmitStory();
 
   const list = tab === "stories" ? myStories : bookmarks;
 
@@ -112,23 +111,13 @@ export function ProfileManager() {
                 </div>
               )}
               {list?.map((story) => (
-                <div key={story.id}>
-                  <StoryListItem
-                    story={story}
-                    categories={categories}
-                    onOpen={openStory}
-                    showStatus={tab === "stories"}
-                  />
-                  {tab === "stories" && story.moderation_status === "rejected" && (
-                    <button
-                      onClick={() => resubmit.mutate(story.id)}
-                      disabled={resubmit.isPending}
-                      className="mb-2 flex items-center gap-1.5 text-[13px] font-medium text-accent disabled:opacity-50"
-                    >
-                      <RotateCw size={14} /> {t.resubmit}
-                    </button>
-                  )}
-                </div>
+                <StoryListItem
+                  key={story.id}
+                  story={story}
+                  categories={categories}
+                  onOpen={openStory}
+                  showStatus={tab === "stories"}
+                />
               ))}
             </div>
           </>

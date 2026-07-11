@@ -65,6 +65,9 @@ export function StorySheet({ authenticated }: StorySheetProps) {
 
   const category = categories?.find((c) => c.id === story?.category_id);
   const Icon = category ? categoryIcons[category.slug] : null;
+  // only approved stories accept reactions/bookmarks — pending or rejected ones
+  // are visible only to their author and must not be interactable
+  const canInteract = story?.moderation_status === "approved";
 
   const share = async () => {
     const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME;
@@ -151,11 +154,11 @@ export function StorySheet({ authenticated }: StorySheetProps) {
                 storyId={story.id}
                 reacted={story.viewer_reacted}
                 count={story.reaction_count}
-                disabled={!authenticated}
+                disabled={!authenticated || !canInteract}
               />
               <button
                 aria-label={story.viewer_bookmarked ? t.saved : t.save}
-                disabled={!authenticated}
+                disabled={!authenticated || !canInteract}
                 onClick={() => bookmark.mutate(story.viewer_bookmarked)}
                 className="rounded-full border border-border p-2 transition-transform duration-150 ease-lm active:scale-95 disabled:opacity-50"
               >

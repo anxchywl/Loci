@@ -33,7 +33,7 @@ export function StoryListItem({ story, categories, onOpen, showStatus = false }:
   return (
     <button
       onClick={() => onOpen(story.id)}
-      className="flex w-full items-start gap-3 border-b border-border py-3 text-left transition-colors duration-150 ease-lm active:bg-surface"
+      className="flex w-full items-start gap-3 border-b border-border py-3 text-left transition-colors duration-150 ease-lm last:border-b-0 active:bg-surface"
     >
       {category && Icon && (
         <span
