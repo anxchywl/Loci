@@ -17,6 +17,7 @@ import {
   Share2,
   Sun,
   SunMoon,
+  Trash2,
   UserRound,
   X,
 } from "lucide-react";
@@ -30,6 +31,7 @@ import {
   useBookmark,
   useCategories,
   useBboxStories,
+  useDeleteStory,
   useReportStory,
   useStory,
   useTrending,
@@ -138,16 +140,45 @@ function NearbyPanel({ location, authenticated, onOpen }: {
   );
 }
 
-function StoryPanel({ storyId, authenticated }: { storyId: string; authenticated: boolean }) {
+function StoryPanel({
+  storyId,
+  authenticated,
+  onClose,
+}: {
+  storyId: string;
+  authenticated: boolean;
+  onClose: () => void;
+}) {
   const t = useDict();
   const showToast = useUiStore((state) => state.showToast);
   const { data: story } = useStory(storyId);
   const { data: categories } = useCategories();
   const bookmark = useBookmark(storyId);
   const report = useReportStory(storyId);
+  const deleteStory = useDeleteStory();
+  const [confirming, setConfirming] = useState<"delete" | "report" | null>(null);
+
+  useEffect(() => {
+    setConfirming(null);
+  }, [storyId]);
 
   const category = categories?.find((c) => c.id === story?.category_id);
   const Icon = category ? categoryIcons[category.slug] : null;
+
+  const confirmAction = () => {
+    if (!story) return;
+    if (confirming === "delete") {
+      deleteStory.mutate(story.id, {
+        onSuccess: () => { setConfirming(null); onClose(); },
+        onError: () => showToast(t.errorGeneric),
+      });
+    } else if (confirming === "report") {
+      report.mutate(null, {
+        onSuccess: () => { setConfirming(null); showToast(t.reported); },
+        onError: () => showToast(t.errorGeneric),
+      });
+    }
+  };
 
   const share = async () => {
     const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME;
@@ -191,25 +222,57 @@ function StoryPanel({ storyId, authenticated }: { storyId: string; authenticated
 
       <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{story.body}</p>
 
-      <div className="flex items-center gap-2">
-        <ReactionButton storyId={story.id} reacted={story.viewer_reacted}
-          count={story.reaction_count} disabled={!authenticated} />
-        <button aria-label={story.viewer_bookmarked ? t.saved : t.save}
-          disabled={!authenticated}
-          onClick={() => bookmark.mutate(story.viewer_bookmarked)}
-          className="rounded-full border border-border p-2 transition-transform duration-150 ease-lm active:scale-95 disabled:opacity-50">
-          <Bookmark size={16} fill={story.viewer_bookmarked ? "currentColor" : "none"} />
-        </button>
-        <button aria-label={t.share} onClick={share}
-          className="rounded-full border border-border p-2 transition-transform duration-150 ease-lm active:scale-95">
-          <Share2 size={16} />
-        </button>
-        <button aria-label={t.report} disabled={!authenticated || report.isSuccess}
-          onClick={() => report.mutate(null, { onSuccess: () => showToast(t.reported) })}
-          className="ml-auto rounded-full border border-border p-2 text-muted transition-transform duration-150 ease-lm active:scale-95 disabled:opacity-50">
-          <Flag size={16} />
-        </button>
-      </div>
+      {confirming ? (
+        <div className="space-y-3 rounded-lg border border-border p-3 animate-fade-in">
+          <div className="text-[15px] font-semibold">
+            {confirming === "delete" ? t.confirmDeleteTitle : t.confirmReportTitle}
+          </div>
+          <p className="text-[13px] text-muted">
+            {confirming === "delete" ? t.confirmDeleteBody : t.confirmReportBody}
+          </p>
+          <div className="flex gap-2">
+            <button onClick={() => setConfirming(null)}
+              disabled={deleteStory.isPending || report.isPending}
+              className="flex-1 rounded border border-border py-2 text-[14px] font-medium text-muted transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50">
+              {t.cancel}
+            </button>
+            <button onClick={confirmAction}
+              disabled={deleteStory.isPending || report.isPending}
+              className={`flex-1 rounded py-2 text-[14px] font-semibold text-white transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50 ${confirming === "delete" ? "bg-[#E5484D]" : "bg-accent text-accent-text"}`}>
+              {confirming === "delete" ? (deleteStory.isPending ? t.deleting : t.deleteStory) : t.report}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <ReactionButton storyId={story.id} reacted={story.viewer_reacted}
+            count={story.reaction_count} disabled={!authenticated} />
+          <button aria-label={story.viewer_bookmarked ? t.saved : t.save}
+            disabled={!authenticated}
+            onClick={() => bookmark.mutate(story.viewer_bookmarked)}
+            className="rounded-full border border-border p-2 transition-transform duration-150 ease-lm active:scale-95 disabled:opacity-50">
+            <Bookmark size={16} fill={story.viewer_bookmarked ? "currentColor" : "none"} />
+          </button>
+          <button aria-label={t.share} onClick={share}
+            className="rounded-full border border-border p-2 transition-transform duration-150 ease-lm active:scale-95">
+            <Share2 size={16} />
+          </button>
+          <div className="ml-auto flex items-center gap-2">
+            {story.viewer_is_owner ? (
+              <button aria-label={t.deleteStory} onClick={() => setConfirming("delete")}
+                className="rounded-full border border-border p-2 text-[#E5484D] transition-transform duration-150 ease-lm active:scale-95">
+                <Trash2 size={16} />
+              </button>
+            ) : (
+              <button aria-label={t.report} disabled={!authenticated || report.isSuccess}
+                onClick={() => setConfirming("report")}
+                className="rounded-full border border-border p-2 text-muted transition-transform duration-150 ease-lm active:scale-95 disabled:opacity-50">
+                <Flag size={16} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -323,7 +386,7 @@ export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void
           )}
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-2 rounded-2xl bg-surface px-3 py-6 text-center">
+        <div className="flex flex-col items-center gap-2 px-3 py-6 text-center">
           <MapPinned size={22} className="text-muted" />
           <span className="text-[13px] text-muted">{t.openInTelegram}</span>
         </div>
@@ -507,7 +570,7 @@ export function DesktopSidebar({
             {/* Panel content */}
             <div className="flex h-full w-[320px] shrink-0 flex-col overflow-y-auto">
               {activePanel === "story" && storyId && (
-                <StoryPanel storyId={storyId} authenticated={authenticated} />
+                <StoryPanel storyId={storyId} authenticated={authenticated} onClose={() => onSetActivePanel(null)} />
               )}
               {activePanel === "trending" && (
                 <TrendingPanel authenticated={authenticated} onOpen={handleStoryOpen} />

@@ -100,15 +100,15 @@ export function AddStorySheet() {
 
   if (submitted) {
     return (
-      <BottomSheet open={mode === "compose"} onClose={finish} title={t.storySentTitle}>
-        <div className="flex flex-col items-center gap-4 py-6 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/15">
-            <Check size={28} className="text-accent" />
+      <BottomSheet open={mode === "compose"} onClose={finish}>
+        <div className="flex items-center gap-3 px-1 pb-4 pt-2">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/15">
+            <Check size={18} className="text-accent" />
           </div>
-          <p className="text-[14px] leading-relaxed text-muted">{t.storySentBody}</p>
+          <p className="flex-1 text-[13px] leading-snug text-muted">{t.storySentBody}</p>
           <button
             onClick={finish}
-            className="w-full rounded bg-accent py-3 text-[15px] font-semibold text-accent-text transition-transform duration-150 ease-lm active:scale-[0.98]"
+            className="shrink-0 rounded bg-accent px-4 py-2 text-[13px] font-semibold text-accent-text transition-transform duration-150 ease-lm active:scale-[0.98]"
           >
             {t.gotIt}
           </button>
