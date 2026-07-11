@@ -3,18 +3,21 @@
 import {
   Bookmark,
   BookOpen,
-  ChevronLeft,
   Flame,
   Info,
+  MapPin,
   Navigation,
   Search,
   Settings,
   UserRound,
+  ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 import { useDict } from "@/lib/i18n/use-dict";
+
+export type Panel = "saved" | "my-stories" | "profile" | "settings" | "about" | null;
 
 interface DesktopSidebarProps {
   open: boolean;
@@ -23,6 +26,8 @@ interface DesktopSidebarProps {
   onTrending: () => void;
   onNearby: () => void;
   onSearchFocus: () => void;
+  activePanel: Panel;
+  onSetActivePanel: (p: Panel) => void;
 }
 
 interface NavItemProps {
@@ -41,7 +46,7 @@ function NavItem({ icon, label, onClick, href, chevron }: NavItemProps) {
     <>
       <span className="text-muted">{icon}</span>
       <span className="flex-1 text-left">{label}</span>
-      {chevron && <ChevronLeft size={16} className="rotate-180 text-muted opacity-50" />}
+      {chevron && <ChevronRight size={15} className="text-muted opacity-40" />}
     </>
   );
 
@@ -60,8 +65,6 @@ function NavItem({ icon, label, onClick, href, chevron }: NavItemProps) {
   );
 }
 
-type Panel = "saved" | "my-stories" | "profile" | "settings" | "about" | null;
-
 function PanelPlaceholder({ label }: { label: string }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center">
@@ -77,43 +80,22 @@ export function DesktopSidebar({
   onTrending,
   onNearby,
   onSearchFocus,
+  activePanel,
+  onSetActivePanel,
 }: DesktopSidebarProps) {
   const t = useDict();
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const [activePanel, setActivePanel] = useState<Panel>(null);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (activePanel) setActivePanel(null);
+        if (activePanel) onSetActivePanel(null);
         else if (open) onClose();
       }
     };
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [open, onClose, activePanel]);
-
-  useEffect(() => {
-    if (!open) {
-      // reset panel when sidebar closes
-      const id = setTimeout(() => setActivePanel(null), 230);
-      return () => clearTimeout(id);
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (sidebarRef.current && !sidebarRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    const id = setTimeout(() => document.addEventListener("mousedown", handleClickOutside), 50);
-    return () => {
-      clearTimeout(id);
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [open, onClose]);
+  }, [open, onClose, activePanel, onSetActivePanel]);
 
   const panelLabels: Record<Exclude<Panel, null>, string> = {
     saved: t.savedStories,
@@ -125,172 +107,146 @@ export function DesktopSidebar({
 
   return (
     <>
-    {/* Mini icon strip — visible when sidebar is closed */}
-    <div
-      aria-hidden={open}
-      className={[
-        "pointer-events-none fixed left-0 top-0 z-40 hidden h-full w-12 select-none flex-col items-center py-2 lg:flex",
-        "bg-bg border-r border-border",
-        "transition-opacity duration-[230ms] ease-lm",
-        open ? "opacity-0" : "opacity-100 pointer-events-auto",
-      ].join(" ")}
-    >
-      {/* Space for the hamburger button rendered in home-manager */}
-      <div className="h-10 w-10" />
-      <div className="my-2 w-6 h-px bg-border" />
-      <div className="flex flex-col items-center gap-1">
-        <button title={t.searchPlaceholder} onClick={() => { onSearchFocus(); }} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface">
-          <Search size={18} />
-        </button>
-        <button title={t.trending} onClick={onTrending} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface">
-          <Flame size={18} />
-        </button>
-        <button title={t.nearby} onClick={onNearby} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface">
-          <Navigation size={18} />
-        </button>
-      </div>
-      <div className="my-2 w-6 h-px bg-border" />
-      <div className="flex flex-col items-center gap-1">
-        <button title={t.savedStories} onClick={onOpen} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface">
-          <Bookmark size={18} />
-        </button>
-        <button title={t.myStories} onClick={onOpen} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface">
-          <BookOpen size={18} />
-        </button>
-      </div>
-      <div className="flex-1" />
-      <Link href="/profile" title={t.profile} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface">
-        <UserRound size={18} />
-      </Link>
-    </div>
-
-    <div
-      ref={sidebarRef}
-      role="navigation"
-      aria-label="Main navigation"
-      aria-hidden={!open}
-      className={[
-        "pointer-events-none fixed left-0 top-0 z-40 hidden h-full w-[320px] select-none flex-col overflow-hidden",
-        "bg-bg shadow-[2px_0_12px_rgba(0,0,0,0.08)] lg:flex",
-        "rounded-r-[16px]",
-        "transition-transform duration-[230ms] ease-lm will-change-transform",
-        open ? "translate-x-0 pointer-events-auto" : "-translate-x-full",
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      {/* Sliding container: main + panel side-by-side, translate to show active */}
+      {/* Mini icon strip — always visible on desktop, sits behind the full sidebar */}
       <div
-        className="flex h-full w-[640px] transition-transform duration-[230ms] ease-lm"
-        style={{ transform: activePanel ? "translateX(-320px)" : "translateX(0)" }}
+        aria-hidden={open}
+        className={[
+          "fixed left-0 top-0 z-30 hidden h-full w-12 select-none flex-col items-center lg:flex",
+          "bg-bg border-r border-border",
+          "transition-opacity duration-[230ms] ease-lm",
+          open ? "opacity-0 pointer-events-none" : "opacity-100",
+        ].join(" ")}
       >
-        {/* ── Main nav (left slot) ── */}
-        <div className="flex h-full w-[320px] shrink-0 flex-col">
-          {/* Space aligning with the hamburger button height */}
-          <div className="h-14" />
+        {/* Spacer for the toggle button at top-3 (12px) + h-9 (36px) */}
+        <div className="mt-3 h-9 w-9 shrink-0" />
+        <div className="my-2 w-6 h-px bg-border" />
+        <div className="flex flex-col items-center gap-0.5">
+          <button title={t.searchPlaceholder} onClick={onSearchFocus} className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface">
+            <Search size={17} />
+          </button>
+          <button title={t.trending} onClick={onTrending} className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface">
+            <Flame size={17} />
+          </button>
+          <button title={t.nearby} onClick={onNearby} className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface">
+            <Navigation size={17} />
+          </button>
+        </div>
+        <div className="my-2 w-6 h-px bg-border" />
+        <div className="flex flex-col items-center gap-0.5">
+          <button title={t.savedStories} onClick={onOpen} className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface">
+            <Bookmark size={17} />
+          </button>
+          <button title={t.myStories} onClick={onOpen} className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface">
+            <BookOpen size={17} />
+          </button>
+        </div>
+        <div className="flex-1" />
+        <div className="mb-2 flex flex-col items-center gap-0.5">
+          <Link href="/profile" title={t.profile} className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface">
+            <UserRound size={17} />
+          </Link>
+        </div>
+      </div>
 
-          <div className="mx-4 h-px bg-border" />
+      {/* Click-outside overlay — sits between map (z-0) and sidebar (z-40) */}
+      {open && (
+        <div
+          className="fixed inset-0 z-[39] hidden lg:block"
+          onClick={onClose}
+        />
+      )}
 
-          <nav className="flex-1 overflow-y-auto px-2 py-3">
-            <div className="space-y-0.5">
-              <NavItem
-                icon={<Search size={18} />}
-                label={t.searchPlaceholder}
-                onClick={() => { onSearchFocus(); onClose(); }}
-              />
-              <NavItem
-                icon={<Flame size={18} />}
-                label={t.trending}
-                onClick={() => { onTrending(); onClose(); }}
-              />
-              <NavItem
-                icon={<Navigation size={18} />}
-                label={t.nearby}
-                onClick={() => { onNearby(); onClose(); }}
-              />
+      {/* Full sidebar */}
+      <div
+        ref={sidebarRef}
+        role="navigation"
+        aria-label="Main navigation"
+        aria-hidden={!open}
+        className={[
+          "fixed left-0 top-0 z-40 hidden h-full w-[320px] select-none flex-col overflow-hidden",
+          "bg-bg shadow-[2px_0_12px_rgba(0,0,0,0.08)] lg:flex",
+          "rounded-r-[16px]",
+          "transition-transform duration-[230ms] ease-lm will-change-transform",
+          open ? "translate-x-0" : "-translate-x-full pointer-events-none",
+        ].join(" ")}
+      >
+        {/* Shared header — shows Loci brand or panel name */}
+        <div className="flex h-14 shrink-0 items-center pl-14 pr-4">
+          <div className="relative flex-1 overflow-hidden h-6">
+            {/* Loci brand */}
+            <div className={[
+              "absolute inset-0 flex items-center gap-1.5 transition-all duration-[230ms] ease-lm",
+              activePanel ? "opacity-0 -translate-x-3 pointer-events-none" : "opacity-100 translate-x-0",
+            ].join(" ")}>
+              <MapPin size={16} className="text-accent shrink-0" />
+              <span className="text-[15px] font-semibold tracking-tight">{t.appName}</span>
             </div>
-
-            <div className="mx-1 my-3 h-px bg-border" />
-
-            <div className="space-y-0.5">
-              <NavItem
-                icon={<Bookmark size={18} />}
-                label={t.savedStories}
-                chevron
-                onClick={() => setActivePanel("saved")}
-              />
-              <NavItem
-                icon={<BookOpen size={18} />}
-                label={t.myStories}
-                chevron
-                onClick={() => setActivePanel("my-stories")}
-              />
-              <NavItem
-                icon={<UserRound size={18} />}
-                label={t.profile}
-                chevron
-                onClick={() => setActivePanel("profile")}
-              />
-            </div>
-          </nav>
-
-          <div className="mx-4 h-px bg-border" />
-
-          <div className="px-2 py-3">
-            <div className="space-y-0.5">
-              <NavItem
-                icon={<Settings size={18} />}
-                label={t.settings}
-                chevron
-                onClick={() => setActivePanel("settings")}
-              />
-              <NavItem
-                icon={<Info size={18} />}
-                label={t.about}
-                chevron
-                onClick={() => setActivePanel("about")}
-              />
+            {/* Panel name */}
+            <div className={[
+              "absolute inset-0 flex items-center transition-all duration-[230ms] ease-lm",
+              activePanel ? "opacity-100 translate-x-0" : "opacity-0 translate-x-3 pointer-events-none",
+            ].join(" ")}>
+              <span className="text-[15px] font-semibold">
+                {activePanel ? panelLabels[activePanel] : ""}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* ── Panel (right slot) ── */}
-        <div className="flex h-full w-[320px] shrink-0 flex-col">
-          {/* Panel header */}
-          <div className="flex h-14 items-center gap-1 px-3">
-            <button
-              onClick={() => setActivePanel(null)}
-              className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-[14px] font-medium text-muted transition-colors hover:bg-surface"
-            >
-              <ChevronLeft size={18} />
-              <span>{activePanel ? panelLabels[activePanel] : ""}</span>
-            </button>
-          </div>
+        <div className="mx-4 h-px bg-border shrink-0" />
 
-          <div className="mx-4 h-px bg-border" />
+        {/* Sliding content */}
+        <div className="flex-1 overflow-hidden">
+          <div
+            className="flex h-full transition-transform duration-[230ms] ease-lm will-change-transform"
+            style={{
+              width: "640px",
+              transform: activePanel ? "translateX(-320px)" : "translateX(0)",
+            }}
+          >
+            {/* ── Main nav ── */}
+            <div className="flex h-full w-[320px] shrink-0 flex-col">
+              <nav className="flex-1 overflow-y-auto px-2 py-3">
+                <div className="space-y-0.5">
+                  <NavItem icon={<Search size={18} />} label={t.searchPlaceholder} onClick={() => { onSearchFocus(); onClose(); }} />
+                  <NavItem icon={<Flame size={18} />} label={t.trending} onClick={() => { onTrending(); onClose(); }} />
+                  <NavItem icon={<Navigation size={18} />} label={t.nearby} onClick={() => { onNearby(); onClose(); }} />
+                </div>
 
-          <div className="flex flex-1 flex-col overflow-y-auto px-2 py-3">
-            {activePanel === "saved" && (
-              <PanelPlaceholder label={t.savedStories} />
-            )}
-            {activePanel === "my-stories" && (
-              <PanelPlaceholder label={t.myStories} />
-            )}
-            {activePanel === "profile" && (
-              <div className="space-y-0.5">
-                <NavItem icon={<UserRound size={18} />} label={t.profile} href="/profile" onClick={onClose} />
+                <div className="mx-1 my-3 h-px bg-border" />
+
+                <div className="space-y-0.5">
+                  <NavItem icon={<Bookmark size={18} />} label={t.savedStories} chevron onClick={() => onSetActivePanel("saved")} />
+                  <NavItem icon={<BookOpen size={18} />} label={t.myStories} chevron onClick={() => onSetActivePanel("my-stories")} />
+                </div>
+              </nav>
+
+              <div className="mx-4 h-px bg-border shrink-0" />
+
+              <div className="px-2 py-3 shrink-0">
+                <div className="space-y-0.5">
+                  <NavItem icon={<UserRound size={18} />} label={t.profile} chevron onClick={() => onSetActivePanel("profile")} />
+                  <NavItem icon={<Settings size={18} />} label={t.settings} chevron onClick={() => onSetActivePanel("settings")} />
+                  <NavItem icon={<Info size={18} />} label={t.about} chevron onClick={() => onSetActivePanel("about")} />
+                </div>
               </div>
-            )}
-            {activePanel === "settings" && (
-              <PanelPlaceholder label={t.settings} />
-            )}
-            {activePanel === "about" && (
-              <PanelPlaceholder label={t.about} />
-            )}
+            </div>
+
+            {/* ── Panel content ── */}
+            <div className="flex h-full w-[320px] shrink-0 flex-col overflow-y-auto px-2 py-3">
+              {activePanel === "saved" && <PanelPlaceholder label={t.savedStories} />}
+              {activePanel === "my-stories" && <PanelPlaceholder label={t.myStories} />}
+              {activePanel === "profile" && (
+                <div className="space-y-0.5">
+                  <NavItem icon={<UserRound size={18} />} label={t.profile} href="/profile" onClick={onClose} />
+                </div>
+              )}
+              {activePanel === "settings" && <PanelPlaceholder label={t.settings} />}
+              {activePanel === "about" && <PanelPlaceholder label={t.about} />}
+            </div>
           </div>
         </div>
       </div>
-    </div>
     </>
   );
 }

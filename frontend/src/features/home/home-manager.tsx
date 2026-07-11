@@ -1,11 +1,10 @@
 "use client";
 
-import { Flame, MapPin, Menu, Navigation, Plus, Search, UserRound, X } from "lucide-react";
-import Link from "next/link";
+import { ChevronLeft, Flame, MapPin, Menu, Navigation, Plus, Search, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useTelegramAuth } from "@/features/auth/hooks";
-import { DesktopSidebar } from "@/features/home/desktop-sidebar";
+import { DesktopSidebar, type Panel } from "@/features/home/desktop-sidebar";
 import { MapView, type MapBounds, type MapViewHandle } from "@/features/map/map-view";
 import { AddStorySheet } from "@/features/stories/add-story-sheet";
 import { BottomSheet } from "@/features/stories/components/bottom-sheet";
@@ -58,6 +57,7 @@ export function HomeManager() {
   const [bounds, setBounds] = useState<MapBounds | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activePanel, setActivePanel] = useState<Panel>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mapViewRef = useRef<MapViewHandle>(null);
 
@@ -69,12 +69,29 @@ export function HomeManager() {
   const { data: searchResults } = useSearch(searchQuery);
 
   const searching = searchQuery.trim().length >= 2;
-
   const [locating, setLocating] = useState(false);
 
   const focusSearch = useCallback(() => {
     searchInputRef.current?.focus();
   }, []);
+
+  // Reset panel when sidebar closes
+  useEffect(() => {
+    if (!sidebarOpen) {
+      const id = setTimeout(() => setActivePanel(null), 230);
+      return () => clearTimeout(id);
+    }
+  }, [sidebarOpen]);
+
+  const handleToggle = () => {
+    if (activePanel) {
+      setActivePanel(null);
+    } else if (sidebarOpen) {
+      setSidebarOpen(false);
+    } else {
+      setSidebarOpen(true);
+    }
+  };
 
   const locateMe = async () => {
     if (locating) return;
@@ -93,16 +110,14 @@ export function HomeManager() {
     }
   };
 
-  // bottom position of the locate button (mirrors the inline style below)
+  // locate button bottom, zoom buttons sit 52px above it (44px button + 8px gap)
   const locateBottom = authenticated ? "5.5rem" : "1.5rem";
-  // zoom buttons sit above locate: locate height ~44px + 8px gap = 52px
   const zoomBottom = authenticated ? "calc(5.5rem + 52px)" : "calc(1.5rem + 52px)";
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-bg">
       <MapView ref={mapViewRef} categories={categories} stories={stories} onBoundsChange={setBounds} />
 
-      {/* Desktop sidebar */}
       <DesktopSidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -110,53 +125,58 @@ export function HomeManager() {
         onTrending={() => setTrendingOpen(true)}
         onNearby={locateMe}
         onSearchFocus={focusSearch}
+        activePanel={activePanel}
+        onSetActivePanel={setActivePanel}
       />
 
-      {/* Desktop hamburger/close — morphs in place, hidden on mobile */}
+      {/* Desktop toggle button — morphs between ☰ / ✕ / ← */}
       {mode !== "compose" && (
         <button
-          aria-label={sidebarOpen ? t.cancel : "Menu"}
-          aria-expanded={sidebarOpen}
-          onClick={() => setSidebarOpen((o) => !o)}
-          className="absolute left-3 top-3 z-50 hidden h-9 w-9 items-center justify-center rounded-lg border border-border bg-bg text-text shadow-sm lg:flex"
+          aria-label={activePanel ? "Back" : sidebarOpen ? t.cancel : "Menu"}
+          onClick={handleToggle}
+          className="absolute left-3 top-3 z-50 hidden h-9 w-9 items-center justify-center rounded-lg text-text lg:flex"
         >
+          {/* Menu icon */}
           <span className={[
-            "absolute transition-all duration-200",
-            sidebarOpen ? "opacity-0 rotate-90 scale-75" : "opacity-100 rotate-0 scale-100",
+            "absolute transition-all duration-[200ms] ease-lm",
+            (!sidebarOpen && !activePanel) ? "opacity-100 scale-100 rotate-0" : "opacity-0 scale-75 rotate-90",
           ].join(" ")}>
             <Menu size={18} />
           </span>
+          {/* X icon */}
           <span className={[
-            "absolute transition-all duration-200",
-            sidebarOpen ? "opacity-100 rotate-0 scale-100" : "opacity-0 -rotate-90 scale-75",
+            "absolute transition-all duration-[200ms] ease-lm",
+            (sidebarOpen && !activePanel) ? "opacity-100 scale-100 rotate-0" : "opacity-0 scale-75 -rotate-90",
           ].join(" ")}>
             <X size={18} />
+          </span>
+          {/* Back icon */}
+          <span className={[
+            "absolute transition-all duration-[200ms] ease-lm",
+            activePanel ? "opacity-100 scale-100 translate-x-0" : "opacity-0 scale-75 translate-x-2",
+          ].join(" ")}>
+            <ChevronLeft size={18} />
           </span>
         </button>
       )}
 
+      {/* Search + categories bar */}
       {mode !== "compose" && (
         <div
           className={[
-            "absolute inset-x-0 top-0 space-y-2 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]",
+            "absolute inset-x-0 top-0 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]",
             "transition-[padding-left] duration-[230ms] ease-lm",
             sidebarOpen ? "lg:pl-[332px]" : "lg:pl-14",
           ].join(" ")}
         >
-          <div className="flex items-center gap-2">
-            {/* Loci brand — shown on desktop when sidebar is open */}
-            {sidebarOpen && (
-              <div className="hidden shrink-0 items-center gap-1.5 lg:flex">
-                <MapPin size={17} className="text-accent" />
-                <span className="text-[15px] font-semibold tracking-tight">{t.appName}</span>
-              </div>
-            )}
-            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-border bg-bg px-3 py-2">
+          {/* Mobile: stacked layout */}
+          <div className="flex flex-col gap-2 lg:hidden">
+            <div className="flex items-center gap-2 rounded-full border border-border bg-bg px-3 py-2">
               <Search size={16} className="shrink-0 text-muted" />
               <input
                 ref={searchInputRef}
                 value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t.searchPlaceholder}
                 className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted"
               />
@@ -166,47 +186,53 @@ export function HomeManager() {
                 </button>
               )}
             </div>
-            <Link
-              href="/profile"
-              aria-label={t.profile}
-              className="rounded-full border border-border bg-bg p-2.5 text-muted"
-            >
-              <UserRound size={18} />
-            </Link>
+            {!searching && (
+              <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+                {categories.map((cat) => (
+                  <CategoryChip key={cat.id} category={cat} selected={categoryFilter === cat.id}
+                    onClick={() => setCategoryFilter(categoryFilter === cat.id ? null : cat.id)} />
+                ))}
+              </div>
+            )}
           </div>
 
-          {!searching && (
-            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
-              {categories.map((category) => (
-                <CategoryChip
-                  key={category.id}
-                  category={category}
-                  selected={categoryFilter === category.id}
-                  onClick={() =>
-                    setCategoryFilter(categoryFilter === category.id ? null : category.id)
-                  }
-                />
-              ))}
+          {/* Desktop: single row — compact search + scrollable categories */}
+          <div className="hidden lg:flex items-center gap-2">
+            <div className="flex w-[200px] shrink-0 items-center gap-2 rounded-full border border-border bg-bg px-3 py-1.5">
+              <Search size={14} className="shrink-0 text-muted" />
+              <input
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t.searchPlaceholder}
+                className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-muted"
+              />
+              {searchQuery && (
+                <button aria-label={t.cancel} onClick={() => setSearchQuery("")}>
+                  <X size={14} className="text-muted" />
+                </button>
+              )}
             </div>
-          )}
+            {!searching && (
+              <div className="flex flex-1 gap-2 overflow-x-auto [scrollbar-width:none]">
+                {categories.map((cat) => (
+                  <CategoryChip key={cat.id} category={cat} selected={categoryFilter === cat.id}
+                    onClick={() => setCategoryFilter(categoryFilter === cat.id ? null : cat.id)} />
+                ))}
+              </div>
+            )}
+          </div>
 
+          {/* Search results (both layouts) */}
           {searching && (
-            <div className="max-h-[50dvh] overflow-y-auto rounded-sheet border border-border bg-bg">
+            <div className="mt-2 max-h-[50dvh] overflow-y-auto rounded-sheet border border-border bg-bg">
               <div className="px-4">
                 {searchResults?.length === 0 && (
                   <div className="py-6 text-center text-[13px] text-muted">{t.noResults}</div>
                 )}
                 {searchResults?.map((story) => (
-                  <StoryListItem
-                    key={story.id}
-                    story={story}
-                    categories={categories}
-                    onOpen={(id) => {
-                      setSearchQuery("");
-                      openStory(id);
-                      requestPanTo(story.lat, story.lon);
-                    }}
-                  />
+                  <StoryListItem key={story.id} story={story} categories={categories}
+                    onOpen={(id) => { setSearchQuery(""); openStory(id); requestPanTo(story.lat, story.lon); }} />
                 ))}
               </div>
             </div>
@@ -217,10 +243,7 @@ export function HomeManager() {
       {mode === "pick-location" && (
         <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-bg p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <span className="text-[15px] font-medium">{t.tapMapToPlace}</span>
-          <button
-            onClick={cancelCompose}
-            className="rounded-full border border-border px-4 py-2 text-[13px] font-medium text-muted"
-          >
+          <button onClick={cancelCompose} className="rounded-full border border-border px-4 py-2 text-[13px] font-medium text-muted">
             {t.cancel}
           </button>
         </div>
@@ -239,11 +262,8 @@ export function HomeManager() {
           </button>
 
           {authenticated && (
-            <button
-              aria-label={t.addStory}
-              onClick={startPickLocation}
-              className="absolute bottom-6 right-4 rounded-full bg-accent p-4 text-accent-text shadow-lg transition-transform duration-150 ease-lm active:scale-95"
-            >
+            <button aria-label={t.addStory} onClick={startPickLocation}
+              className="absolute bottom-6 right-4 rounded-full bg-accent p-4 text-accent-text shadow-lg transition-transform duration-150 ease-lm active:scale-95">
               <Plus size={22} />
             </button>
           )}
@@ -254,40 +274,30 @@ export function HomeManager() {
             onClick={locateMe}
             disabled={locating}
             style={{ bottom: locateBottom }}
-            className="absolute right-4 z-10 flex items-center justify-center rounded-full border border-border bg-bg p-3 text-muted shadow-sm transition-transform duration-150 ease-lm active:scale-95 disabled:opacity-50"
+            className="absolute right-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-bg text-muted shadow-sm transition-transform duration-150 ease-lm active:scale-95 disabled:opacity-50"
           >
             <Navigation size={20} className={locating ? "animate-pulse" : undefined} />
           </button>
 
-          {/* Zoom controls — bottom-right above locate */}
+          {/* Zoom controls — above locate */}
           <div
             className="absolute right-4 z-10 flex flex-col overflow-hidden rounded-lg border border-border bg-bg shadow-sm"
             style={{ bottom: zoomBottom }}
           >
-            <button
-              aria-label="Zoom in"
-              onClick={() => mapViewRef.current?.zoomIn()}
-              className="flex h-9 w-9 items-center justify-center text-[18px] font-light text-text transition-colors hover:bg-surface active:bg-surface"
-            >
+            <button aria-label="Zoom in" onClick={() => mapViewRef.current?.zoomIn()}
+              className="flex h-[42px] w-11 items-center justify-center text-[20px] leading-none text-text transition-colors hover:bg-surface active:bg-surface">
               +
             </button>
             <div className="h-px bg-border" />
-            <button
-              aria-label="Zoom out"
-              onClick={() => mapViewRef.current?.zoomOut()}
-              className="flex h-9 w-9 items-center justify-center text-[18px] font-light text-text transition-colors hover:bg-surface active:bg-surface"
-            >
+            <button aria-label="Zoom out" onClick={() => mapViewRef.current?.zoomOut()}
+              className="flex h-[42px] w-11 items-center justify-center text-[20px] leading-none text-text transition-colors hover:bg-surface active:bg-surface">
               −
             </button>
           </div>
         </>
       )}
 
-      <BottomSheet
-        open={trendingOpen}
-        onClose={() => setTrendingOpen(false)}
-        title={t.trending}
-      >
+      <BottomSheet open={trendingOpen} onClose={() => setTrendingOpen(false)} title={t.trending}>
         {trendingStories?.length === 0 && (
           <div className="flex flex-col items-center gap-2 py-8 text-center">
             <Flame size={24} className="text-muted" />
@@ -295,15 +305,8 @@ export function HomeManager() {
           </div>
         )}
         {trendingStories?.map((story) => (
-          <StoryListItem
-            key={story.id}
-            story={story}
-            categories={categories}
-            onOpen={(id) => {
-              openStory(id);
-              requestPanTo(story.lat, story.lon);
-            }}
-          />
+          <StoryListItem key={story.id} story={story} categories={categories}
+            onOpen={(id) => { openStory(id); requestPanTo(story.lat, story.lon); }} />
         ))}
       </BottomSheet>
 
