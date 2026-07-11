@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, Flame, MapPin, Menu, Navigation, Plus, Search, X } from "lucide-react";
+import { Flame, Navigation, Plus, Search, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useTelegramAuth } from "@/features/auth/hooks";
@@ -83,16 +83,6 @@ export function HomeManager() {
     }
   }, [sidebarOpen]);
 
-  const handleToggle = () => {
-    if (activePanel) {
-      setActivePanel(null);
-    } else if (sidebarOpen) {
-      setSidebarOpen(false);
-    } else {
-      setSidebarOpen(true);
-    }
-  };
-
   const locateMe = async () => {
     if (locating) return;
     setLocating(true);
@@ -128,37 +118,6 @@ export function HomeManager() {
         activePanel={activePanel}
         onSetActivePanel={setActivePanel}
       />
-
-      {/* Desktop toggle button — morphs between ☰ / ✕ / ← */}
-      {mode !== "compose" && (
-        <button
-          aria-label={activePanel ? "Back" : sidebarOpen ? t.cancel : "Menu"}
-          onClick={handleToggle}
-          className="absolute left-3 top-3 z-50 hidden h-9 w-9 items-center justify-center rounded-lg text-text lg:flex"
-        >
-          {/* Menu icon */}
-          <span className={[
-            "absolute transition-all duration-[200ms] ease-lm",
-            (!sidebarOpen && !activePanel) ? "opacity-100 scale-100 rotate-0" : "opacity-0 scale-75 rotate-90",
-          ].join(" ")}>
-            <Menu size={18} />
-          </span>
-          {/* X icon */}
-          <span className={[
-            "absolute transition-all duration-[200ms] ease-lm",
-            (sidebarOpen && !activePanel) ? "opacity-100 scale-100 rotate-0" : "opacity-0 scale-75 -rotate-90",
-          ].join(" ")}>
-            <X size={18} />
-          </span>
-          {/* Back icon */}
-          <span className={[
-            "absolute transition-all duration-[200ms] ease-lm",
-            activePanel ? "opacity-100 scale-100 translate-x-0" : "opacity-0 scale-75 translate-x-2",
-          ].join(" ")}>
-            <ChevronLeft size={18} />
-          </span>
-        </button>
-      )}
 
       {/* Search + categories bar */}
       {mode !== "compose" && (
