@@ -1,15 +1,12 @@
 "use client";
 
-import { Bookmark, Flag, MapPin, Send, Share2 } from "lucide-react";
-import { useState } from "react";
+import { Bookmark, Flag, MapPin, Share2 } from "lucide-react";
 
 import { ReactionButton } from "@/features/stories/components/reaction-button";
 import { BottomSheet } from "@/features/stories/components/bottom-sheet";
 import {
   useBookmark,
   useCategories,
-  useComments,
-  usePostComment,
   useReportStory,
   useStory,
 } from "@/features/stories/hooks";
@@ -30,10 +27,6 @@ export function StorySheet({ authenticated }: StorySheetProps) {
 
   const { data: story } = useStory(storyId);
   const { data: categories } = useCategories();
-  const { data: comments } = useComments(storyId);
-
-  const [commentDraft, setCommentDraft] = useState("");
-  const postComment = usePostComment(storyId ?? "");
   const bookmark = useBookmark(storyId ?? "");
   const report = useReportStory(storyId ?? "");
 
@@ -51,12 +44,6 @@ export function StorySheet({ authenticated }: StorySheetProps) {
       await navigator.clipboard.writeText(link);
       showToast(t.linkCopied);
     }
-  };
-
-  const submitComment = () => {
-    const body = commentDraft.trim();
-    if (!body) return;
-    postComment.mutate(body, { onSuccess: () => setCommentDraft("") });
   };
 
   return (
@@ -133,47 +120,6 @@ export function StorySheet({ authenticated }: StorySheetProps) {
             >
               <Flag size={16} />
             </button>
-          </div>
-
-          <div>
-            <div className="mb-2 text-[15px] font-semibold">
-              {t.comments} · {story.comment_count}
-            </div>
-            {comments && comments.length === 0 && (
-              <div className="py-3 text-[13px] text-muted">{t.noCommentsYet}</div>
-            )}
-            <div className="space-y-3">
-              {comments?.map((comment) => (
-                <div key={comment.id} className="text-[15px]">
-                  <span className="font-medium">
-                    {comment.author
-                      ? (comment.author.username ?? comment.author.first_name)
-                      : t.anonymous}
-                  </span>{" "}
-                  <span>{comment.body}</span>
-                </div>
-              ))}
-            </div>
-            {authenticated && (
-              <div className="mt-3 flex items-center gap-2">
-                <input
-                  value={commentDraft}
-                  onChange={(event) => setCommentDraft(event.target.value)}
-                  onKeyDown={(event) => event.key === "Enter" && submitComment()}
-                  placeholder={t.commentPlaceholder}
-                  maxLength={1000}
-                  className="min-w-0 flex-1 rounded border border-border bg-bg px-3 py-2 text-[15px] outline-none placeholder:text-muted"
-                />
-                <button
-                  aria-label={t.send}
-                  onClick={submitComment}
-                  disabled={postComment.isPending || !commentDraft.trim()}
-                  className="rounded bg-accent p-2 text-accent-text transition-transform duration-150 ease-lm active:scale-95 disabled:opacity-50"
-                >
-                  <Send size={16} />
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Heart, MessageCircle } from "lucide-react";
+import { Heart } from "lucide-react";
 
 import type { Category, Story } from "@/features/stories/api";
 import { categoryIcons } from "@/lib/icons/category-glyphs";
@@ -36,9 +36,6 @@ export function StoryListItem({ story, categories, onOpen }: StoryListItemProps)
         <span className="mt-1 flex items-center gap-3 text-[13px] text-muted">
           <span className="flex items-center gap-1">
             <Heart size={13} /> {story.reaction_count}
-          </span>
-          <span className="flex items-center gap-1">
-            <MessageCircle size={13} /> {story.comment_count}
           </span>
           <span>{story.author ? (story.author.username ?? story.author.first_name) : t.anonymous}</span>
         </span>

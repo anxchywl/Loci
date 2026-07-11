@@ -1,10 +1,10 @@
 "use client";
 
-import { Flame, Navigation, Plus, Search, X } from "lucide-react";
+import { Flame, Navigation, Plus, Search, UserRound, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useTelegramAuth } from "@/features/auth/hooks";
-import { DesktopSidebar, type Panel } from "@/features/home/desktop-sidebar";
+import { DesktopSidebar, ProfilePanel, type Panel } from "@/features/home/desktop-sidebar";
 import { MapView, type MapBounds, type MapViewHandle } from "@/features/map/map-view";
 import { AddStorySheet } from "@/features/stories/add-story-sheet";
 import { BottomSheet } from "@/features/stories/components/bottom-sheet";
@@ -59,6 +59,7 @@ export function HomeManager() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<Panel>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [nearbyLocation, setNearbyLocation] = useState<{ lat: number; lon: number } | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mapViewRef = useRef<MapViewHandle>(null);
@@ -124,8 +125,8 @@ export function HomeManager() {
   };
 
   // locate button bottom; zoom buttons sit 40px above it (36px button + 4px gap)
-  const locateBottom = authenticated ? "5.5rem" : "1.5rem";
-  const zoomBottom = authenticated ? "calc(5.5rem + 40px)" : "calc(1.5rem + 40px)";
+  const locateBottom = "1.5rem";
+  const zoomBottom = "calc(1.5rem + 40px)";
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-bg">
@@ -154,20 +155,29 @@ export function HomeManager() {
         >
           {/* Mobile: stacked layout */}
           <div className="flex flex-col gap-2 lg:hidden">
-            <div className="flex items-center gap-2 rounded-full border border-border bg-bg px-3 py-2 transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-[var(--lm-focus)]">
-              <Search size={16} className="shrink-0 text-muted" />
-              <input
-                ref={searchInputRef}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t.searchPlaceholder}
-                className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted"
-              />
-              {searchQuery && (
-                <button aria-label={t.cancel} onClick={() => setSearchQuery("")} className="rounded text-muted transition-colors hover:text-accent focus-visible:text-accent">
-                  <X size={16} />
-                </button>
-              )}
+            <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-border bg-bg px-3 py-2 shadow-sm transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-[var(--lm-focus)]">
+                <Search size={16} className="shrink-0 text-muted" />
+                <input
+                  ref={searchInputRef}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t.searchPlaceholder}
+                  className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted"
+                />
+                {searchQuery && (
+                  <button aria-label={t.cancel} onClick={() => setSearchQuery("")} className="rounded text-muted transition-colors hover:text-accent focus-visible:text-accent">
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+              <button
+                aria-label={t.profile}
+                onClick={() => setProfileOpen(true)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-bg text-text shadow-sm transition-[color,border-color,transform] duration-150 ease-lm hover:border-accent hover:text-accent focus-visible:border-accent focus-visible:text-accent active:scale-95"
+              >
+                <UserRound size={18} />
+              </button>
             </div>
             {!searching && (
               <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
@@ -247,19 +257,16 @@ export function HomeManager() {
 
       {mode === "browse" && (
         <>
-          {/* Trending — mobile only */}
-          <button
-            aria-label={t.trending}
-            onClick={() => setTrendingOpen(true)}
-            className="absolute bottom-6 left-4 flex items-center gap-1.5 rounded-full border border-border bg-bg px-4 py-2.5 text-[13px] font-medium shadow-sm transition-[color,border-color,transform,box-shadow] duration-150 ease-lm hover:border-accent hover:text-accent focus-visible:border-accent focus-visible:text-accent focus-visible:ring-2 focus-visible:ring-[var(--lm-focus)] active:scale-95 lg:hidden"
-          >
-            <Flame size={15} />
-            {t.trending}
-          </button>
+          {authenticated && (
+            <button aria-label={t.addStory} onClick={startPickLocation}
+              className="absolute bottom-6 left-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-accent-text shadow-lg transition-[transform,box-shadow] duration-150 ease-lm hover:shadow-xl focus-visible:ring-2 focus-visible:ring-[var(--lm-focus)] active:scale-95 lg:hidden">
+              <Plus size={24} />
+            </button>
+          )}
 
           {authenticated && (
             <button aria-label={t.addStory} onClick={startPickLocation}
-              className="absolute bottom-6 right-4 rounded-full bg-accent p-4 text-accent-text shadow-lg transition-transform duration-150 ease-lm active:scale-95">
+              className="absolute bottom-6 right-4 hidden rounded-full bg-accent p-4 text-accent-text shadow-lg transition-transform duration-150 ease-lm active:scale-95 lg:block">
               <Plus size={22} />
             </button>
           )}
@@ -305,6 +312,12 @@ export function HomeManager() {
             onOpen={(id) => { openStory(id); requestPanTo(story.lat, story.lon); }} />
         ))}
       </BottomSheet>
+
+      <div className="lg:hidden">
+        <BottomSheet open={profileOpen} onClose={() => setProfileOpen(false)} title={t.profile}>
+          <ProfilePanel />
+        </BottomSheet>
+      </div>
 
       <div className="lg:hidden">
         <StorySheet authenticated={authenticated} />
