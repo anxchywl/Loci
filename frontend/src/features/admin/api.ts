@@ -110,7 +110,9 @@ export function fetchAdminDashboard(from?: string, to?: string): Promise<AdminDa
 }
 
 export function fetchAdminUsers(params: { q: string; status: string; sortBy: string; sortOrder: string; limit: number; offset: number }): Promise<AdminUsersResponse> {
-  const query = new URLSearchParams({ q: params.q, status: params.status, sort_by: params.sortBy, sort_order: params.sortOrder, limit: String(params.limit), offset: String(params.offset) });
+  const query = new URLSearchParams({ sort_by: params.sortBy, sort_order: params.sortOrder, limit: String(params.limit), offset: String(params.offset) });
+  if (params.q.trim()) query.set("q", params.q.trim());
+  if (params.status) query.set("status", params.status);
   return apiFetch<AdminUsersResponse>(`/admin/users?${query}`);
 }
 

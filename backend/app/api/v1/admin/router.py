@@ -49,13 +49,14 @@ async def users(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     settings: Annotated[Settings, Depends(get_settings)],
     q: Annotated[str | None, Query(max_length=100)] = None,
-    status_filter: Annotated[str | None, Query(alias="status", pattern="^(active|blocked|deleted)$")] = None,
+    status_filter: Annotated[str | None, Query(alias="status", pattern="^(active|blocked|deleted)?$")] = None,
     sort_by: Annotated[str, Query(pattern="^(created_at|last_active_at|uid|telegram_id|username)$")] = "created_at",
     sort_order: Annotated[str, Query(pattern="^(asc|desc)$")] = "desc",
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> AdminUsersResponse:
     q = q.strip() if q else None
+    status_filter = status_filter or None
     items = await admin_service.list_users(db, settings, q, status_filter, sort_by, sort_order, limit, offset)
     from app.db.repositories import admin as admin_repo
     total = await admin_repo.count_users(db, q, status_filter)
