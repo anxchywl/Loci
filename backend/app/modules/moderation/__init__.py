@@ -17,6 +17,7 @@ from app.db.models.story import ModerationStatus
 from app.db.models import AuditLog
 from app.db.repositories import photos as photos_repo
 from app.db.repositories import stories as stories_repo
+from app.core.security.text import clean_line
 from app.db.repositories import users as users_repo
 from app.integrations import storage
 from app.modules import notifications
@@ -139,8 +140,9 @@ async def approve(
 
 
 async def reject(
-    db: AsyncSession, story_id: uuid.UUID, admin_id: int, reason: str, settings: Settings
+    db: AsyncSession, story_id: uuid.UUID, admin_id: int, reason: str | None, settings: Settings
 ) -> None:
+    reason = clean_line(reason or "") or None
     ok = await stories_repo.reject(db, story_id, admin_id, reason)
     if not ok:
         raise _already_moderated()

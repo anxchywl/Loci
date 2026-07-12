@@ -9,7 +9,7 @@ import {
   rejectStory,
   type ModerationQueueItem,
 } from "@/features/admin/api";
-import { deleteAdminStory, fetchAdminAuditLogs, fetchAdminDashboard, fetchAdminUser, fetchAdminUserStories, fetchAdminUsers, moderateAdminUser, setAdminUserDeleted } from "@/features/admin/api";
+import { deleteAdminStory, fetchAdminAuditLogs, fetchAdminDashboard, fetchAdminUser, fetchAdminUserStories, fetchAdminUsers, fetchReportedStories, fetchReportedStory, moderateAdminUser, resolveReports, setAdminUserDeleted, type ResolutionAction } from "@/features/admin/api";
 import { ApiError } from "@/lib/api";
 
 interface QueueState {
@@ -85,7 +85,7 @@ export function useModerate(onDone: (storyId: string) => void) {
   });
 
   const reject = useMutation({
-    mutationFn: ({ storyId, reason }: { storyId: string; reason: string }) =>
+    mutationFn: ({ storyId, reason }: { storyId: string; reason: string | null }) =>
       rejectStory(storyId, reason),
     onSuccess: (_data, { storyId }) => {
       invalidate();
@@ -127,6 +127,27 @@ export function useAdminAuditLogs(limit = 50, offset = 0) {
 
 export function useAdminUserStories(userId: number | null, status?: string) {
   return useQuery({ queryKey: ["admin", "user-stories", userId, status], queryFn: () => fetchAdminUserStories(userId!, status), enabled: userId !== null });
+}
+
+export function useReportedStories(params: { q: string; filter: string; sort: string; limit: number; offset: number }) {
+  return useQuery({ queryKey: ["admin", "reports", params], queryFn: () => fetchReportedStories(params), placeholderData: (previous) => previous });
+}
+
+export function useReportedStory(storyId: string | null) {
+  return useQuery({ queryKey: ["admin", "report", storyId], queryFn: () => fetchReportedStory(storyId!), enabled: storyId !== null });
+}
+
+export function useResolveReports() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ storyId, action, reason }: { storyId: string; action: ResolutionAction; reason?: string }) => resolveReports(storyId, action, reason),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "reports"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "report"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["stories"] });
+    },
+  });
 }
 
 export function useAdminStoryDeletion() {

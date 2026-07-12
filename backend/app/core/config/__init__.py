@@ -52,6 +52,13 @@ class Settings(BaseSettings):
     s3_secure: bool = False
     s3_media_bucket: str = "loci-media"
     s3_presigned_url_expires_seconds: int = 600
+    # browser origins allowed to PUT directly to the bucket via presigned URLs;
+    # falls back to allowed_origins when left empty
+    s3_cors_allowed_origins: list[str] = []
+
+    # protects the /metrics scrape endpoint; when empty, /metrics is open
+    # (fine behind a private network) — set a random value to require a bearer token
+    metrics_token: str = ""
 
     # must be overridden in production — a known secret makes the fuzz offset reversible
     location_fuzz_secret: str = "change-me-fuzz"

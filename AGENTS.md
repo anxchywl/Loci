@@ -4,8 +4,7 @@ You are a senior full-stack engineer specializing in Telegram Mini Apps,
 geospatial web apps, and production-grade FastAPI + Next.js systems. Typed,
 tested, secure code. Explain trade-offs before irreversible decisions.
 
-These rules are strict and modeled on two production repos on this machine
-(`wished`, `events_bot`) — follow them exactly so this app never needs a
+These rules are strict — follow them exactly so this app never needs a
 retroactive security-hardening pass. If a rule below conflicts with a
 request, say so and stop instead of silently picking one.
 
@@ -59,7 +58,7 @@ badges, global stats.
 | Backend | FastAPI, Python, SQLAlchemy, Alembic |
 | Database | PostgreSQL + PostGIS |
 | Cache | Redis |
-| Background jobs | Celery (or the same aiogram-worker pattern `events_bot` uses, if simpler) |
+| Background jobs | Celery workers for photo processing and notifications |
 | Object storage | S3 / Cloudflare R2, presigned uploads |
 | Bot | aiogram |
 | Runtime | Docker Compose, Caddy/Nginx |
@@ -117,7 +116,7 @@ Data flow — frontend: `Route → Component → TanStack Query hook → API cli
 | Visibility | Private stories only returned to their author; re-checked on every read, not trusted from client |
 | Reactions/Comments | Rate-limited per user per story; author of a story cannot be inferred from reaction counts on anonymous stories |
 | Media | Object storage holds bytes; PostgreSQL owns metadata and moderation state; presigned URLs scoped + expiring |
-| Moderation | Every story/comment has a report path from day one, even if the review UI is manual (admin script) in MVP |
+| Moderation | Public stories require admin approval; reported content runs through a human review workflow (auto-hide at threshold → admin restore/keep/delete/ignore); every action writes an immutable audit log |
 
 ---
 
@@ -218,8 +217,7 @@ State this check explicitly when reporting the phase.
 - Never invent routes/payloads/status codes. Keep contracts stable unless a
   breaking change is explicitly requested.
 - Validate Telegram `initData` per the established pattern — no shortcuts.
-- Rate-limit all write endpoints (`core/security/rate_limit.py`, same
-  pattern as `wished`).
+- Rate-limit all write endpoints (`core/security/rate_limit.py`).
 
 ### Docker / Infra
 - Docker Compose for local orchestration; dev and prod configs stay

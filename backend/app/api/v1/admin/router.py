@@ -10,6 +10,12 @@ from app.core.config import Settings, get_settings
 from app.db.models import User
 from app.db.models.story import ModerationStatus
 from app.modules import moderation
+from app.modules import reports as reports_service
+from app.modules.reports.schemas import (
+    ReportedStoriesResponse,
+    ReportedStoryDetail,
+    ResolveReportsRequest,
+)
 from app.modules.stories.schemas import ModerationQueueResponse, RejectRequest
 from app.modules.admin import service as admin_service
 from app.modules.admin.schemas import (
@@ -105,10 +111,19 @@ async def restore_user(user_id: int, payload: AdminUserActionRequest, admin: Ann
 
 @router.get("/users/{user_id}/stories")
 async def user_stories(user_id: int, _admin: Annotated[User, Depends(get_current_admin)], db: Annotated[AsyncSession, Depends(get_db_session)], settings: Annotated[Settings, Depends(get_settings)], moderation_status: Annotated[ModerationStatus | None, Query(alias="status")] = None):
+    from app.db.repositories import admin as admin_repo
+
     rows = await stories_repo.list_by_author(db, author_id=user_id, viewer_id=user_id, limit=100, include_anonymous=True)
     if moderation_status is not None:
         rows = [row for row in rows if row["moderation_status"] == moderation_status]
-    return [story_service.serialize_story(row, viewer_id=user_id) for row in rows]
+    report_counts = await admin_repo.story_report_counts(db, [row["id"] for row in rows])
+    return [
+        {
+            **story_service.serialize_story(row, viewer_id=user_id).model_dump(mode="json"),
+            "report_count": report_counts.get(row["id"], 0),
+        }
+        for row in rows
+    ]
 
 
 @router.delete("/stories/{story_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -157,4 +172,43 @@ async def reject_story(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> Response:
     await moderation.reject(db, story_id, admin.id, payload.reason, settings)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/reports", response_model=ReportedStoriesResponse)
+async def reported_stories(
+    _admin: Annotated[User, Depends(get_current_admin)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    q: Annotated[str | None, Query(max_length=100)] = None,
+    filter_by: Annotated[str, Query(alias="filter", pattern="^(all|hidden|visible|pending|resolved)$")] = "all",
+    sort_by: Annotated[str, Query(alias="sort", pattern="^(reports|newest|hidden)$")] = "reports",
+    limit: Annotated[int, Query(ge=1, le=50)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> ReportedStoriesResponse:
+    search = q.strip() if q and q.strip() else None
+    return await reports_service.list_reported(
+        db, settings, search=search, filter_by=filter_by, sort_by=sort_by, limit=limit, offset=offset
+    )
+
+
+@router.get("/reports/{story_id}", response_model=ReportedStoryDetail)
+async def reported_story_detail(
+    story_id: uuid.UUID,
+    _admin: Annotated[User, Depends(get_current_admin)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> ReportedStoryDetail:
+    return await reports_service.story_detail(db, settings, story_id)
+
+
+@router.post("/reports/{story_id}/resolve", status_code=status.HTTP_204_NO_CONTENT)
+async def resolve_reports(
+    story_id: uuid.UUID,
+    payload: ResolveReportsRequest,
+    admin: Annotated[User, Depends(get_current_admin)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> Response:
+    await reports_service.resolve(db, admin.id, story_id, payload.action, payload.reason, settings)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

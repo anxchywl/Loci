@@ -80,15 +80,18 @@ async def test_double_approval_conflicts(client):
     ).status_code == 409
 
 
-async def test_reject_requires_reason(client):
+async def test_reject_allows_optional_reason(client):
+    story_id = await create_pending(client)
+    await authenticate(client, telegram_id=ADMIN_TG)
+    assert (
+        await client.post(f"/api/v1/admin/moderation/{story_id}/reject", json={})
+    ).status_code == 204
+
     story_id = await create_pending(client)
     await authenticate(client, telegram_id=ADMIN_TG)
     assert (
         await client.post(f"/api/v1/admin/moderation/{story_id}/reject", json={"reason": "   "})
-    ).status_code == 422
-    assert (
-        await client.post(f"/api/v1/admin/moderation/{story_id}/reject", json={})
-    ).status_code == 422
+    ).status_code == 204
 
 
 async def test_rejection_reason_visible_to_owner_only(client):

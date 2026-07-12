@@ -232,7 +232,7 @@ export function HomeManager() {
                 <input
                   ref={searchInputRef}
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => setSearchQuery(e.target.value.replace(/^\s+/, "").slice(0, 100))}
                   placeholder={t.searchPlaceholder}
                   className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted"
                 />
@@ -281,7 +281,7 @@ export function HomeManager() {
                 <input
                   ref={searchInputRef}
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => setSearchQuery(e.target.value.replace(/^\s+/, "").slice(0, 100))}
                   placeholder={t.searchPlaceholder}
                   className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-muted"
                 />

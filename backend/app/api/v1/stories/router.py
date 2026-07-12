@@ -1,3 +1,4 @@
+import time
 import uuid
 from typing import Annotated
 
@@ -7,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db_session, get_optional_user, get_redis
 from app.core.config import Settings, get_settings
+from app.core.observability import observe
 from app.core.security.rate_limit import check_rate_limit, client_identifier
 from app.core.security.text import clean_line
 from app.db.models import User
@@ -15,6 +17,7 @@ from app.modules.stories import interactions, photos, service
 from app.modules.stories.schemas import (
     CommentCreateRequest,
     CommentResponse,
+    PhotoCompleteRequest,
     PhotoUploadRequest,
     PhotoUploadResponse,
     ReportCreateRequest,
@@ -276,7 +279,40 @@ async def complete_photo_upload(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     redis: Annotated[Redis, Depends(get_redis)],
     settings: Annotated[Settings, Depends(get_settings)],
+    telemetry: PhotoCompleteRequest | None = None,
 ) -> Response:
     await check_rate_limit(redis, "rl:upload", str(user.id), 3600, settings.upload_urls_per_hour)
-    await photos.complete_upload(db, story_id, photo_id, user.id, settings)
+    telemetry = telemetry or PhotoCompleteRequest()
+    await photos.complete_upload(
+        db,
+        story_id,
+        photo_id,
+        user.id,
+        settings,
+        upload_path=telemetry.upload_path,
+        duration_ms=telemetry.duration_ms,
+        fallback_reason=telemetry.fallback_reason,
+    )
     return Response(status_code=status.HTTP_202_ACCEPTED)
+
+
+@router.put("/{story_id}/photos/{photo_id}/upload", status_code=status.HTTP_204_NO_CONTENT)
+async def proxy_photo_upload(
+    story_id: uuid.UUID,
+    photo_id: uuid.UUID,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    redis: Annotated[Redis, Depends(get_redis)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> Response:
+    await check_rate_limit(redis, "rl:upload", str(user.id), 3600, settings.upload_urls_per_hour)
+    started = time.perf_counter()
+    raw = await request.body()
+    await photos.upload_bytes(db, story_id, photo_id, user.id, raw, settings)
+    observe(
+        "photo_proxy_upload_duration_seconds",
+        time.perf_counter() - started,
+        help="Backend proxy photo upload handling duration in seconds.",
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -294,6 +294,30 @@ async def set_hidden(db: AsyncSession, story_id: uuid.UUID, hidden: bool) -> Non
         await db.flush()
 
 
+async def auto_hide_for_reports(db: AsyncSession, story_id: uuid.UUID, now: datetime) -> bool:
+    """Hide a story because it crossed the report threshold, stamping when it
+    happened. Only acts on a currently-visible story, so the timestamp reflects
+    the first auto-hide and a later report can't reset it. Returns True if it
+    transitioned from visible to hidden."""
+    stmt = (
+        update(Story)
+        .where(Story.id == story_id, Story.is_hidden.is_(False))
+        .values(is_hidden=True, auto_hidden_at=now)
+    )
+    return (await db.execute(stmt)).rowcount > 0
+
+
+async def restore_from_reports(db: AsyncSession, story_id: uuid.UUID) -> bool:
+    """Admin restore: make a reported/auto-hidden story visible again and clear
+    the auto-hide marker. Atomic UPDATE so two admins can't both 'win'."""
+    stmt = (
+        update(Story)
+        .where(Story.id == story_id)
+        .values(is_hidden=False, auto_hidden_at=None)
+    )
+    return (await db.execute(stmt)).rowcount > 0
+
+
 # --- moderation ---------------------------------------------------------------
 
 _QUEUE_COLUMNS = (
@@ -356,8 +380,8 @@ async def approve(db: AsyncSession, story_id: uuid.UUID, admin_id: int) -> bool:
     return (await db.execute(stmt)).scalar_one_or_none() is not None
 
 
-async def reject(db: AsyncSession, story_id: uuid.UUID, admin_id: int, reason: str) -> bool:
-    """Atomic pending -> rejected with a reason. Same race guard as approve."""
+async def reject(db: AsyncSession, story_id: uuid.UUID, admin_id: int, reason: str | None) -> bool:
+    """Atomic pending -> rejected with optional moderation feedback."""
     stmt = (
         update(Story)
         .where(

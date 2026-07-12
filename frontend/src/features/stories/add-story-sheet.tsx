@@ -17,6 +17,11 @@ import { finalizeStoryText, normalizeStoryText } from "@/features/stories/text-i
 const MAX_PHOTOS = 5;
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 
+function formatStoryDate(value: string): string {
+  const [year, month, day] = value.split("-");
+  return year && month && day ? `${day}.${month}.${year}` : value;
+}
+
 export function AddStorySheet() {
   const t = useDict();
   const mode = useUiStore((state) => state.mode);
@@ -130,13 +135,14 @@ export function AddStorySheet() {
         onUploadProgress: setUploadProgress,
       },
       {
-        onSuccess: () => {
+        onSuccess: ({ photoUploadFailed }) => {
           // the story is pending review, so instead of opening it we show a
           // confirmation that it was sent for moderation
           reset();
           requestPanTo(pickedLocation.lat, pickedLocation.lon, 14);
           setSubmittedPrivate(!isPublic);
           setSubmitted(true);
+          if (photoUploadFailed) showToast(t.photoUploadFailed);
         },
         onError: () => showToast(t.errorGeneric),
       },
@@ -248,7 +254,7 @@ export function AddStorySheet() {
           </div>
           {(
             <button type="button" onClick={() => setCalendarOpen(true)} className="flex w-full items-center justify-between rounded border border-border bg-bg px-3 py-2 text-left text-[15px]">
-              <span className={happenedOn ? "" : "text-muted"}>{happenedOn || t.dateLabel}</span>
+              <span className={happenedOn ? "" : "text-muted"}>{happenedOn ? formatStoryDate(happenedOn) : t.dateLabel}</span>
               <span className="text-[13px] text-muted">{happenedOn ? t.change : t.pick}</span>
             </button>
           )}

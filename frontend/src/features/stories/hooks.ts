@@ -49,10 +49,14 @@ export function useTrending(enabled: boolean) {
 }
 
 export function useSearch(query: string) {
+  // normalise before it reaches the cache key or the network: strip leading/
+  // trailing space, collapse internal runs, and cap length. keeps " foo",
+  // "foo " and "foo" as one cached query and never sends an over-length value.
+  const normalized = query.trim().replace(/\s+/g, " ").slice(0, 100);
   return useQuery({
-    queryKey: ["stories", "search", query],
-    queryFn: () => searchStories(query),
-    enabled: query.trim().length >= 2,
+    queryKey: ["stories", "search", normalized],
+    queryFn: () => searchStories(normalized),
+    enabled: normalized.length >= 2,
     placeholderData: (previous) => previous,
   });
 }
@@ -79,11 +83,16 @@ export function useCreateStory() {
     mutationFn: async (input: CreateStoryInput & { photos: File[]; onUploadProgress?: (progress: number) => void }) => {
       const { photos, onUploadProgress, ...payload } = input;
       const story = await createStory(payload);
+      let photoUploadFailed = false;
       for (const [index, file] of photos.entries()) {
-        await uploadStoryPhoto(story.id, file, (progress) => onUploadProgress?.((index + progress) / photos.length));
+        try {
+          await uploadStoryPhoto(story.id, file, (progress) => onUploadProgress?.((index + progress) / photos.length));
+        } catch {
+          photoUploadFailed = true;
+        }
       }
       onUploadProgress?.(1);
-      return story;
+      return { story, photoUploadFailed };
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["stories"] });

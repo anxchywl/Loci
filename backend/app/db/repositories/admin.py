@@ -1,3 +1,4 @@
+import uuid
 from datetime import date, datetime, time, timezone
 
 from sqlalchemy import String, cast, func, or_, select
@@ -106,6 +107,18 @@ async def report_counts(db: AsyncSession, user_ids: list[int]) -> dict[int, int]
     for row in comment_rows:
         counts[row[0]] += row[1]
     return counts
+
+
+async def story_report_counts(db: AsyncSession, story_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+    """Number of reports filed against each of the given stories."""
+    if not story_ids:
+        return {}
+    rows = await db.execute(
+        select(Report.story_id, func.count())
+        .where(Report.story_id.in_(story_ids))
+        .group_by(Report.story_id)
+    )
+    return {row[0]: row[1] for row in rows}
 
 
 async def get_user(db: AsyncSession, user_id: int) -> User | None:

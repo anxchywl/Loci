@@ -83,6 +83,14 @@ class AdminDashboardResponse(BaseModel):
     approved_stories: int
     rejected_stories: int
     published_stories: int
+    # reported-content analytics
+    pending_reports: int
+    auto_hidden_stories: int
+    resolved_reports: int
+    deleted_after_reports: int
+    restored_after_review: int
+    avg_review_seconds: float | None
+    most_reported_categories: list[dict[str, int]]
     activity: list[dict[str, int | str]]
     moderation: list[dict[str, int | str]]
     recent_actions: list[dict[str, int | str | None]]

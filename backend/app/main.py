@@ -1,13 +1,15 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_v1_router
 from app.core.config import get_settings
 from app.core.errors import register_error_handlers
+from app.core.observability import render_metrics
 from app.db.session import dispose_db
+from app.integrations import storage
 from app.integrations.redis import close_redis
 
 logger = logging.getLogger(__name__)
@@ -15,6 +17,15 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
+    settings = get_settings()
+    # direct-to-storage uploads need the bucket to answer CORS preflights for the
+    # app origin; do it best-effort at startup so production uploads take the fast
+    # path without a manual bucket step
+    origins = settings.s3_cors_allowed_origins or settings.allowed_origins
+    try:
+        storage.configure_bucket_cors(origins)
+    except Exception:
+        logger.warning("bucket CORS configuration skipped", exc_info=True)
     yield
     await close_redis()
     await dispose_db()
@@ -67,6 +78,15 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/metrics")
+    async def metrics(authorization: str | None = Header(default=None)) -> Response:
+        # optional bearer-token guard so the scrape endpoint can be exposed safely
+        if settings.metrics_token:
+            expected = f"Bearer {settings.metrics_token}"
+            if authorization != expected:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        return Response(content=render_metrics(), media_type="text/plain; version=0.0.4")
 
     return app
 

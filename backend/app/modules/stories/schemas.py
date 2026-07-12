@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -116,11 +117,23 @@ class PhotoUploadResponse(BaseModel):
     expires_in: int
 
 
+class PhotoCompleteRequest(BaseModel):
+    """Client telemetry about how the bytes reached storage.
+
+    Optional so the endpoint stays backward compatible with clients that send no
+    body. Used only for observability — it never changes what the server does.
+    """
+
+    upload_path: Literal["direct", "proxy"] | None = None
+    duration_ms: int | None = Field(default=None, ge=0, le=3_600_000)
+    fallback_reason: str | None = Field(default=None, max_length=200)
+
+
 # --- moderation ---------------------------------------------------------------
 
 
 class RejectRequest(BaseModel):
-    reason: LineStr(1, REJECTION_REASON_MAX)
+    reason: str | None = Field(default=None, max_length=REJECTION_REASON_MAX)
 
 
 class ModerationQueueItem(BaseModel):

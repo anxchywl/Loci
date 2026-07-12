@@ -51,7 +51,7 @@ badges, global stats.
 | Visibility | Private stories only returned to their author; re-checked on every read, not trusted from client |
 | Reactions/Comments | Rate-limited per user per story; author of a story cannot be inferred from reaction counts on anonymous stories |
 | Media | Object storage holds bytes; PostgreSQL owns metadata and moderation state; presigned URLs scoped + expiring |
-| Moderation | Every story/comment has a report path from day one, even if the review UI is manual (admin script) in MVP |
+| Moderation | Every story/comment has a report path; public stories require admin approval, and reported content goes through a human review workflow (see below). Every moderation action writes an immutable audit log |
 
 ## Policy decisions (approved 2026-07-10)
 
@@ -78,9 +78,42 @@ badges, global stats.
   (including HEIC) before producing served WebP variants.
 
 ### Moderation
-- `reports` exist for stories and comments from day one.
-- Content auto-hides at **5 unique reporters**, pending manual review
-  (admin script in MVP). Nothing is auto-deleted.
+- Every public story is **pending** on creation and is only discoverable after an
+  admin approves it. Private ("only me") stories skip review. Admins approve or
+  reject from the review queue; rejection carries a private reason shown only to
+  the author.
+- `reports` exist for stories and comments. **One report per user per target**
+  (partial unique index); duplicates are silently ignored; self-reports don't
+  count.
+- **Reported-content workflow** — reports inform, admins decide:
+
+  ```text
+  Visible → Reported → Auto-hidden (threshold reached) → Admin review
+                                                          ↙          ↘
+                                                      Restore       Delete
+  ```
+
+  At **5 distinct non-author reporters** a story is auto-hidden (`is_hidden`,
+  `auto_hidden_at`) and surfaces in the admin **Reported** queue — never
+  auto-deleted. An admin reviews the full report timeline (reporter, reason,
+  time) and resolves it: **restore** (unhide + resolve reports + notify author),
+  **keep hidden**, **delete** (remove + notify; report reasons snapshotted into
+  the audit log so history survives the cascade), or **ignore** (dismiss the
+  reports, leave visibility unchanged).
+- Reports carry a resolution state (`pending → reviewed → resolved`) with
+  `resolved_by`, `resolution_action`, and `resolved_at`. Moderation history is
+  never lost — resolved reports persist, and deletes are preserved in the audit
+  log.
+- **Abuse protection**: one report per user per story, per-day report rate limit,
+  duplicate reports ignored, and a logged brigading signal when a story draws a
+  burst of reports in a short window. Reporter counting is the extension point
+  for future trust/reputation weighting (today every distinct reporter counts as
+  one).
+- **Notifications** (best-effort Telegram): the author is told when their story is
+  auto-hidden pending review, restored, or removed after review.
+- **Dashboard analytics**: pending reports, auto-hidden stories, resolved reports,
+  deleted/restored after review, average review time, and most-reported
+  categories.
 
 ### Rate limits (per user, Redis-backed)
 | Action | Limit |
@@ -147,8 +180,21 @@ re-check visibility on the server for every request.
 | `POST/DELETE /api/v1/stories/{id}/bookmark` | Idempotent bookmark toggle |
 | `POST /api/v1/stories/{id}/report`, `POST /api/v1/comments/{id}/report` | One report per user per target; auto-hide at threshold of distinct non-author reporters |
 | `POST /api/v1/stories/{id}/photos` | Author only; ≤5 photos; returns single-key presigned PUT (10 min) |
-| `POST /api/v1/stories/{id}/photos/{photo_id}/complete` | Author confirms upload; queues Celery WebP re-encode (2048 px + thumb); original deleted after |
+| `PUT /api/v1/stories/{id}/photos/{photo_id}/upload` | Backend proxy fallback when the direct presigned PUT can't reach storage; stores the raw bytes |
+| `POST /api/v1/stories/{id}/photos/{photo_id}/complete` | Author confirms upload; validates and queues Celery WebP re-encode (2048 px + thumb); original deleted after |
 | `GET /api/v1/profile/me` · `/me/stories` · `/me/bookmarks` | Own profile; own list includes anonymous stories (only there) |
+
+Admin-only (`is_admin`), all writing an immutable audit log:
+
+| Route | Behavior |
+|---|---|
+| `GET /api/v1/admin/dashboard` | User + moderation + report analytics for a date range |
+| `GET /api/v1/admin/moderation/queue` · `POST .../{id}/approve` · `.../{id}/reject` | Cursor-paginated review queue; atomic status transitions (409 on double-moderate) |
+| `GET /api/v1/admin/reports` | Reported-story queue; search, filter (all/pending/hidden/visible/resolved), sort (reports/newest/auto-hidden), pagination |
+| `GET /api/v1/admin/reports/{id}` | One story with its full report timeline (reporter, reason, state, resolution) |
+| `POST /api/v1/admin/reports/{id}/resolve` | `{action: restore\|keep_hidden\|delete\|ignore, reason?}`; resolves reports + records outcome |
+| `GET /api/v1/admin/users` · `.../{id}` · block/unblock/warn/delete/restore · `.../{id}/stories` | User management with per-user story + report history |
+| `GET /api/v1/admin/audit-logs` | Immutable moderation history |
 
 ## Edge cases (grows as phases land)
 

@@ -143,6 +143,15 @@ async def dashboard(db: AsyncSession, from_date: date, to_date: date) -> AdminDa
     rejected = int((await db.execute(select(func.count()).select_from(Story).where(Story.moderation_status == "rejected", Story.moderated_at >= start, Story.moderated_at <= end))).scalar_one())
     published = int((await db.execute(select(func.count()).select_from(Story).where(Story.moderation_status == "approved", Story.created_at <= end))).scalar_one())
     recent = list((await db.execute(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(10))).scalars().all())
+    from app.db.repositories import reports as reports_repo
+
+    report_stats = await reports_repo.report_analytics(db, start, end)
+    deleted_after_reports = int((await db.execute(
+        select(func.count()).select_from(AuditLog).where(AuditLog.action == "deleted_reported_story", AuditLog.created_at >= start, AuditLog.created_at <= end)
+    )).scalar_one())
+    restored_after_review = int((await db.execute(
+        select(func.count()).select_from(AuditLog).where(AuditLog.action == "restored_reported_story", AuditLog.created_at >= start, AuditLog.created_at <= end)
+    )).scalar_one())
     activity_rows = await db.execute(
         select(func.date_trunc("day", User.last_active_at).label("period"), func.count(func.distinct(User.id)).label("count"))
         .where(User.last_active_at >= start, User.last_active_at <= end, User.deleted_at.is_(None))
@@ -156,6 +165,13 @@ async def dashboard(db: AsyncSession, from_date: date, to_date: date) -> AdminDa
     return AdminDashboardResponse(
         from_date=from_date, to_date=to_date, total_users=total_users, active_users=active_users, new_users=new_users,
         pending_moderation=pending, approved_stories=approved, rejected_stories=rejected, published_stories=published,
+        pending_reports=report_stats["pending_reports"],
+        auto_hidden_stories=report_stats["auto_hidden_stories"],
+        resolved_reports=report_stats["resolved_reports"],
+        deleted_after_reports=deleted_after_reports,
+        restored_after_review=restored_after_review,
+        avg_review_seconds=report_stats["avg_review_seconds"],
+        most_reported_categories=report_stats["most_reported_categories"],
         activity=[{"period": row.period.date().isoformat(), "count": row.count} for row in activity_rows],
         moderation=[{"period": row.period.date().isoformat(), "status": str(row.moderation_status), "count": row.count} for row in moderation_rows],
         recent_actions=[{"id": a.id, "admin_id": a.admin_id, "action": a.action, "target_user_id": a.target_user_id, "created_at": a.created_at.isoformat()} for a in recent],

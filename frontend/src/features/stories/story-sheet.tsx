@@ -74,14 +74,15 @@ export function StorySheet({ authenticated }: StorySheetProps) {
     const link = botUsername
       ? `https://t.me/${botUsername}?startapp=${storyId}`
       : window.location.href;
-    if (!openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}`)) {
-      await navigator.clipboard.writeText(link);
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(t.shareText)}`;
+    if (!openTelegramLink(shareUrl)) {
+      await navigator.clipboard.writeText(`${t.shareText} ${link}`);
       showToast(t.linkCopied);
     }
   };
 
   return (
-    <BottomSheet open onClose={closeStory} title={confirming === "delete" ? t.confirmDeleteTitle : story?.title ?? t.loading}>
+    <BottomSheet open onClose={closeStory} title={confirming === "delete" ? undefined : story?.title ?? t.loading}>
       {story && (
         <div
           key={confirming ?? "story"}

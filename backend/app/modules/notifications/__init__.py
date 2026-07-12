@@ -17,6 +17,10 @@ class StoryEvent(str, enum.Enum):
     approved = "approved"
     rejected = "rejected"
     resubmitted = "resubmitted"
+    # reported-content workflow
+    report_threshold = "report_threshold"
+    restored = "restored"
+    removed = "removed"
 
 
 _MESSAGES = {
@@ -24,6 +28,9 @@ _MESSAGES = {
     StoryEvent.approved: "Your story “{title}” was approved and is now on the map.",
     StoryEvent.rejected: "Your story “{title}” was rejected.\n\nReason: {reason}",
     StoryEvent.resubmitted: "Your story “{title}” was resubmitted and is pending review.",
+    StoryEvent.report_threshold: "Your story “{title}” has been temporarily hidden after several reports and is now waiting for a moderator to review it.",
+    StoryEvent.restored: "Your story “{title}” was reviewed by a moderator and is back on the map.",
+    StoryEvent.removed: "Your story “{title}” was removed by a moderator after review.\n\nReason: {reason}",
 }
 
 

@@ -48,6 +48,13 @@ export interface AdminDashboard {
   approved_stories: number;
   rejected_stories: number;
   published_stories: number;
+  pending_reports: number;
+  auto_hidden_stories: number;
+  resolved_reports: number;
+  deleted_after_reports: number;
+  restored_after_review: number;
+  avg_review_seconds: number | null;
+  most_reported_categories: Array<{ category_id: number; count: number }>;
   activity: Array<Record<string, string | number>>;
   moderation: Array<Record<string, string | number>>;
   recent_actions: Array<Record<string, string | number | null>>;
@@ -95,7 +102,7 @@ export function approveStory(storyId: string): Promise<void> {
   return apiFetch<void>(`/admin/moderation/${storyId}/approve`, { method: "POST" });
 }
 
-export function rejectStory(storyId: string, reason: string): Promise<void> {
+export function rejectStory(storyId: string, reason: string | null): Promise<void> {
   return apiFetch<void>(`/admin/moderation/${storyId}/reject`, {
     method: "POST",
     body: JSON.stringify({ reason }),
@@ -132,11 +139,90 @@ export function fetchAdminAuditLogs(limit = 50, offset = 0): Promise<AuditLogsRe
   return apiFetch<AuditLogsResponse>(`/admin/audit-logs?limit=${limit}&offset=${offset}`);
 }
 
-export function fetchAdminUserStories(userId: number, status?: string): Promise<Story[]> {
+export interface AdminUserStory extends Story {
+  report_count: number;
+}
+
+export function fetchAdminUserStories(userId: number, status?: string): Promise<AdminUserStory[]> {
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
-  return apiFetch<Story[]>(`/admin/users/${userId}/stories${query}`);
+  return apiFetch<AdminUserStory[]>(`/admin/users/${userId}/stories${query}`);
 }
 
 export function deleteAdminStory(storyId: string, reason: string): Promise<void> {
   return apiFetch<void>(`/admin/stories/${storyId}`, { method: "DELETE", body: JSON.stringify({ reason }) });
+}
+
+// --- reported content -------------------------------------------------------
+
+export interface ReportedStoryItem {
+  id: string;
+  category_id: number;
+  title: string;
+  body: string;
+  moderation_status: ModerationStatus;
+  is_hidden: boolean;
+  auto_hidden_at: string | null;
+  created_at: string;
+  author: StoryAuthor | null;
+  report_count: number;
+  reporter_count: number;
+  pending_count: number;
+  report_threshold: number;
+  latest_report_at: string | null;
+  first_report_at: string | null;
+  photos: StoryPhoto[];
+}
+
+export interface ReportedStoriesResponse {
+  items: ReportedStoryItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  report_threshold: number;
+}
+
+export interface ReportDetail {
+  id: string;
+  reason: string | null;
+  status: "pending" | "reviewed" | "resolved";
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: number | null;
+  resolution_action: string | null;
+  reporter: { id: number | null; username: string | null; first_name: string | null };
+}
+
+export interface ReportedStoryDetail {
+  story: ReportedStoryItem;
+  reports: ReportDetail[];
+}
+
+export type ResolutionAction = "restore" | "keep_hidden" | "delete" | "ignore";
+
+export function fetchReportedStories(params: {
+  q: string;
+  filter: string;
+  sort: string;
+  limit: number;
+  offset: number;
+}): Promise<ReportedStoriesResponse> {
+  const query = new URLSearchParams({
+    filter: params.filter,
+    sort: params.sort,
+    limit: String(params.limit),
+    offset: String(params.offset),
+  });
+  if (params.q) query.set("q", params.q);
+  return apiFetch<ReportedStoriesResponse>(`/admin/reports?${query}`);
+}
+
+export function fetchReportedStory(storyId: string): Promise<ReportedStoryDetail> {
+  return apiFetch<ReportedStoryDetail>(`/admin/reports/${storyId}`);
+}
+
+export function resolveReports(storyId: string, action: ResolutionAction, reason?: string): Promise<void> {
+  return apiFetch<void>(`/admin/reports/${storyId}/resolve`, {
+    method: "POST",
+    body: JSON.stringify({ action, reason: reason ?? null }),
+  });
 }

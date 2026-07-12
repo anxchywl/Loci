@@ -1,0 +1,9 @@
+[
+  {
+    "AllowedOrigins": ["https://loci.anxchywl.dev"],
+    "AllowedMethods": ["PUT", "GET", "HEAD"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]

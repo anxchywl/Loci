@@ -40,7 +40,7 @@ injects everything; the backend reads them via `pydantic-settings`
 | `NEXT_PUBLIC_API_URL` | frontend → API base URL |
 | `CADDY_DOMAIN` | prod domain for TLS + routing |
 | `BACKUP_RETENTION_DAYS` / `BACKUP_DIR` | backup policy |
-| `ADMIN_TELEGRAM_IDS` | comma-separated admin user IDs (moderation script) |
+| `ADMIN_TELEGRAM_IDS` | comma-separated Telegram IDs granted access to the admin panel |
 | `WEB_CONCURRENCY` | production Uvicorn worker count |
 
 ## Local development

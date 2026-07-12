@@ -39,6 +39,7 @@ interface Dict {
   bodyPlaceholder: string;
   dateLabel: string;
   photosLabel: string;
+  noPhotos: string;
   addPhoto: string;
   pick: string;
   change: string;
@@ -47,6 +48,7 @@ interface Dict {
   editPhoto: string;
   apply: string;
   photoInvalid: string;
+  photoUploadFailed: string;
   locationLabel: string;
   locationApprox: string;
   locationExact: string;
@@ -64,6 +66,7 @@ interface Dict {
   send: string;
   noCommentsYet: string;
   share: string;
+  shareText: string;
   linkCopied: string;
   report: string;
   reported: string;
@@ -148,6 +151,45 @@ interface Dict {
   adminLast7Days: string;
   adminLast30Days: string;
   adminCustom: string;
+  adminFrom: string;
+  adminTo: string;
+  adminStoryReports: string;
+  reportTab: string;
+  reportSearch: string;
+  reportEmpty: string;
+  reportFilterAll: string;
+  reportFilterPending: string;
+  reportFilterHidden: string;
+  reportFilterVisible: string;
+  reportFilterResolved: string;
+  reportSortReports: string;
+  reportSortNewest: string;
+  reportSortHidden: string;
+  reportReporters: string;
+  reportAutoHidden: string;
+  reportHidden: string;
+  reportVisible: string;
+  reportActionRestore: string;
+  reportActionKeepHidden: string;
+  reportActionDelete: string;
+  reportActionIgnore: string;
+  reportConfirmRestore: string;
+  reportConfirmKeepHidden: string;
+  reportConfirmDelete: string;
+  reportConfirmIgnore: string;
+  reportOpenAuthor: string;
+  reportTimeline: string;
+  reportNoReason: string;
+  reportStatusPending: string;
+  reportStatusReviewed: string;
+  reportStatusResolved: string;
+  reportAnalytics: string;
+  reportPending: string;
+  reportAutoHiddenCount: string;
+  reportResolved: string;
+  reportDeleted: string;
+  reportRestored: string;
+  reportAvgReview: string;
   adminTotalUsers: string;
   adminActiveUsers: string;
   adminNewUsers: string;
@@ -191,6 +233,7 @@ export const dict: Record<Locale, Dict> = {
     bodyPlaceholder: "What happened here?",
     dateLabel: "Date (optional)",
     photosLabel: "Photos",
+    noPhotos: "No photos",
     addPhoto: "Add photo",
     pick: "Pick",
     change: "Change",
@@ -199,6 +242,7 @@ export const dict: Record<Locale, Dict> = {
     editPhoto: "Edit photo",
     apply: "Apply",
     photoInvalid: "Choose a valid image up to 10 MB.",
+    photoUploadFailed: "Story sent. One or more photos could not be uploaded.",
     locationLabel: "Location",
     locationApprox: "Approximate",
     locationExact: "Exact",
@@ -216,6 +260,7 @@ export const dict: Record<Locale, Dict> = {
     send: "Send",
     noCommentsYet: "No comments yet",
     share: "Share",
+    shareText: "See this story on Loci:",
     linkCopied: "Link copied",
     report: "Report",
     reported: "Reported",
@@ -300,6 +345,45 @@ export const dict: Record<Locale, Dict> = {
     adminLast7Days: "Last 7 days",
     adminLast30Days: "Last 30 days",
     adminCustom: "Custom",
+    adminFrom: "From",
+    adminTo: "To",
+    adminStoryReports: "reports",
+    reportTab: "Reported",
+    reportSearch: "Search reported stories",
+    reportEmpty: "No reported content",
+    reportFilterAll: "All reported",
+    reportFilterPending: "Needs review",
+    reportFilterHidden: "Hidden",
+    reportFilterVisible: "Visible",
+    reportFilterResolved: "Resolved",
+    reportSortReports: "Most reports",
+    reportSortNewest: "Newest reports",
+    reportSortHidden: "Auto-hidden first",
+    reportReporters: "reporters",
+    reportAutoHidden: "Auto-hidden",
+    reportHidden: "Hidden",
+    reportVisible: "Visible",
+    reportActionRestore: "Restore",
+    reportActionKeepHidden: "Keep hidden",
+    reportActionDelete: "Delete",
+    reportActionIgnore: "Ignore reports",
+    reportConfirmRestore: "Restore this story and make it visible again?",
+    reportConfirmKeepHidden: "Keep this story hidden and mark the reports reviewed?",
+    reportConfirmDelete: "Permanently delete this story? This cannot be undone.",
+    reportConfirmIgnore: "Dismiss these reports and leave the story as is?",
+    reportOpenAuthor: "Open author",
+    reportTimeline: "Report timeline",
+    reportNoReason: "No reason given",
+    reportStatusPending: "pending",
+    reportStatusReviewed: "reviewed",
+    reportStatusResolved: "resolved",
+    reportAnalytics: "Reported content",
+    reportPending: "Pending reports",
+    reportAutoHiddenCount: "Auto-hidden",
+    reportResolved: "Resolved reports",
+    reportDeleted: "Deleted after review",
+    reportRestored: "Restored after review",
+    reportAvgReview: "Avg review time",
     adminTotalUsers: "Total users",
     adminActiveUsers: "Active users",
     adminNewUsers: "New users",
@@ -354,6 +438,7 @@ export const dict: Record<Locale, Dict> = {
     bodyPlaceholder: "Мұнда не болды?",
     dateLabel: "Күні (міндетті емес)",
     photosLabel: "Фотолар",
+    noPhotos: "Фотосурет жоқ",
     addPhoto: "Фото қосу",
     pick: "Таңдау",
     change: "Өзгерту",
@@ -362,6 +447,7 @@ export const dict: Record<Locale, Dict> = {
     editPhoto: "Фотосуретті өңдеу",
     apply: "Қолдану",
     photoInvalid: "10 МБ-қа дейінгі жарамды суретті таңдаңыз.",
+    photoUploadFailed: "Оқиға жіберілді. Бір немесе бірнеше фотосуретті жүктеу мүмкін болмады.",
     locationLabel: "Орналасқан жері",
     locationApprox: "Шамамен",
     locationExact: "Нақты",
@@ -379,6 +465,7 @@ export const dict: Record<Locale, Dict> = {
     send: "Жіберу",
     noCommentsYet: "Әзірге пікір жоқ",
     share: "Бөлісу",
+    shareText: "Loci-де осы оқиғаны қараңыз:",
     linkCopied: "Сілтеме көшірілді",
     report: "Шағымдану",
     reported: "Шағым жіберілді",
@@ -463,6 +550,45 @@ export const dict: Record<Locale, Dict> = {
     adminLast7Days: "Соңғы 7 күн",
     adminLast30Days: "Соңғы 30 күн",
     adminCustom: "Арнайы",
+    adminFrom: "Басы",
+    adminTo: "Соңы",
+    adminStoryReports: "шағым",
+    reportTab: "Шағымдар",
+    reportSearch: "Шағым түскен оқиғаларды іздеу",
+    reportEmpty: "Шағым түскен мазмұн жоқ",
+    reportFilterAll: "Барлық шағымдар",
+    reportFilterPending: "Қарау керек",
+    reportFilterHidden: "Жасырылған",
+    reportFilterVisible: "Көрінетін",
+    reportFilterResolved: "Шешілген",
+    reportSortReports: "Ең көп шағым",
+    reportSortNewest: "Жаңа шағымдар",
+    reportSortHidden: "Алдымен жасырылғандар",
+    reportReporters: "шағымданушы",
+    reportAutoHidden: "Авто-жасырылған",
+    reportHidden: "Жасырылған",
+    reportVisible: "Көрінеді",
+    reportActionRestore: "Қалпына келтіру",
+    reportActionKeepHidden: "Жасырулы қалдыру",
+    reportActionDelete: "Жою",
+    reportActionIgnore: "Шағымдарды елемеу",
+    reportConfirmRestore: "Бұл оқиғаны қалпына келтіріп, қайта көрсету керек пе?",
+    reportConfirmKeepHidden: "Оқиғаны жасырулы қалдырып, шағымдарды қаралды деп белгілеу керек пе?",
+    reportConfirmDelete: "Бұл оқиғаны біржола жою керек пе? Мұны қайтару мүмкін емес.",
+    reportConfirmIgnore: "Бұл шағымдарды жауып, оқиғаны сол күйінде қалдыру керек пе?",
+    reportOpenAuthor: "Авторды ашу",
+    reportTimeline: "Шағымдар тарихы",
+    reportNoReason: "Себебі көрсетілмеген",
+    reportStatusPending: "күтуде",
+    reportStatusReviewed: "қаралды",
+    reportStatusResolved: "шешілді",
+    reportAnalytics: "Шағым түскен мазмұн",
+    reportPending: "Күтудегі шағымдар",
+    reportAutoHiddenCount: "Авто-жасырылған",
+    reportResolved: "Шешілген шағымдар",
+    reportDeleted: "Қараудан кейін жойылған",
+    reportRestored: "Қараудан кейін қалпына келтірілген",
+    reportAvgReview: "Орташа қарау уақыты",
     adminTotalUsers: "Барлық пайдаланушы",
     adminActiveUsers: "Белсенді пайдаланушы",
     adminNewUsers: "Жаңа пайдаланушы",
@@ -517,6 +643,7 @@ export const dict: Record<Locale, Dict> = {
     bodyPlaceholder: "Что здесь произошло?",
     dateLabel: "Дата (необязательно)",
     photosLabel: "Фото",
+    noPhotos: "Нет фото",
     addPhoto: "Добавить фото",
     pick: "Выбрать",
     change: "Изменить",
@@ -525,6 +652,7 @@ export const dict: Record<Locale, Dict> = {
     editPhoto: "Изменить фото",
     apply: "Применить",
     photoInvalid: "Выберите корректное изображение размером до 10 МБ.",
+    photoUploadFailed: "История отправлена. Не удалось загрузить одну или несколько фотографий.",
     locationLabel: "Место",
     locationApprox: "Примерно",
     locationExact: "Точно",
@@ -542,6 +670,7 @@ export const dict: Record<Locale, Dict> = {
     send: "Отправить",
     noCommentsYet: "Пока нет комментариев",
     share: "Поделиться",
+    shareText: "Посмотрите эту историю в Loci:",
     linkCopied: "Ссылка скопирована",
     report: "Пожаловаться",
     reported: "Жалоба отправлена",
@@ -626,6 +755,45 @@ export const dict: Record<Locale, Dict> = {
     adminLast7Days: "Последние 7 дней",
     adminLast30Days: "Последние 30 дней",
     adminCustom: "Период",
+    adminFrom: "С",
+    adminTo: "По",
+    adminStoryReports: "жалоб",
+    reportTab: "Жалобы",
+    reportSearch: "Поиск историй с жалобами",
+    reportEmpty: "Нет контента с жалобами",
+    reportFilterAll: "Все жалобы",
+    reportFilterPending: "Нужен обзор",
+    reportFilterHidden: "Скрытые",
+    reportFilterVisible: "Видимые",
+    reportFilterResolved: "Решённые",
+    reportSortReports: "Больше жалоб",
+    reportSortNewest: "Новые жалобы",
+    reportSortHidden: "Сначала скрытые",
+    reportReporters: "пожаловались",
+    reportAutoHidden: "Авто-скрыто",
+    reportHidden: "Скрыто",
+    reportVisible: "Видно",
+    reportActionRestore: "Восстановить",
+    reportActionKeepHidden: "Оставить скрытой",
+    reportActionDelete: "Удалить",
+    reportActionIgnore: "Отклонить жалобы",
+    reportConfirmRestore: "Восстановить историю и снова показать её?",
+    reportConfirmKeepHidden: "Оставить историю скрытой и отметить жалобы рассмотренными?",
+    reportConfirmDelete: "Удалить историю навсегда? Это нельзя отменить.",
+    reportConfirmIgnore: "Отклонить эти жалобы и оставить историю как есть?",
+    reportOpenAuthor: "Открыть автора",
+    reportTimeline: "История жалоб",
+    reportNoReason: "Причина не указана",
+    reportStatusPending: "ожидает",
+    reportStatusReviewed: "рассмотрено",
+    reportStatusResolved: "решено",
+    reportAnalytics: "Контент с жалобами",
+    reportPending: "Ожидающие жалобы",
+    reportAutoHiddenCount: "Авто-скрыто",
+    reportResolved: "Решённые жалобы",
+    reportDeleted: "Удалено после обзора",
+    reportRestored: "Восстановлено после обзора",
+    reportAvgReview: "Среднее время обзора",
     adminTotalUsers: "Всего пользователей",
     adminActiveUsers: "Активные пользователи",
     adminNewUsers: "Новые пользователи",

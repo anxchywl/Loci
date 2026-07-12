@@ -168,26 +168,110 @@ interface UploadUrlResponse {
   expires_in: number;
 }
 
-export async function uploadStoryPhoto(storyId: string, file: File, onProgress?: (progress: number) => void): Promise<void> {
+export class UploadCancelledError extends Error {
+  constructor() {
+    super("upload cancelled");
+    this.name = "UploadCancelledError";
+  }
+}
+
+interface UploadOptions {
+  onProgress?: (progress: number) => void;
+  signal?: AbortSignal;
+}
+
+// PUT the file with real upload progress and cancellation. Resolves on a 2xx,
+// rejects on network error, non-2xx, or abort — the caller decides whether to
+// fall back. Used for the direct-to-storage path (the production default).
+function putWithProgress(
+  url: string,
+  file: File,
+  contentType: string,
+  options: UploadOptions,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    if (options.signal?.aborted) {
+      reject(new UploadCancelledError());
+      return;
+    }
+    const request = new XMLHttpRequest();
+    request.open("PUT", url);
+    request.setRequestHeader("Content-Type", contentType);
+    const onAbort = () => request.abort();
+    options.signal?.addEventListener("abort", onAbort);
+    const cleanup = () => options.signal?.removeEventListener("abort", onAbort);
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) options.onProgress?.(event.loaded / event.total);
+    };
+    request.onload = () => {
+      cleanup();
+      request.status >= 200 && request.status < 300
+        ? resolve()
+        : reject(new Error(`storage responded ${request.status}`));
+    };
+    request.onerror = () => {
+      cleanup();
+      reject(new Error("network error reaching storage"));
+    };
+    request.onabort = () => {
+      cleanup();
+      reject(new UploadCancelledError());
+    };
+    request.send(file);
+  });
+}
+
+/**
+ * Upload one photo. Tries the direct-to-storage presigned PUT first (fast path),
+ * and on ANY failure that isn't a user cancellation, transparently falls back to
+ * the backend proxy. The chosen path, duration, and fallback reason are reported
+ * to /complete purely for observability. Throws if both paths fail.
+ */
+export async function uploadStoryPhoto(
+  storyId: string,
+  file: File,
+  onProgress?: (progress: number) => void,
+  signal?: AbortSignal,
+): Promise<void> {
   const contentType = file.type === "image/heic" ? "image/heic" : file.type;
   const presigned = await apiFetch<UploadUrlResponse>(`/stories/${storyId}/photos`, {
     method: "POST",
     body: JSON.stringify({ content_type: contentType }),
+    signal,
   });
 
-  await new Promise<void>((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    request.open("PUT", presigned.upload_url);
-    request.setRequestHeader("Content-Type", contentType);
-    request.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress?.(event.loaded / event.total);
-    };
-    request.onload = () => request.status >= 200 && request.status < 300 ? resolve() : reject(new Error("photo upload failed"));
-    request.onerror = () => reject(new Error("photo upload failed"));
-    request.send(file);
-  });
+  const startedAt =
+    typeof performance !== "undefined" ? performance.now() : Date.now();
+  let uploadPath: "direct" | "proxy" = "direct";
+  let fallbackReason: string | null = null;
 
+  try {
+    await putWithProgress(presigned.upload_url, file, contentType, { onProgress, signal });
+  } catch (error) {
+    if (error instanceof UploadCancelledError) throw error;
+    // direct path failed (network, CORS, timeout, 5xx…): fall back to the proxy.
+    // The user never sees this — same file, same result, different transport.
+    uploadPath = "proxy";
+    fallbackReason = error instanceof Error ? error.message : "direct upload failed";
+    await apiFetch<void>(`/stories/${storyId}/photos/${presigned.photo_id}/upload`, {
+      method: "PUT",
+      body: file,
+      headers: { "Content-Type": contentType },
+      signal,
+    });
+    onProgress?.(1);
+  }
+
+  const durationMs = Math.round(
+    (typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt,
+  );
   await apiFetch<void>(`/stories/${storyId}/photos/${presigned.photo_id}/complete`, {
     method: "POST",
+    body: JSON.stringify({
+      upload_path: uploadPath,
+      duration_ms: durationMs,
+      fallback_reason: fallbackReason,
+    }),
+    signal,
   });
 }

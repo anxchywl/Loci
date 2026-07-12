@@ -73,6 +73,10 @@ class Story(Base):
         Geometry("POINT", srid=4326, spatial_index=False), nullable=False
     )
     is_hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    # set when reports auto-hide a story; distinguishes report-driven hiding from
+    # any other hide and drives the "auto-hidden" state in the reported queue.
+    # cleared when an admin restores the story.
+    auto_hidden_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # moderation gate — a story is public only when approved (and not hidden by reports)
     moderation_status: Mapped[ModerationStatus] = mapped_column(
         Enum(ModerationStatus, name="moderation_status"),
