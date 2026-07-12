@@ -13,6 +13,7 @@ from sqlalchemy import (
     Index,
     SmallInteger,
     Text,
+    String,
     func,
     text,
 )
@@ -44,6 +45,9 @@ class Story(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    share_token: Mapped[str] = mapped_column(
+        String(32), unique=True, index=True, nullable=False
     )
     # nullable so anonymous stories survive account deletion unlinkable
     author_id: Mapped[int | None] = mapped_column(

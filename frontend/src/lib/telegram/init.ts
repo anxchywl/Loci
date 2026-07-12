@@ -16,6 +16,7 @@ interface TelegramWebApp {
   expand?: () => void;
   onEvent?: (event: string, handler: () => void) => void;
   openTelegramLink?: (url: string) => void;
+  switchInlineQuery?: (query: string, choose_chat_types?: string[]) => void;
 }
 
 function webApp(): TelegramWebApp | null {
@@ -66,6 +67,20 @@ export function openTelegramLink(url: string): boolean {
   if (tg?.openTelegramLink) {
     tg.openTelegramLink(url);
     return true;
+  }
+  return false;
+}
+
+export function switchInlineQuery(query: string, choose_chat_types?: string[]): boolean {
+  const tg = webApp();
+  if (tg?.switchInlineQuery) {
+    try {
+      tg.switchInlineQuery(query, choose_chat_types);
+      return true;
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
   }
   return false;
 }

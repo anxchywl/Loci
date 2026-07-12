@@ -61,6 +61,8 @@ interface Dict {
   publishing: string;
   done: string;
   anonymous: string;
+  close: string;
+  viewPhoto: string;
   comments: string;
   commentPlaceholder: string;
   send: string;
@@ -255,6 +257,8 @@ export const dict: Record<Locale, Dict> = {
     publishing: "Publishing…",
     done: "Done",
     anonymous: "Anonymous",
+    close: "Close",
+    viewPhoto: "View photo",
     comments: "Comments",
     commentPlaceholder: "Add a comment",
     send: "Send",
@@ -460,6 +464,8 @@ export const dict: Record<Locale, Dict> = {
     publishing: "Жариялануда…",
     done: "Дайын",
     anonymous: "Аноним",
+    close: "Жабу",
+    viewPhoto: "Фотоны көру",
     comments: "Пікірлер",
     commentPlaceholder: "Пікір қосу",
     send: "Жіберу",
@@ -665,6 +671,8 @@ export const dict: Record<Locale, Dict> = {
     publishing: "Публикация…",
     done: "Готово",
     anonymous: "Аноним",
+    close: "Закрыть",
+    viewPhoto: "Открыть фото",
     comments: "Комментарии",
     commentPlaceholder: "Добавить комментарий",
     send: "Отправить",

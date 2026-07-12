@@ -7,14 +7,21 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.core.validation import LineStr, MultilineStr
 from app.db.models.story import LocationPrecision, ModerationStatus, StoryVisibility
 
+from typing import TYPE_CHECKING
+
 TITLE_MAX = 120
 BODY_MAX = 4000
 COMMENT_MAX = 1000
 REJECTION_REASON_MAX = 500
 
-TitleStr = LineStr(1, TITLE_MAX)
-BodyStr = MultilineStr(1, BODY_MAX)
-CommentStr = MultilineStr(1, COMMENT_MAX)
+if TYPE_CHECKING:
+    TitleStr = str
+    BodyStr = str
+    CommentStr = str
+else:
+    TitleStr = LineStr(1, TITLE_MAX)
+    BodyStr = MultilineStr(1, BODY_MAX)
+    CommentStr = MultilineStr(1, COMMENT_MAX)
 
 
 class AuthorResponse(BaseModel):
@@ -68,6 +75,7 @@ class PhotoResponse(BaseModel):
 
 class StoryResponse(BaseModel):
     id: uuid.UUID
+    share_token: str
     category_id: int
     title: str
     body: str

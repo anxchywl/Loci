@@ -12,6 +12,7 @@ from app.db.models.story import LocationPrecision, ModerationStatus
 # public column already holds the same point
 STORY_READ_COLUMNS = (
     Story.id,
+    Story.share_token,
     Story.author_id,
     Story.category_id,
     Story.title,
@@ -132,7 +133,9 @@ async def create(
     exact_lon: float,
     moderation_status: ModerationStatus = ModerationStatus.pending,
 ) -> uuid.UUID:
+    import secrets
     story = Story(
+        share_token=secrets.token_urlsafe(16),
         author_id=author_id,
         category_id=category_id,
         title=title,
@@ -171,6 +174,15 @@ async def get_owned_any(db: AsyncSession, story_id: uuid.UUID) -> Story | None:
 
 async def get_for_viewer(db: AsyncSession, story_id: uuid.UUID, viewer_id: int | None):
     stmt = _base_select(viewer_id).where(Story.id == story_id)
+    return (await db.execute(stmt)).mappings().one_or_none()
+
+
+async def get_by_share_token_discoverable(db: AsyncSession, share_token: str):
+    stmt = (
+        select(Story.id, Story.title, Story.body, Story.category_id)
+        .where(Story.share_token == share_token)
+        .where(_DISCOVERABLE)
+    )
     return (await db.execute(stmt)).mappings().one_or_none()
 
 
@@ -322,6 +334,7 @@ async def restore_from_reports(db: AsyncSession, story_id: uuid.UUID) -> bool:
 
 _QUEUE_COLUMNS = (
     Story.id,
+    Story.share_token,
     Story.author_id,
     Story.category_id,
     Story.title,

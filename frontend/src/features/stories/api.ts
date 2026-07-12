@@ -28,6 +28,7 @@ export type ModerationStatus = "pending" | "approved" | "rejected";
 
 export interface Story {
   id: string;
+  share_token: string;
   category_id: number;
   title: string;
   body: string;
@@ -106,6 +107,10 @@ export function fetchTrending(): Promise<Story[]> {
 
 export function searchStories(q: string): Promise<Story[]> {
   return apiFetch<Story[]>(`/stories/search?${new URLSearchParams({ q })}`);
+}
+
+export function fetchStoryByToken(shareToken: string): Promise<Story> {
+  return apiFetch<Story>(`/stories/by-token/${shareToken}`);
 }
 
 export function fetchStory(id: string): Promise<Story> {

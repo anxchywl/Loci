@@ -1,6 +1,6 @@
 "use client";
 
-import { Bookmark, Flag, MapPin, Share2, Trash2 } from "lucide-react";
+import { Bookmark, Flag, MapPin, Share2, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { ReactionButton } from "@/features/stories/components/reaction-button";
@@ -14,7 +14,7 @@ import {
 } from "@/features/stories/hooks";
 import { categoryIcons } from "@/lib/icons/category-glyphs";
 import { useDict } from "@/lib/i18n/use-dict";
-import { openTelegramLink } from "@/lib/telegram/init";
+import { openTelegramLink, switchInlineQuery } from "@/lib/telegram/init";
 import { useUiStore } from "@/stores/ui-store";
 
 interface StorySheetProps {
@@ -34,11 +34,24 @@ export function StorySheet({ authenticated }: StorySheetProps) {
   const deleteStory = useDeleteStory();
   // inline confirmation shown before a destructive/irreversible action
   const [confirming, setConfirming] = useState<"delete" | "report" | null>(null);
+  // full-screen photo viewer; holds the url of the photo being viewed
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   // reset any pending confirmation when the sheet switches to another story
   useEffect(() => {
     setConfirming(null);
+    setLightboxUrl(null);
   }, [storyId]);
+
+  // close the lightbox with Escape while it's open
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxUrl(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxUrl]);
 
   if (!storyId) return null;
 
@@ -70,15 +83,21 @@ export function StorySheet({ authenticated }: StorySheetProps) {
   const canInteract = story?.moderation_status === "approved";
 
   const share = async () => {
+    if (!story) return;
+    
+    // Attempt native Telegram inline query share first
+    if (switchInlineQuery(story.share_token, ["users", "groups", "channels"])) {
+      return;
+    }
+    
+    // Fallback for browsers/desktop testing
     const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME;
     const link = botUsername
-      ? `https://t.me/${botUsername}?startapp=${storyId}`
+      ? `https://t.me/${botUsername}/app?startapp=${story.share_token}`
       : window.location.href;
-    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(t.shareText)}`;
-    if (!openTelegramLink(shareUrl)) {
-      await navigator.clipboard.writeText(`${t.shareText} ${link}`);
-      showToast(t.linkCopied);
-    }
+      
+    await navigator.clipboard.writeText(`${t.shareText}\n${link}`);
+    showToast(t.linkCopied);
   };
 
   return (
@@ -111,7 +130,7 @@ export function StorySheet({ authenticated }: StorySheetProps) {
                 {t.categories[category.slug]}
               </span>
             )}
-            <span>{story.author ? (story.author.username ?? story.author.first_name) : t.anonymous}</span>
+            {story.author && <span>{story.author.username ?? story.author.first_name}</span>}
             {story.happened_on && <span>{story.happened_on}</span>}
             <span className="flex items-center gap-0.5">
               <MapPin size={13} />
@@ -123,13 +142,20 @@ export function StorySheet({ authenticated }: StorySheetProps) {
           {story.photos.length > 0 && (
             <div className="flex gap-2 overflow-x-auto">
               {story.photos.map((photo) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <button
                   key={photo.id}
-                  src={photo.thumb_url ?? photo.url}
-                  alt=""
-                  className="h-40 rounded-sheet object-cover"
-                />
+                  type="button"
+                  onClick={() => setLightboxUrl(photo.url)}
+                  aria-label={t.viewPhoto}
+                  className="shrink-0 transition-transform duration-150 ease-lm active:scale-[0.98]"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={photo.thumb_url ?? photo.url}
+                    alt=""
+                    className="h-40 rounded-sheet object-cover"
+                  />
+                </button>
               ))}
             </div>
           )}
@@ -211,6 +237,30 @@ export function StorySheet({ authenticated }: StorySheetProps) {
           )}
           </>
           )}
+        </div>
+      )}
+      {lightboxUrl && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={t.viewPhoto}
+          onClick={() => setLightboxUrl(null)}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 motion-safe:animate-story-state"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxUrl}
+            alt=""
+            className="max-h-full max-w-full rounded-sheet object-contain"
+          />
+          <button
+            type="button"
+            aria-label={t.close}
+            onClick={() => setLightboxUrl(null)}
+            className="absolute right-4 top-4 rounded-full bg-white/15 p-2 text-white transition-transform duration-150 ease-lm active:scale-95"
+          >
+            <X size={20} />
+          </button>
         </div>
       )}
     </BottomSheet>

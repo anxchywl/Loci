@@ -35,7 +35,19 @@ export function useTelegramAuth(): { status: AuthStatus; user: AuthUser | null }
         cachedUser = response.user;
         setUser(response.user);
         setStatus("authenticated");
-        if (launch.startParam) openStory(launch.startParam);
+        if (launch.startParam) {
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(launch.startParam);
+          if (isUuid) {
+            openStory(launch.startParam);
+          } else {
+            // It's a share_token, fetch the story by token to get its true ID
+            import("@/features/stories/api").then(({ fetchStoryByToken }) => {
+              fetchStoryByToken(launch.startParam!)
+                .then((story) => openStory(story.id))
+                .catch(() => { /* handle invalid token gracefully */ });
+            });
+          }
+        }
       })
       .catch(() => {
         if (!cancelled) setStatus("signed-out");

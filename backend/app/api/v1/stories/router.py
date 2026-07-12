@@ -126,6 +126,16 @@ async def search(
     return [service.serialize_story(row) for row in rows]
 
 
+@router.get("/by-token/{share_token}", response_model=StoryResponse)
+async def get_story_by_token(
+    share_token: str,
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    viewer: Annotated[User | None, Depends(get_optional_user)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> StoryResponse:
+    return await service.get_story_by_token(db, share_token, viewer.id if viewer else None, settings)
+
+
 @router.get("/{story_id}", response_model=StoryResponse)
 async def get_story(
     story_id: uuid.UUID,

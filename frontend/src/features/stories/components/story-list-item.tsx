@@ -62,7 +62,7 @@ export function StoryListItem({ story, categories, onOpen, showStatus = false }:
           <span className="flex items-center gap-1">
             <Heart size={13} /> {story.reaction_count}
           </span>
-          <span>{story.author ? (story.author.username ?? story.author.first_name) : t.anonymous}</span>
+          {story.author && <span>{story.author.username ?? story.author.first_name}</span>}
         </span>
       </span>
     </button>

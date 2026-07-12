@@ -59,6 +59,7 @@ def serialize_story(
     is_owner = viewer_id is not None and row["author_id"] == viewer_id
     return StoryResponse(
         id=row["id"],
+        share_token=row["share_token"],
         category_id=row["category_id"],
         title=row["title"],
         body=row["body"],
@@ -202,6 +203,18 @@ async def get_story(
         raise StoryNotFound()
     photos = await _photo_responses(db, story_id, settings)
     return serialize_story(row, photos, viewer_id=viewer_id)
+
+
+async def get_story_by_token(
+    db: AsyncSession, share_token: str, viewer_id: int | None, settings: Settings
+) -> StoryResponse:
+    # Look up the ID first (ensuring the story exists and is discoverable)
+    token_row = await stories_repo.get_by_share_token_discoverable(db, share_token)
+    if token_row is None:
+        raise StoryNotFound()
+    
+    # Delegate to get_story to run full visibility and photo retrieval
+    return await get_story(db, token_row["id"], viewer_id, settings)
 
 
 async def delete_story(db: AsyncSession, story_id: uuid.UUID, author_id: int) -> None:
