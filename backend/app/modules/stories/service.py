@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.security.geo import fuzz_story_location
-from app.db.models.story import LocationPrecision
+from app.db.models.story import LocationPrecision, ModerationStatus, StoryVisibility
 from app.db.repositories import categories as categories_repo
 from app.db.repositories import comments as comments_repo
 from app.db.repositories import photos as photos_repo
@@ -98,6 +98,9 @@ async def create_story(
             headers={"Retry-After": "86400"},
         )
 
+    # private ("only me") stories are never discoverable, so they skip review and
+    # are auto-approved on creation; public stories still go through moderation
+    is_private = payload.visibility == StoryVisibility.private
     story_id = await stories_repo.create(
         db,
         author_id=author_id,
@@ -110,6 +113,7 @@ async def create_story(
         precision=payload.location_precision,
         exact_lat=payload.lat,
         exact_lon=payload.lon,
+        moderation_status=ModerationStatus.approved if is_private else ModerationStatus.pending,
     )
 
     # fuzzing happens server-side before the public point is ever readable
@@ -124,15 +128,16 @@ async def create_story(
         raise StoryNotFound()
 
     author = await users_repo.get_by_id(db, author_id)
-    notifications.dispatch(
-        settings,
-        event=notifications.StoryEvent.submitted,
-        telegram_id=author.telegram_id if author else None,
-        title=payload.title,
-    )
-    notifications.dispatch_admins_pending_review(
-        settings, title=payload.title, author_label=_author_label(author)
-    )
+    if not is_private:
+        notifications.dispatch(
+            settings,
+            event=notifications.StoryEvent.submitted,
+            telegram_id=author.telegram_id if author else None,
+            title=payload.title,
+        )
+        notifications.dispatch_admins_pending_review(
+            settings, title=payload.title, author_label=_author_label(author)
+        )
     return serialize_story(row, viewer_id=author_id)
 
 

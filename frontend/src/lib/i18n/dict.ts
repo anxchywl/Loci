@@ -115,6 +115,7 @@ interface Dict {
   adminOnly: string;
   storySentTitle: string;
   storySentBody: string;
+  storyPublishedBody: string;
   gotIt: string;
   confirm: string;
   deleting: string;
@@ -265,6 +266,7 @@ export const dict: Record<Locale, Dict> = {
     adminOnly: "You don't have access to moderation.",
     storySentTitle: "Story sent for review",
     storySentBody: "We've sent your story to review. It'll appear on the map once our team checks it — please give us a little time.",
+    storyPublishedBody: "Your private story is saved. Only you can see it on the map.",
     gotIt: "Got it",
     confirm: "Confirm",
     deleting: "Deleting…",
@@ -426,6 +428,7 @@ export const dict: Record<Locale, Dict> = {
     adminOnly: "Сізде модерацияға рұқсат жоқ.",
     storySentTitle: "Оқиға тексеруге жіберілді",
     storySentBody: "Оқиғаңызды тексеруге жібердік. Біздің команда тексергеннен кейін ол картада көрінеді — сәл уақыт беріңіз.",
+    storyPublishedBody: "Жеке оқиғаңыз сақталды. Оны картадан тек өзіңіз көресіз.",
     gotIt: "Түсінікті",
     confirm: "Растау",
     deleting: "Жойылуда…",
@@ -587,6 +590,7 @@ export const dict: Record<Locale, Dict> = {
     adminOnly: "У вас нет доступа к модерации.",
     storySentTitle: "История отправлена на проверку",
     storySentBody: "Мы отправили вашу историю на проверку. Она появится на карте после того, как наша команда её проверит — пожалуйста, подождите немного.",
+    storyPublishedBody: "Ваша личная история сохранена. Её видите на карте только вы.",
     gotIt: "Понятно",
     confirm: "Подтвердить",
     deleting: "Удаление…",

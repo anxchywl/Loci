@@ -136,6 +136,17 @@ async def test_private_story_hidden_from_others_and_anonymous_readers(client):
     assert (await client.get("/api/v1/stories/trending")).json() == []
 
 
+async def test_private_story_is_auto_approved_without_review(client):
+    await authenticate(client, telegram_id=3)
+    private = await client.post("/api/v1/stories", json=story_payload(visibility="private"))
+    assert private.status_code == 201
+    assert private.json()["moderation_status"] == ModerationStatus.approved.value
+
+    public = await client.post("/api/v1/stories", json=story_payload(visibility="public"))
+    assert public.status_code == 201
+    assert public.json()["moderation_status"] == ModerationStatus.pending.value
+
+
 async def test_unknown_category_rejected(client):
     await authenticate(client)
     response = await client.post("/api/v1/stories", json=story_payload(category_id=99))

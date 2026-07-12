@@ -100,9 +100,11 @@ body {
 .icon-button:hover { background: var(--lm-surface); color: var(--lm-text); }
 
 .story-calendar { padding: 4px 0 2px; }
-.story-calendar-full { min-height: 380px; padding-top: 12px; }
+.story-calendar-full { min-height: 316px; padding: 10px 0 0; }
 .photo-editor-canvas { position: relative; display: flex; height: min(62vw, 360px); min-height: 280px; align-items: center; justify-content: center; overflow: hidden; border-radius: 12px; background: #111; touch-action: none; }
-.photo-editor-image { max-width: none; object-fit: contain; user-select: none; }
+.photo-editor-canvas { cursor: grab; }
+.photo-editor-canvas:active { cursor: grabbing; }
+.photo-editor-image { position: absolute; top: 50%; left: 50%; max-width: none; object-fit: cover; user-select: none; will-change: transform; }
 .photo-editor-frame { position: absolute; inset: 50% auto auto 50%; height: min(62vw, 320px); width: min(62vw, 320px); transform: translate(-50%, -50%); border: 1px dashed rgba(255,255,255,.8); box-shadow: 0 0 0 9999px rgba(0,0,0,.68); }
 .photo-editor-frame span { position: absolute; background: rgba(255,255,255,.45); }
 .photo-editor-frame span:nth-child(1), .photo-editor-frame span:nth-child(2) { top: 33.33%; bottom: 33.33%; width: 1px; }

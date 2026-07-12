@@ -30,6 +30,7 @@ export function AddStorySheet() {
   const createStory = useCreateStory();
 
   const [submitted, setSubmitted] = useState(false);
+  const [submittedPrivate, setSubmittedPrivate] = useState(false);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -66,6 +67,7 @@ export function AddStorySheet() {
   // dismiss the post-submit confirmation and return to the map
   const finish = () => {
     setSubmitted(false);
+    setSubmittedPrivate(false);
     reset();
     finishCompose();
   };
@@ -105,6 +107,7 @@ export function AddStorySheet() {
           // confirmation that it was sent for moderation
           reset();
           requestPanTo(pickedLocation.lat, pickedLocation.lon, 14);
+          setSubmittedPrivate(!isPublic);
           setSubmitted(true);
         },
         onError: () => showToast(t.errorGeneric),
@@ -119,7 +122,7 @@ export function AddStorySheet() {
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/15">
             <Check size={18} className="text-accent" />
           </div>
-          <p className="flex-1 text-[13px] leading-snug text-muted">{t.storySentBody}</p>
+          <p className="flex-1 text-[13px] leading-snug text-muted">{submittedPrivate ? t.storyPublishedBody : t.storySentBody}</p>
               <button
             onClick={finish}
             className="shrink-0 rounded bg-accent px-4 py-2 text-[13px] font-semibold text-accent-text transition-transform duration-150 ease-lm active:scale-[0.98]"
@@ -135,15 +138,15 @@ export function AddStorySheet() {
     <BottomSheet
       open={mode === "compose"}
       onClose={close}
-      title={calendarOpen ? t.dateLabel : editingPhotoIndex !== null ? t.editPhoto : t.newStory}
-      onBack={calendarOpen ? () => setCalendarOpen(false) : editingPhotoIndex !== null ? () => setEditingPhotoIndex(null) : undefined}
+      title={calendarOpen ? undefined : editingPhotoIndex !== null ? t.editPhoto : t.newStory}
+      onBack={editingPhotoIndex !== null ? () => setEditingPhotoIndex(null) : undefined}
       isEditing={focusMode.isFocusMode}
     >
       <div key={calendarOpen ? "calendar" : editingPhotoIndex !== null ? "photo-editor" : "story-form"} className="motion-safe:animate-story-state">
         {calendarOpen ? (
-          <StoryCalendar value={happenedOn} onChange={setHappenedOn} onClose={() => setCalendarOpen(false)} calendarLabel={t.dateLabel} previousLabel={t.previousMonth} nextLabel={t.nextMonth} closeLabel={t.cancel} />
+          <StoryCalendar value={happenedOn} onChange={setHappenedOn} onClose={() => setCalendarOpen(false)} calendarLabel={t.dateLabel} previousLabel={t.previousMonth} nextLabel={t.nextMonth} />
         ) : editingPhotoIndex !== null && photos[editingPhotoIndex] ? (
-          <PhotoEditor file={photos[editingPhotoIndex]} onCancel={() => setEditingPhotoIndex(null)} onApply={(file) => { setPhotos((current) => current.map((photo, index) => index === editingPhotoIndex ? file : photo)); setEditingPhotoIndex(null); }} cancelLabel={t.cancel} applyLabel={t.apply} title={t.editPhoto} />
+          <PhotoEditor file={photos[editingPhotoIndex]} onCancel={() => setEditingPhotoIndex(null)} onApply={(file) => { setPhotos((current) => current.map((photo, index) => index === editingPhotoIndex ? file : photo)); setEditingPhotoIndex(null); }} cancelLabel={t.cancel} applyLabel={t.apply} />
         ) : (
       <div
         className={`keyboard-form-stack ${focusMode.isFocusMode ? "keyboard-form-stack-focus" : ""} ${focusMode.isSwitching ? "keyboard-form-stack-switching" : ""}`}
@@ -266,7 +269,7 @@ export function AddStorySheet() {
             <button
               role="radio"
               aria-checked={!isPublic}
-              onClick={() => setIsPublic(false)}
+              onClick={() => { setIsPublic(false); setAnonymous(false); }}
               className={`flex-1 rounded px-3 py-1.5 text-[13px] font-medium transition-colors duration-200 ease-lm ${isPublic ? "text-muted" : "bg-accent text-accent-text"}`}
             >
               {t.visibilityPrivate}
@@ -274,10 +277,11 @@ export function AddStorySheet() {
           </div>
         </div>
 
-        <label className={`${focusMode.sectionClass("anonymous")} flex items-center gap-2 text-[15px]`} aria-hidden={focusMode.isFocusMode}>
+        <label className={`${focusMode.sectionClass("anonymous")} flex items-center gap-2 text-[15px] transition-opacity duration-200 ease-lm ${isPublic ? "" : "pointer-events-none opacity-40 text-muted"}`} aria-hidden={focusMode.isFocusMode}>
           <input
             type="checkbox"
-            checked={anonymous}
+            checked={isPublic && anonymous}
+            disabled={!isPublic}
             onChange={(event) => setAnonymous(event.target.checked)}
             className="h-4 w-4 accent-[var(--lm-accent)]"
           />

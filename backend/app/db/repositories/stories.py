@@ -130,6 +130,7 @@ async def create(
     precision: LocationPrecision,
     exact_lat: float,
     exact_lon: float,
+    moderation_status: ModerationStatus = ModerationStatus.pending,
 ) -> uuid.UUID:
     story = Story(
         author_id=author_id,
@@ -139,6 +140,7 @@ async def create(
         happened_on=happened_on,
         is_anonymous=is_anonymous,
         visibility=visibility,
+        moderation_status=moderation_status,
         location_precision=precision,
         location_exact=func.ST_SetSRID(func.ST_MakePoint(exact_lon, exact_lat), 4326),
         location_public=func.ST_SetSRID(func.ST_MakePoint(exact_lon, exact_lat), 4326),
