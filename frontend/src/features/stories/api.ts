@@ -168,19 +168,24 @@ interface UploadUrlResponse {
   expires_in: number;
 }
 
-export async function uploadStoryPhoto(storyId: string, file: File): Promise<void> {
+export async function uploadStoryPhoto(storyId: string, file: File, onProgress?: (progress: number) => void): Promise<void> {
   const contentType = file.type === "image/heic" ? "image/heic" : file.type;
   const presigned = await apiFetch<UploadUrlResponse>(`/stories/${storyId}/photos`, {
     method: "POST",
     body: JSON.stringify({ content_type: contentType }),
   });
 
-  const put = await fetch(presigned.upload_url, {
-    method: "PUT",
-    body: file,
-    headers: { "Content-Type": contentType },
+  await new Promise<void>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("PUT", presigned.upload_url);
+    request.setRequestHeader("Content-Type", contentType);
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress?.(event.loaded / event.total);
+    };
+    request.onload = () => request.status >= 200 && request.status < 300 ? resolve() : reject(new Error("photo upload failed"));
+    request.onerror = () => reject(new Error("photo upload failed"));
+    request.send(file);
   });
-  if (!put.ok) throw new Error("photo upload failed");
 
   await apiFetch<void>(`/stories/${storyId}/photos/${presigned.photo_id}/complete`, {
     method: "POST",

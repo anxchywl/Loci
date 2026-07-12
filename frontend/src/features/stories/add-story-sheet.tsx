@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ImagePlus, X } from "lucide-react";
+import { Check } from "lucide-react";
 import { useState } from "react";
 
 import { BottomSheet } from "@/features/stories/components/bottom-sheet";
@@ -9,6 +9,9 @@ import { categoryIcons } from "@/lib/icons/category-glyphs";
 import { useDict } from "@/lib/i18n/use-dict";
 import { useUiStore } from "@/stores/ui-store";
 import { useMobileFocusMode } from "@/features/stories/use-mobile-focus-mode";
+import { StoryCalendar } from "@/features/stories/components/story-calendar";
+import { PhotoPicker } from "@/features/stories/components/photo-picker";
+import { finalizeStoryText, normalizeStoryText } from "@/features/stories/text-input";
 
 const MAX_PHOTOS = 5;
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
@@ -34,6 +37,8 @@ export function AddStorySheet() {
   const [isPublic, setIsPublic] = useState(true);
   const [anonymous, setAnonymous] = useState(false);
   const [photos, setPhotos] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const focusMode = useMobileFocusMode();
 
   const reset = () => {
@@ -45,6 +50,8 @@ export function AddStorySheet() {
     setIsPublic(true);
     setAnonymous(false);
     setPhotos([]);
+    setUploadProgress(0);
+    setCalendarOpen(false);
   };
 
   const close = () => {
@@ -62,7 +69,7 @@ export function AddStorySheet() {
 
   const addPhotos = (files: FileList | null) => {
     if (!files) return;
-    const accepted = Array.from(files).filter((file) => file.size <= MAX_PHOTO_BYTES);
+    const accepted = Array.from(files).filter((file) => file.size <= MAX_PHOTO_BYTES && ["image/jpeg", "image/png", "image/webp", "image/heic"].includes(file.type));
     setPhotos((current) => [...current, ...accepted].slice(0, MAX_PHOTOS));
   };
 
@@ -87,6 +94,7 @@ export function AddStorySheet() {
         is_anonymous: anonymous,
         happened_on: happenedOn || null,
         photos,
+        onUploadProgress: setUploadProgress,
       },
       {
         onSuccess: () => {
@@ -109,7 +117,7 @@ export function AddStorySheet() {
             <Check size={18} className="text-accent" />
           </div>
           <p className="flex-1 text-[13px] leading-snug text-muted">{t.storySentBody}</p>
-          <button
+              <button
             onClick={finish}
             className="shrink-0 rounded bg-accent px-4 py-2 text-[13px] font-semibold text-accent-text transition-transform duration-150 ease-lm active:scale-[0.98]"
           >
@@ -169,9 +177,9 @@ export function AddStorySheet() {
             id="story-title"
             value={title}
             maxLength={120}
-            onChange={(event) => setTitle(event.target.value)}
+            onChange={(event) => setTitle(normalizeStoryText(event.target.value))}
+            onBlur={(event) => { setTitle(finalizeStoryText(event.target.value)); focusMode.onFieldBlur(); }}
             placeholder={t.titlePlaceholder}
-            onBlur={focusMode.onFieldBlur}
             {...focusMode.fieldFocusProps("title")}
             className="w-full rounded border border-border bg-bg px-3 py-2 text-[15px] outline-none placeholder:text-muted"
           />
@@ -186,58 +194,29 @@ export function AddStorySheet() {
             value={body}
             maxLength={4000}
             rows={4}
-            onChange={(event) => setBody(event.target.value)}
+            onChange={(event) => setBody(normalizeStoryText(event.target.value, true))}
             placeholder={t.bodyPlaceholder}
-            onBlur={focusMode.onFieldBlur}
+            onBlur={(event) => { setBody(finalizeStoryText(event.target.value, true)); focusMode.onFieldBlur(); }}
             {...focusMode.fieldFocusProps("body")}
             className="w-full resize-none rounded border border-border bg-bg px-3 py-2 text-[15px] outline-none placeholder:text-muted"
           />
         </div>
 
         <div className={focusMode.sectionClass("date")} aria-hidden={focusMode.isFocusMode}>
-          <label className="mb-1 block text-[13px] font-medium text-muted" htmlFor="story-date">
+          <div className="mb-1 block text-[13px] font-medium text-muted">
             {t.dateLabel}
-          </label>
-          <input
-            id="story-date"
-            type="date"
-            value={happenedOn}
-            onChange={(event) => setHappenedOn(event.target.value)}
-            className="rounded border border-border bg-bg px-3 py-2 text-[15px] outline-none"
-          />
+          </div>
+          {calendarOpen ? <StoryCalendar value={happenedOn} onChange={setHappenedOn} onClose={() => setCalendarOpen(false)} calendarLabel={t.dateLabel} previousLabel={t.previousMonth} nextLabel={t.nextMonth} closeLabel={t.cancel} /> : (
+            <button type="button" onClick={() => setCalendarOpen(true)} className="flex w-full items-center justify-between rounded border border-border bg-bg px-3 py-2 text-left text-[15px]">
+              <span className={happenedOn ? "" : "text-muted"}>{happenedOn || t.dateLabel}</span>
+              <span className="text-[13px] text-muted">{happenedOn ? t.change : t.pick}</span>
+            </button>
+          )}
         </div>
 
         <div className={focusMode.sectionClass("photos")} aria-hidden={focusMode.isFocusMode}>
           <div className="mb-2 text-[13px] font-medium text-muted">{t.photosLabel}</div>
-          <div className="flex flex-wrap items-center gap-2">
-            {photos.map((file, index) => (
-              <span
-                key={`${file.name}-${index}`}
-                className="flex items-center gap-1 rounded border border-border px-2 py-1 text-[13px]"
-              >
-                {file.name}
-                <button
-                  aria-label={t.cancel}
-                  onClick={() => setPhotos((current) => current.filter((_, i) => i !== index))}
-                >
-                  <X size={13} />
-                </button>
-              </span>
-            ))}
-            {photos.length < MAX_PHOTOS && (
-              <label className="flex cursor-pointer items-center gap-1.5 rounded border border-border px-3 py-2 text-[13px] font-medium text-muted transition-colors duration-150 ease-lm hover:bg-surface">
-                <ImagePlus size={15} />
-                {t.addPhoto}
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/heic"
-                  multiple
-                  hidden
-                  onChange={(event) => addPhotos(event.target.files)}
-                />
-              </label>
-            )}
-          </div>
+          <PhotoPicker photos={photos} maxPhotos={MAX_PHOTOS} onAdd={addPhotos} onRemove={(index) => setPhotos((current) => current.filter((_, i) => i !== index))} addLabel={t.addPhoto} removeLabel={t.cancel} disabled={createStory.isPending} />
         </div>
 
         <div className={focusMode.sectionClass("location")} aria-hidden={focusMode.isFocusMode}>
@@ -305,13 +284,20 @@ export function AddStorySheet() {
               {t.done}
             </button>
           ) : (
-            <button
-              onClick={publish}
-              disabled={!canPublish}
-              className="w-full rounded bg-accent py-3 text-[15px] font-semibold text-accent-text transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50"
-            >
-              {createStory.isPending ? t.publishing : t.publish}
-            </button>
+            <>
+              <button
+                onClick={publish}
+                disabled={!canPublish}
+                className="w-full rounded bg-accent py-3 text-[15px] font-semibold text-accent-text transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50"
+              >
+                {createStory.isPending ? t.publishing : t.publish}
+              </button>
+              {createStory.isPending && photos.length > 0 && (
+                <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface" aria-label={`${Math.round(uploadProgress * 100)}%`}>
+                  <div className="h-full bg-accent transition-[width] duration-200 ease-lm" style={{ width: `${Math.round(uploadProgress * 100)}%` }} />
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

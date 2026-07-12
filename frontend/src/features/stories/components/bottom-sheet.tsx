@@ -62,7 +62,7 @@ export function BottomSheet({
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
-          <div className="mb-3 h-1.5 w-12 shrink-0 rounded-full bg-border/80" />
+          <div className="mb-2 h-1 w-10 shrink-0 rounded-full bg-border/80" />
           {(title || onBack) ? (
             <div className={`keyboard-sheet-title-row relative flex w-full min-h-[32px] items-center justify-center pb-3 ${isEditing ? "keyboard-sheet-title-row-editing" : ""}`}>
               {onBack && (
@@ -84,7 +84,7 @@ export function BottomSheet({
             <div className="pb-1" />
           )}
         </div>
-        <div className="px-4 pb-6">{children}</div>
+        <div className="px-4 pb-5">{children}</div>
       </div>
     </div>
   );

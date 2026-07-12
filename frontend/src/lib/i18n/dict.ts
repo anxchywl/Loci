@@ -40,6 +40,10 @@ interface Dict {
   dateLabel: string;
   photosLabel: string;
   addPhoto: string;
+  pick: string;
+  change: string;
+  previousMonth: string;
+  nextMonth: string;
   locationLabel: string;
   locationApprox: string;
   locationExact: string;
@@ -184,6 +188,10 @@ export const dict: Record<Locale, Dict> = {
     dateLabel: "Date (optional)",
     photosLabel: "Photos",
     addPhoto: "Add photo",
+    pick: "Pick",
+    change: "Change",
+    previousMonth: "Previous month",
+    nextMonth: "Next month",
     locationLabel: "Location",
     locationApprox: "Approximate",
     locationExact: "Exact",
@@ -339,6 +347,10 @@ export const dict: Record<Locale, Dict> = {
     dateLabel: "Күні (міндетті емес)",
     photosLabel: "Фотолар",
     addPhoto: "Фото қосу",
+    pick: "Таңдау",
+    change: "Өзгерту",
+    previousMonth: "Алдыңғы ай",
+    nextMonth: "Келесі ай",
     locationLabel: "Орналасқан жері",
     locationApprox: "Шамамен",
     locationExact: "Нақты",
@@ -494,6 +506,10 @@ export const dict: Record<Locale, Dict> = {
     dateLabel: "Дата (необязательно)",
     photosLabel: "Фото",
     addPhoto: "Добавить фото",
+    pick: "Выбрать",
+    change: "Изменить",
+    previousMonth: "Предыдущий месяц",
+    nextMonth: "Следующий месяц",
     locationLabel: "Место",
     locationApprox: "Примерно",
     locationExact: "Точно",

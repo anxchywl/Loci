@@ -81,12 +81,25 @@ export function StorySheet({ authenticated }: StorySheetProps) {
   };
 
   return (
-    <BottomSheet open onClose={closeStory} title={story?.title ?? t.loading}>
+    <BottomSheet open onClose={closeStory} title={confirming === "delete" ? t.confirmDeleteTitle : story?.title ?? t.loading}>
       {story && (
         <div
           key={confirming ?? "story"}
           className="space-y-4 motion-safe:animate-story-state"
         >
+          {confirming === "delete" ? (
+            <div className="space-y-4 py-2">
+              <div>
+                <div className="text-[17px] font-semibold">{t.confirmDeleteTitle}</div>
+                <p className="mt-1 text-[13px] leading-relaxed text-muted">{t.confirmDeleteBody}</p>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setConfirming(null)} disabled={deleteStory.isPending} className="flex-1 rounded border border-border py-2.5 text-[14px] font-medium text-muted transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50">{t.cancel}</button>
+                <button onClick={confirmAction} disabled={deleteStory.isPending} className="flex-1 rounded bg-[#E5484D] py-2.5 text-[14px] font-semibold text-white transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50">{deleteStory.isPending ? t.deleting : t.deleteStory}</button>
+              </div>
+            </div>
+          ) : (
+          <>
           <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
             {category && Icon && (
               <span
@@ -122,32 +135,28 @@ export function StorySheet({ authenticated }: StorySheetProps) {
 
           <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{story.body}</p>
 
-          {confirming ? (
+          {confirming === "report" ? (
             <div className="space-y-3 rounded-sheet border border-border p-3">
               <div className="text-[15px] font-semibold">
-                {confirming === "delete" ? t.confirmDeleteTitle : t.confirmReportTitle}
+                {t.confirmReportTitle}
               </div>
               <p className="text-[13px] text-muted">
-                {confirming === "delete" ? t.confirmDeleteBody : t.confirmReportBody}
+                {t.confirmReportBody}
               </p>
               <div className="flex gap-2">
                 <button
                   onClick={() => setConfirming(null)}
-                  disabled={deleteStory.isPending || report.isPending}
+                  disabled={report.isPending}
                   className="flex-1 rounded border border-border py-2 text-[14px] font-medium text-muted transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50"
                 >
                   {t.cancel}
                 </button>
                 <button
                   onClick={confirmAction}
-                  disabled={deleteStory.isPending || report.isPending}
-                  className={`flex-1 rounded py-2 text-[14px] font-semibold text-white transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50 ${confirming === "delete" ? "bg-[#E5484D]" : "bg-accent text-accent-text"}`}
+                  disabled={report.isPending}
+                  className="flex-1 rounded bg-accent py-2 text-[14px] font-semibold text-accent-text transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50"
                 >
-                  {confirming === "delete"
-                    ? deleteStory.isPending
-                      ? t.deleting
-                      : t.deleteStory
-                    : t.report}
+                  {t.report}
                 </button>
               </div>
             </div>
@@ -198,6 +207,8 @@ export function StorySheet({ authenticated }: StorySheetProps) {
                 )}
               </div>
             </div>
+          )}
+          </>
           )}
         </div>
       )}

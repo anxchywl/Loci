@@ -76,12 +76,13 @@ export function useComments(storyId: string | null) {
 export function useCreateStory() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: CreateStoryInput & { photos: File[] }) => {
-      const { photos, ...payload } = input;
+    mutationFn: async (input: CreateStoryInput & { photos: File[]; onUploadProgress?: (progress: number) => void }) => {
+      const { photos, onUploadProgress, ...payload } = input;
       const story = await createStory(payload);
-      for (const file of photos) {
-        await uploadStoryPhoto(story.id, file);
+      for (const [index, file] of photos.entries()) {
+        await uploadStoryPhoto(story.id, file, (progress) => onUploadProgress?.((index + progress) / photos.length));
       }
+      onUploadProgress?.(1);
       return story;
     },
     onSuccess: () => {
@@ -96,6 +97,20 @@ export function useDeleteStory() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: deleteStory,
+    onMutate: async (storyId) => {
+      await queryClient.cancelQueries({ queryKey: ["stories"] });
+      await queryClient.cancelQueries({ queryKey: ["profile", "stories"] });
+      const listSnapshots = queryClient.getQueriesData<Story[]>({ queryKey: ["stories"] });
+      const profileSnapshots = queryClient.getQueriesData<Story[]>({ queryKey: ["profile", "stories"] });
+      const remove = (stories: Story[] | undefined) => stories?.filter((story) => story.id !== storyId);
+      for (const [key, stories] of listSnapshots) queryClient.setQueryData(key, remove(stories));
+      for (const [key, stories] of profileSnapshots) queryClient.setQueryData(key, remove(stories));
+      return { listSnapshots, profileSnapshots };
+    },
+    onError: (_error, _storyId, context) => {
+      context?.listSnapshots.forEach(([key, stories]) => queryClient.setQueryData(key, stories));
+      context?.profileSnapshots.forEach(([key, stories]) => queryClient.setQueryData(key, stories));
+    },
     onSuccess: (_data, storyId) => {
       // drop the detail cache and refresh the map + both profile lists so a
       // deleted story can't linger anywhere or leave an orphaned view

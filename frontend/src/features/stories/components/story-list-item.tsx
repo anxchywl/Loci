@@ -54,7 +54,7 @@ export function StoryListItem({ story, categories, onOpen, showStatus = false }:
         </span>
         <span className="block truncate text-[13px] text-muted">{story.body}</span>
         {showStatus && story.moderation_status === "rejected" && story.rejection_reason && (
-          <span className="mt-1 block rounded bg-surface px-2 py-1 text-[12px] text-[#E5484D]">
+          <span className="story-rejection mt-1 block rounded bg-surface px-2 py-1 text-[12px] text-[#E5484D]">
             {t.reasonLabel}: {story.rejection_reason}
           </span>
         )}
