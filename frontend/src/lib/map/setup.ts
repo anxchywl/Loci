@@ -1,6 +1,6 @@
 import maplibregl, { Map as MapLibreMap } from "maplibre-gl";
 
-import { categoryGlyphSvg } from "@/lib/icons/category-glyphs";
+import { categoryPinSvg } from "@/lib/icons/category-glyphs";
 import type { CategorySlug, Locale } from "@/lib/i18n/dict";
 
 export const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
@@ -25,11 +25,11 @@ export function createMap(container: HTMLElement): MapLibreMap {
   });
 }
 
-function rasterizeSvg(svg: string, size: number): Promise<HTMLImageElement> {
+function rasterizeSvg(svg: string, width: number, height: number): Promise<HTMLImageElement> {
   const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   return new Promise((resolve, reject) => {
-    const image = new Image(size, size);
+    const image = new Image(width, height);
     image.onload = () => {
       URL.revokeObjectURL(url);
       resolve(image);
@@ -45,9 +45,10 @@ export async function addCategoryGlyphImages(
 ): Promise<void> {
   await Promise.all(
     categories.map(async (category) => {
-      const imageId = `glyph-${category.id}`;
+      const imageId = `pin-${category.id}`;
       if (map.hasImage(imageId)) return;
-      const bitmap = await rasterizeSvg(categoryGlyphSvg(category.slug), 48);
+      // pin is 30x44; rasterize at 2x for crisp edges (pixelRatio 2 → logical 30x44)
+      const bitmap = await rasterizeSvg(categoryPinSvg(category.slug, category.color), 60, 88);
       if (!map.hasImage(imageId)) {
         map.addImage(imageId, bitmap, { pixelRatio: 2 });
       }

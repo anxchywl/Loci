@@ -23,3 +23,7 @@ export function postTelegramAuth(initData: string): Promise<TokenResponse> {
     body: JSON.stringify({ init_data: initData }),
   });
 }
+
+export function fetchCurrentUser(): Promise<AuthUser> {
+  return apiFetch<AuthUser>("/profile/me");
+}

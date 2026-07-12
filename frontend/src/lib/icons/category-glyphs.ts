@@ -66,13 +66,33 @@ function nodeToSvgBody(children: readonly IconChild[]): string {
     .join("");
 }
 
-export function categoryGlyphSvg(slug: CategorySlug, color = "#ffffff"): string {
+function iconBody(slug: CategorySlug): string {
   const node = lucideIconData[glyphNames[slug]] as unknown as IconNode;
-  const children = node[2] ?? [];
+  return nodeToSvgBody(node[2] ?? []);
+}
+
+export function categoryGlyphSvg(slug: CategorySlug, color = "#ffffff"): string {
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" ` +
     `stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` +
-    nodeToSvgBody(children) +
+    iconBody(slug) +
+    `</svg>`
+  );
+}
+
+// A classic teardrop map pin: a round head in the category colour with a narrow
+// pointed stem whose tip sits exactly at the bottom-centre of the viewBox, plus
+// the category's white line icon in the head. Anchor the raster at "bottom" so
+// the tip lands on the coordinate.
+export function categoryPinSvg(slug: CategorySlug, color: string): string {
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="44" viewBox="0 0 30 44" fill="none">` +
+    `<path d="M15 43 L3.5 21 A13 13 0 1 1 26.5 21 Z" fill="${color}" ` +
+    `stroke="#ffffff" stroke-width="2" stroke-linejoin="round"/>` +
+    `<g transform="translate(15 15) scale(0.62) translate(-12 -12)" fill="none" ` +
+    `stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` +
+    iconBody(slug) +
+    `</g>` +
     `</svg>`
   );
 }

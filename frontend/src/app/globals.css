@@ -114,6 +114,32 @@ body {
 
 .story-rejection { overflow: hidden; animation: rejection-expand 200ms cubic-bezier(0.2, 0, 0, 1); }
 
+/* pulsing "you are here" dot dropped by the Locate button */
+.lm-user-dot { position: relative; width: 18px; height: 18px; }
+.lm-user-dot__core {
+  position: absolute; inset: 50% auto auto 50%; width: 14px; height: 14px;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px; background: var(--lm-accent);
+  border: 2px solid var(--lm-accent-text);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.lm-user-dot__ring {
+  position: absolute; inset: 50% auto auto 50%; width: 14px; height: 14px;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px; background: var(--lm-accent);
+  animation: lm-user-pulse 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes lm-user-pulse {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.45; }
+  70% { transform: translate(-50%, -50%) scale(3.4); opacity: 0; }
+  100% { transform: translate(-50%, -50%) scale(3.4); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lm-user-dot__ring { animation: none; opacity: 0; }
+}
+
 @keyframes rejection-expand {
   from { opacity: 0; max-height: 0; transform: translateY(-4px); }
   to { opacity: 1; max-height: 80px; transform: translateY(0); }

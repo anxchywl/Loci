@@ -135,7 +135,7 @@ export function HomeManager() {
     try {
       const outcome = await locate();
       if (outcome.kind === "located") {
-        requestPanTo(outcome.lat, outcome.lon, 14);
+        mapViewRef.current?.flyToUser(outcome.lat, outcome.lon);
       } else if (outcome.kind === "denied") {
         useUiStore.getState().showToast(t.errorLocationDenied);
       } else if (outcome.kind === "unsupported") {
@@ -333,12 +333,19 @@ export function HomeManager() {
               className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-bg text-muted shadow-sm transition-[color,border-color,transform,box-shadow] duration-150 ease-lm hover:border-accent hover:text-accent focus-visible:border-accent focus-visible:text-accent focus-visible:ring-2 focus-visible:ring-[var(--lm-focus)] active:scale-95">
               <Flame size={18} />
             </button>
-            {authenticated && (
-              <button aria-label={t.addStory} onClick={startPickLocation}
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-accent text-accent-text shadow-lg transition-[transform,box-shadow] duration-150 ease-lm hover:shadow-xl focus-visible:ring-2 focus-visible:ring-[var(--lm-focus)] active:scale-95">
-                <Plus size={22} />
-              </button>
-            )}
+            <button
+              aria-label={t.addStory}
+              onClick={() => {
+                if (authenticated) {
+                  startPickLocation();
+                } else {
+                  // signed-out (e.g. opened outside Telegram) — surface the sign-in prompt
+                  setMobileMenuOpen(true);
+                }
+              }}
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-accent text-accent-text shadow-lg transition-[transform,box-shadow] duration-150 ease-lm hover:shadow-xl focus-visible:ring-2 focus-visible:ring-[var(--lm-focus)] active:scale-95">
+              <Plus size={22} />
+            </button>
           </div>
 
           <button

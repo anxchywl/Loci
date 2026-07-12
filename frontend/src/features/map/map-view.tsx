@@ -18,6 +18,7 @@ export interface MapBounds {
 export interface MapViewHandle {
   zoomIn: () => void;
   zoomOut: () => void;
+  flyToUser: (lat: number, lon: number) => void;
 }
 
 interface MapViewProps {
@@ -34,6 +35,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   const mapRef = useRef<MapLibreMap | null>(null);
   const readyRef = useRef(false);
   const pickMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const userMarkerRef = useRef<maplibregl.Marker | null>(null);
 
   const mode = useUiStore((state) => state.mode);
   const pickedLocation = useUiStore((state) => state.pickedLocation);
@@ -46,6 +48,33 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   useImperativeHandle(ref, () => ({
     zoomIn: () => mapRef.current?.zoomIn({ duration: 250 }),
     zoomOut: () => mapRef.current?.zoomOut({ duration: 250 }),
+    flyToUser: (lat: number, lon: number) => {
+      const map = mapRef.current;
+      if (!map) return;
+
+      // drop (or move) a pulsing blue dot at the user's position
+      if (!userMarkerRef.current) {
+        const el = document.createElement("div");
+        el.className = "lm-user-dot";
+        el.innerHTML = '<span class="lm-user-dot__ring"></span><span class="lm-user-dot__core"></span>';
+        userMarkerRef.current = new maplibregl.Marker({ element: el });
+      }
+      userMarkerRef.current.setLngLat([lon, lat]).addTo(map);
+
+      const reduceMotion =
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (reduceMotion) {
+        map.jumpTo({ center: [lon, lat], zoom: 15 });
+        return;
+      }
+
+      // two-phase: pull back to a planet-wide view, then arc down onto the user
+      map.easeTo({ zoom: 2.2, duration: 750, essential: true });
+      window.setTimeout(() => {
+        map.flyTo({ center: [lon, lat], zoom: 15, duration: 2200, curve: 1.5, essential: true });
+      }, 800);
+    },
   }));
 
   useEffect(() => {
@@ -67,7 +96,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     map.on("load", () => {
       addCategoryGlyphImages(map, categories)
         .then(() => {
-          addStoryLayers(map, categories, (storyId, lat, lon) => {
+          addStoryLayers(map, (storyId, lat, lon) => {
             if (useUiStore.getState().mode === "browse") {
               useUiStore.getState().openStory(storyId);
               if (lat !== undefined && lon !== undefined) {
@@ -94,6 +123,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     return () => {
       map.remove();
       mapRef.current = null;
+      userMarkerRef.current = null;
       readyRef.current = false;
     };
     // map is created once; categories are stable after first successful fetch
@@ -141,7 +171,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       const cats = categoriesRef.current;
       addCategoryGlyphImages(map, cats)
         .then(() => {
-          addStoryLayers(map, cats, (storyId, lat, lon) => {
+          addStoryLayers(map, (storyId, lat, lon) => {
             if (useUiStore.getState().mode === "browse") {
               useUiStore.getState().openStory(storyId);
               if (lat !== undefined && lon !== undefined)

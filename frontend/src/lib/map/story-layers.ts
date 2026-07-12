@@ -1,12 +1,9 @@
 import type { GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
 
-import { colorMatchExpression, type CategoryStyle } from "@/lib/map/setup";
-
 export const STORIES_SOURCE = "stories";
 const CLUSTER_LAYER = "story-clusters";
 const CLUSTER_COUNT_LAYER = "story-cluster-counts";
 const POINT_LAYER = "story-points";
-const GLYPH_LAYER = "story-glyphs";
 
 export interface StoryPointProperties {
   id: string;
@@ -28,7 +25,6 @@ export function storiesToGeoJson(
 
 export function addStoryLayers(
   map: MapLibreMap,
-  categories: CategoryStyle[],
   onStoryClick: (storyId: string, lat?: number, lon?: number) => void,
 ): void {
   map.addSource(STORIES_SOURCE, {
@@ -38,8 +34,6 @@ export function addStoryLayers(
     clusterRadius: 56,
     clusterMaxZoom: 15,
   });
-
-  const categoryColor = colorMatchExpression(categories);
 
   map.addLayer({
     id: CLUSTER_LAYER,
@@ -70,25 +64,14 @@ export function addStoryLayers(
 
   map.addLayer({
     id: POINT_LAYER,
-    type: "circle",
-    source: STORIES_SOURCE,
-    filter: ["!", ["has", "point_count"]],
-    paint: {
-      "circle-color": categoryColor,
-      "circle-radius": 14,
-      "circle-stroke-width": 2,
-      "circle-stroke-color": "#ffffff",
-    },
-  });
-
-  map.addLayer({
-    id: GLYPH_LAYER,
     type: "symbol",
     source: STORIES_SOURCE,
     filter: ["!", ["has", "point_count"]],
     layout: {
-      "icon-image": ["concat", "glyph-", ["to-string", ["get", "category_id"]]],
-      "icon-size": 0.58,
+      "icon-image": ["concat", "pin-", ["to-string", ["get", "category_id"]]],
+      "icon-size": 0.9,
+      // anchor at the tip so the pin points at the exact coordinate
+      "icon-anchor": "bottom",
       "icon-allow-overlap": true,
     },
   });

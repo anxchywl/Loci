@@ -21,6 +21,13 @@ interface StorySheetProps {
   authenticated: boolean;
 }
 
+// happened_on arrives as an ISO date (YYYY-MM-DD); render it as DD.MM.YYYY
+function formatHappenedOn(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return value;
+  return `${match[3]}.${match[2]}.${match[1]}`;
+}
+
 export function StorySheet({ authenticated }: StorySheetProps) {
   const t = useDict();
   const storyId = useUiStore((state) => state.openStoryId);
@@ -131,12 +138,6 @@ export function StorySheet({ authenticated }: StorySheetProps) {
               </span>
             )}
             {story.author && <span>{story.author.username ?? story.author.first_name}</span>}
-            {story.happened_on && <span>{story.happened_on}</span>}
-            <span className="flex items-center gap-0.5">
-              <MapPin size={13} />
-              {story.location_precision === "approx" ? "≈" : ""}
-              {story.lat.toFixed(3)}, {story.lon.toFixed(3)}
-            </span>
           </div>
 
           {story.photos.length > 0 && (
@@ -235,6 +236,15 @@ export function StorySheet({ authenticated }: StorySheetProps) {
               </div>
             </div>
           )}
+
+          <div className="flex items-center justify-between gap-2 border-t border-border pt-3 text-[13px] text-muted">
+            <span className="flex items-center gap-1">
+              <MapPin size={13} />
+              {story.location_precision === "approx" ? "≈" : ""}
+              {story.lat.toFixed(3)}, {story.lon.toFixed(3)}
+            </span>
+            {story.happened_on && <span>{formatHappenedOn(story.happened_on)}</span>}
+          </div>
           </>
           )}
         </div>
