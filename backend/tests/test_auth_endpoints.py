@@ -1,6 +1,7 @@
 import time
 
 import pytest
+from fakeredis.aioredis import FakeRedis
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import func, select
@@ -132,17 +133,17 @@ async def test_get_current_user_resolves_bearer_token(client, db_session):
     settings = get_settings()
     token, _ = create_access_token(user_id, settings)
     credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
-    user = await get_current_user(credentials, db_session, settings)
+    user = await get_current_user(credentials, db_session, settings, FakeRedis(decode_responses=True))
     assert user.telegram_id == 7
 
 
 async def test_get_current_user_rejects_missing_and_garbage_tokens(db_session):
     settings = get_settings()
     with pytest.raises(HTTPException) as missing:
-        await get_current_user(None, db_session, settings)
+        await get_current_user(None, db_session, settings, FakeRedis(decode_responses=True))
     assert missing.value.status_code == 401
 
     garbage = HTTPAuthorizationCredentials(scheme="Bearer", credentials="not-a-jwt")
     with pytest.raises(HTTPException) as invalid:
-        await get_current_user(garbage, db_session, settings)
+        await get_current_user(garbage, db_session, settings, FakeRedis(decode_responses=True))
     assert invalid.value.status_code == 401

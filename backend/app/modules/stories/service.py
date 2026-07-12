@@ -238,8 +238,12 @@ async def _photo_responses(
     return [
         PhotoResponse(
             id=photo.id,
-            url=storage.presigned_get_url(photo.object_key, ttl),
-            thumb_url=storage.presigned_get_url(photo.thumb_key, ttl) if photo.thumb_key else None,
+            url=await storage.presigned_get_url_cached(photo.object_key, ttl),
+            thumb_url=(
+                await storage.presigned_get_url_cached(photo.thumb_key, ttl)
+                if photo.thumb_key
+                else None
+            ),
             width=photo.width,
             height=photo.height,
         )
@@ -283,8 +287,8 @@ async def add_comment(
     await _assert_readable(db, story_id, author_id)
     comment = await comments_repo.create(db, story_id=story_id, author_id=author_id, body=body)
     await db.commit()
-    rows = await comments_repo.list_for_story(db, story_id, limit=1000)
-    row = next(r for r in rows if r["id"] == comment.id)
+    row = await comments_repo.get_row(db, comment.id)
+    assert row is not None
     return _serialize_comment(row)
 
 

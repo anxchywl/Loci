@@ -2,7 +2,7 @@ import time
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,15 +14,18 @@ from app.core.security.rate_limit import check_rate_limit, client_identifier
 from app.core.security.text import clean_line
 from app.db.models import User
 from app.db.repositories import stories as stories_repo
-from app.modules.stories import interactions, photos, service
+from app.modules.stories import interactions, photos, service, trending_cache
+from app.modules.stories import map_clusters as map_clusters_service
 from app.modules.stories.schemas import (
     CommentCreateRequest,
     CommentResponse,
+    MapClusterResponse,
     PhotoCompleteRequest,
     PhotoUploadRequest,
     PhotoUploadResponse,
     ReportCreateRequest,
     StoryCreateRequest,
+    StoryPinResponse,
     StoryResponse,
     StoryUpdateRequest,
 )
@@ -30,6 +33,8 @@ from app.modules.stories.schemas import (
 router = APIRouter(prefix="/stories", tags=["stories"])
 
 MAX_LIMIT = 100
+# compact pins allow a higher safe map limit
+MAX_PIN_LIMIT = 500
 
 
 @router.post("", response_model=StoryResponse, status_code=status.HTTP_201_CREATED)
@@ -87,14 +92,60 @@ async def nearby(
     return [service.serialize_story(row) for row in rows]
 
 
+@router.get("/map", response_model=list[StoryPinResponse])
+async def map_pins(
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    min_lat: Annotated[float, Query(ge=-90, le=90)],
+    max_lat: Annotated[float, Query(ge=-90, le=90)],
+    # accept world-wrapped map bounds for antimeridian viewports
+    min_lon: Annotated[float, Query(ge=-540, le=540)],
+    max_lon: Annotated[float, Query(ge=-540, le=540)],
+    category_id: Annotated[int | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=MAX_PIN_LIMIT)] = 300,
+) -> list[StoryPinResponse]:
+    rows = await stories_repo.list_pins_in_bbox(
+        db,
+        min_lat=min_lat,
+        min_lon=min_lon,
+        max_lat=max_lat,
+        max_lon=max_lon,
+        category_id=category_id,
+        limit=limit,
+    )
+    return [StoryPinResponse.model_validate(dict(row)) for row in rows]
+
+
+@router.get("/map-clusters", response_model=list[MapClusterResponse])
+async def map_clusters(
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    redis: Annotated[Redis, Depends(get_redis)],
+    min_lat: Annotated[float, Query(ge=-90, le=90)],
+    max_lat: Annotated[float, Query(ge=-90, le=90)],
+    min_lon: Annotated[float, Query(ge=-540, le=540)],
+    max_lon: Annotated[float, Query(ge=-540, le=540)],
+    zoom: Annotated[int, Query(ge=map_clusters_service.MIN_ZOOM, le=map_clusters_service.MAX_ZOOM)],
+    category_id: Annotated[int | None, Query()] = None,
+) -> list[MapClusterResponse]:
+    return await map_clusters_service.get_clusters(
+        db,
+        redis,
+        min_lat=min_lat,
+        min_lon=min_lon,
+        max_lat=max_lat,
+        max_lon=max_lon,
+        zoom=zoom,
+        category_id=category_id,
+    )
+
+
 @router.get("/bbox", response_model=list[StoryResponse])
 async def in_bbox(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     viewer: Annotated[User | None, Depends(get_optional_user)],
     min_lat: Annotated[float, Query(ge=-90, le=90)],
-    min_lon: Annotated[float, Query(ge=-180, le=180)],
+    min_lon: Annotated[float, Query(ge=-540, le=540)],
     max_lat: Annotated[float, Query(ge=-90, le=90)],
-    max_lon: Annotated[float, Query(ge=-180, le=180)],
+    max_lon: Annotated[float, Query(ge=-540, le=540)],
     category_id: Annotated[int | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = 100,
 ) -> list[StoryResponse]:
@@ -115,10 +166,31 @@ async def in_bbox(
 async def trending(
     db: Annotated[AsyncSession, Depends(get_db_session)],
     viewer: Annotated[User | None, Depends(get_optional_user)],
+    redis: Annotated[Redis, Depends(get_redis)],
+    response: Response,
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = 20,
 ) -> list[StoryResponse]:
+    response.headers["Vary"] = "Authorization"
+    if viewer is not None:
+        response.headers["Cache-Control"] = "private, no-store"
+        rows = await stories_repo.list_trending(db, viewer_id=viewer.id, limit=limit)
+        return [service.serialize_story(row) for row in rows]
+
+    response.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=30"
+    cached = await trending_cache.read(redis, limit)
+    if cached is not None:
+        return cached
+
+    has_lock = await trending_cache.acquire_fill_lock(redis, limit)
+    if not has_lock:
+        cached = await trending_cache.wait_for_fill(redis, limit)
+        if cached is not None:
+            return cached
+
     rows = await stories_repo.list_trending(db, viewer_id=viewer.id if viewer else None, limit=limit)
-    return [service.serialize_story(row) for row in rows]
+    stories = [service.serialize_story(row) for row in rows]
+    await trending_cache.write(redis, limit, stories)
+    return stories
 
 
 @router.get("/search", response_model=list[StoryResponse])
@@ -370,8 +442,28 @@ async def proxy_photo_upload(
 ) -> Response:
     await check_rate_limit(redis, "rl:upload", str(user.id), 3600, settings.upload_urls_per_hour)
     started = time.perf_counter()
-    raw = await request.body()
-    await photos.upload_bytes(db, story_id, photo_id, user.id, raw, settings)
+    content_length_header = request.headers.get("content-length")
+    try:
+        content_length = int(content_length_header) if content_length_header else None
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Content-Length",
+        ) from error
+    if content_length is not None and content_length < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Content-Length",
+        )
+    await photos.upload_stream(
+        db,
+        story_id,
+        photo_id,
+        user.id,
+        request.stream(),
+        settings,
+        content_length,
+    )
     observe(
         "photo_proxy_upload_duration_seconds",
         time.perf_counter() - started,

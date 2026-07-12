@@ -1,4 +1,5 @@
 import logging
+import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, HTTPException, Response, status
@@ -7,10 +8,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import api_v1_router
 from app.core.config import get_settings
 from app.core.errors import register_error_handlers
-from app.core.observability import render_metrics
+from app.core.observability import MetricsMiddleware, render_metrics
+from app.core.operational_metrics import render_operational_metrics
 from app.db.session import dispose_db
 from app.integrations import storage
 from app.integrations.redis import close_redis
+from app.integrations.redis import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -23,27 +26,38 @@ async def _lifespan(app: FastAPI):
     # path without a manual bucket step
     origins = settings.s3_cors_allowed_origins or settings.allowed_origins
     try:
+        # bootstrap storage before request traffic starts
+        storage.ensure_bucket(settings.s3_media_bucket)
         storage.configure_bucket_cors(origins)
     except Exception:
-        logger.warning("bucket CORS configuration skipped", exc_info=True)
+        logger.warning("bucket bootstrap skipped", exc_info=True)
     yield
     await close_redis()
     await dispose_db()
 
 
 def _enforce_production_secrets(settings) -> None:
-    if settings.jwt_secret_key in ("change-me", ""):
-        raise RuntimeError("JWT_SECRET_KEY must be set to a secure value in production")
-    if settings.postgres_password in ("loci", ""):
-        raise RuntimeError("POSTGRES_PASSWORD must be set to a secure value in production")
+    if len(settings.jwt_secret_key) < 24 or settings.jwt_secret_key == "change-me":
+        raise RuntimeError("JWT_SECRET_KEY must be at least 24 characters in production")
+    if not settings.database_url and (
+        len(settings.postgres_password) < 24 or settings.postgres_password == "loci"
+    ):
+        raise RuntimeError("POSTGRES_PASSWORD must be at least 24 characters in production")
     if settings.s3_secret_key in ("loci-password", ""):
         raise RuntimeError("S3_SECRET_KEY must be set to a secure value in production")
-    if settings.location_fuzz_secret in ("change-me-fuzz", ""):
-        raise RuntimeError("LOCATION_FUZZ_SECRET must be set to a secure value in production")
+    if (
+        len(settings.location_fuzz_secret) < 24
+        or settings.location_fuzz_secret == "change-me-fuzz"
+    ):
+        raise RuntimeError("LOCATION_FUZZ_SECRET must be at least 24 characters in production")
     if not settings.telegram_bot_token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN must be set in production")
-    if not settings.redis_password:
+    if not settings.redis_url and not settings.redis_password:
         raise RuntimeError("REDIS_PASSWORD must be set in production")
+    if not settings.s3_secure:
+        raise RuntimeError("S3_SECURE must be true in production")
+    if any(not origin.startswith("https://") for origin in settings.allowed_origins):
+        raise RuntimeError("ALLOWED_ORIGINS must contain only HTTPS origins in production")
     if settings.telegram_init_data_max_age_seconds > 300:
         raise RuntimeError("TELEGRAM_INIT_DATA_MAX_AGE_SECONDS must not exceed 300 in production")
 
@@ -63,6 +77,7 @@ def create_app() -> FastAPI:
         lifespan=_lifespan,
     )
     register_error_handlers(app)
+    app.add_middleware(MetricsMiddleware)
 
     if settings.allowed_origins:
         app.add_middleware(
@@ -84,9 +99,11 @@ def create_app() -> FastAPI:
         # optional bearer-token guard so the scrape endpoint can be exposed safely
         if settings.metrics_token:
             expected = f"Bearer {settings.metrics_token}"
-            if authorization != expected:
+            if authorization is None or not secrets.compare_digest(authorization, expected):
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-        return Response(content=render_metrics(), media_type="text/plain; version=0.0.4")
+        content, media_type = render_metrics()
+        operational = await render_operational_metrics(get_redis_client())
+        return Response(content=content + operational, media_type=media_type)
 
     return app
 

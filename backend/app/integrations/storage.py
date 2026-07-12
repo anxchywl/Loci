@@ -1,6 +1,7 @@
 import logging
 from datetime import timedelta
 from io import BytesIO
+from typing import BinaryIO
 from urllib.parse import urlparse
 
 from minio import Minio
@@ -89,10 +90,9 @@ def configure_bucket_cors(origins: list[str]) -> None:
 
 
 def presigned_put_url(object_key: str, expires_seconds: int) -> str:
-    settings = get_settings()
-    ensure_bucket(settings.s3_media_bucket)
+    # avoid a blocking bucket check on every upload request
     return _get_signing_client().presigned_put_object(
-        bucket_name=settings.s3_media_bucket,
+        bucket_name=get_settings().s3_media_bucket,
         object_name=object_key,
         expires=timedelta(seconds=expires_seconds),
     )
@@ -104,6 +104,29 @@ def presigned_get_url(object_key: str, expires_seconds: int) -> str:
         object_name=object_key,
         expires=timedelta(seconds=expires_seconds),
     )
+
+
+async def presigned_get_url_cached(object_key: str, expires_seconds: int) -> str:
+    """cache scoped urls while retaining an expiry safety margin"""
+    from redis.exceptions import RedisError
+
+    from app.integrations.redis import get_redis_client
+
+    cache_key = f"photo-url:{object_key}"
+    redis = get_redis_client()
+    try:
+        cached = await redis.get(cache_key)
+        if cached:
+            return cached
+    except RedisError:
+        return presigned_get_url(object_key, expires_seconds)
+
+    url = presigned_get_url(object_key, expires_seconds)
+    try:
+        await redis.set(cache_key, url, ex=max(int(expires_seconds * 0.8), 1))
+    except RedisError:
+        pass
+    return url
 
 
 def get_object_bytes(object_key: str) -> bytes:
@@ -127,12 +150,26 @@ def get_object_size(object_key: str) -> int | None:
 
 def put_object_bytes(object_key: str, content: bytes, content_type: str) -> None:
     settings = get_settings()
-    ensure_bucket(settings.s3_media_bucket)
     get_client().put_object(
         bucket_name=settings.s3_media_bucket,
         object_name=object_key,
         data=BytesIO(content),
         length=len(content),
+        content_type=content_type,
+    )
+
+
+def put_object_file(
+    object_key: str,
+    content: BinaryIO,
+    length: int,
+    content_type: str,
+) -> None:
+    get_client().put_object(
+        bucket_name=get_settings().s3_media_bucket,
+        object_name=object_key,
+        data=content,
+        length=length,
         content_type=content_type,
     )
 

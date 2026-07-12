@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import exists, select, update
+from sqlalchemy import and_, delete, exists, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.refresh_token import RefreshToken
@@ -68,6 +68,19 @@ async def revoke_all_for_session(
         .values(revoked_at=when)
     )
     await db.flush()
+
+
+async def delete_stale(db: AsyncSession, cutoff: datetime) -> int:
+    result = await db.execute(
+        delete(RefreshToken).where(
+            or_(
+                RefreshToken.expires_at < cutoff,
+                and_(RefreshToken.revoked_at.is_not(None), RefreshToken.revoked_at < cutoff),
+            )
+        )
+    )
+    await db.flush()
+    return result.rowcount
 
 
 async def has_active_session(db: AsyncSession, session_id: uuid.UUID, now: datetime) -> bool:

@@ -21,8 +21,34 @@ fi
 
 git pull --ff-only
 
+TARGET=${DEPLOYMENT_TARGET:-$(sed -n 's/^DEPLOYMENT_TARGET=//p' .env | tail -n 1)}
+if [ -z "$TARGET" ]; then
+  if docker ps --format '{{.Names}}' | grep -qx wished-caddy; then
+    TARGET=shared-host
+  else
+    TARGET=dedicated
+  fi
+fi
+
+if [ "$TARGET" = "shared-host" ]; then
+  COMPOSE="$COMPOSE -f $REPO_DIR/docker/docker-compose.shared-host.yml"
+else
+  COMPOSE="$COMPOSE --profile dedicated"
+fi
+
+DEPLOYMENT_TARGET="$TARGET" "$REPO_DIR/deploy/preflight.sh"
+
+MONITORING_ENABLED=$(sed -n 's/^MONITORING_ENABLED=//p' .env | tail -n 1)
+if [ "$TARGET" = "dedicated" ] && [ "${MONITORING_ENABLED:-true}" = "true" ]; then
+  COMPOSE="$COMPOSE --profile monitoring"
+fi
+
 $COMPOSE config -q
-$COMPOSE build
+if [ "${DEPLOY_USE_PREBUILT:-false}" = "true" ]; then
+  $COMPOSE pull
+else
+  $COMPOSE build
+fi
 $COMPOSE up -d --wait postgres redis
 $COMPOSE run --rm --no-deps backup /usr/local/bin/backup.sh
 $COMPOSE run --rm --no-deps api alembic upgrade head

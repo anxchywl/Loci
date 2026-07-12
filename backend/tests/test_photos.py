@@ -1,20 +1,23 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 
 import httpx
 import pytest
 from PIL import Image
+from sqlalchemy import update
 
 from app.core.config import get_settings
+from app.db.models import PhotoStatus, StoryPhoto
 from app.integrations import storage
-from app.modules.stories.photos import _validate_image_bytes
+from app.modules.stories.image_validation import InvalidImageError, decode_image
 from tests.test_stories_api import authenticate, story_payload
 
 
 def _minio_reachable() -> bool:
     try:
-        storage.get_client().bucket_exists(get_settings().s3_media_bucket)
-        return True
+        storage.ensure_bucket(get_settings().s3_media_bucket)
+        return storage.get_client().bucket_exists(get_settings().s3_media_bucket)
     except Exception:
         return False
 
@@ -25,13 +28,13 @@ needs_minio = pytest.mark.skipif(not _minio_reachable(), reason="minio not runni
 def test_uploaded_image_validation_rejects_corrupt_and_spoofed_bytes():
     valid = BytesIO()
     Image.new("RGB", (16, 16), color=(20, 30, 40)).save(valid, format="JPEG")
-    _validate_image_bytes(valid.getvalue(), "image/jpeg")
+    decode_image(valid.getvalue(), "image/jpeg").close()
 
-    with pytest.raises(Exception):
-        _validate_image_bytes(b"not an image", "image/jpeg")
+    with pytest.raises(InvalidImageError):
+        decode_image(b"not an image", "image/jpeg")
 
-    with pytest.raises(Exception):
-        _validate_image_bytes(valid.getvalue(), "image/png")
+    with pytest.raises(InvalidImageError):
+        decode_image(valid.getvalue(), "image/png")
 
 
 async def create_story(client) -> str:
@@ -57,6 +60,68 @@ async def test_upload_rejects_unsupported_content_type(client):
         f"/api/v1/stories/{story_id}/photos", json={"content_type": "application/pdf"}
     )
     assert response.status_code == 422
+
+
+async def test_proxy_upload_stream_rejects_oversize_without_consuming_photo_slot(
+    client, db_session, monkeypatch
+):
+    monkeypatch.setattr(get_settings(), "max_photos_per_story", 1)
+    monkeypatch.setattr(get_settings(), "max_upload_size_mb", 0)
+    await authenticate(client, telegram_id=1)
+    story_id = await create_story(client)
+    first = (
+        await client.post(
+            f"/api/v1/stories/{story_id}/photos", json={"content_type": "image/jpeg"}
+        )
+    ).json()
+
+    rejected = await client.put(
+        f"/api/v1/stories/{story_id}/photos/{first['photo_id']}/upload",
+        content=b"oversized",
+    )
+
+    assert rejected.status_code == 400
+    failed = await db_session.get(StoryPhoto, uuid.UUID(first["photo_id"]))
+    assert failed is not None and failed.status == PhotoStatus.failed
+    replacement = await client.post(
+        f"/api/v1/stories/{story_id}/photos", json={"content_type": "image/jpeg"}
+    )
+    assert replacement.status_code == 201
+
+
+async def test_stale_upload_cleanup_selection_excludes_ready_photos(client, db_session):
+    from app.db.repositories import photos as photos_repo
+
+    await authenticate(client, telegram_id=1)
+    story_id = await create_story(client)
+    pending = (
+        await client.post(
+            f"/api/v1/stories/{story_id}/photos", json={"content_type": "image/jpeg"}
+        )
+    ).json()
+    ready = (
+        await client.post(
+            f"/api/v1/stories/{story_id}/photos", json={"content_type": "image/png"}
+        )
+    ).json()
+    old = datetime.now(UTC) - timedelta(hours=25)
+    await db_session.execute(
+        update(StoryPhoto)
+        .where(StoryPhoto.id.in_((uuid.UUID(pending["photo_id"]), uuid.UUID(ready["photo_id"]))))
+        .values(created_at=old)
+    )
+    await db_session.execute(
+        update(StoryPhoto)
+        .where(StoryPhoto.id == uuid.UUID(ready["photo_id"]))
+        .values(status=PhotoStatus.ready)
+    )
+    await db_session.commit()
+
+    selected = await photos_repo.list_stale_uploads_for_update(
+        db_session, datetime.now(UTC) - timedelta(hours=24), 100
+    )
+
+    assert [photo.id for photo in selected] == [uuid.UUID(pending["photo_id"])]
 
 
 @needs_minio
@@ -117,6 +182,34 @@ async def test_complete_rejects_oversized_upload(client, db_session, monkeypatch
     photo = await photos_repo.get(db_session, uuid.UUID(created["photo_id"]))
     assert photo.status.value == "failed"
     assert storage.get_object_size(photo.object_key) is None
+
+
+@needs_minio
+async def test_complete_queues_without_decoding_in_api(client, monkeypatch):
+    from app.workers.tasks import optimize_photo
+
+    await authenticate(client, telegram_id=1)
+    story_id = await create_story(client)
+    created = (
+        await client.post(
+            f"/api/v1/stories/{story_id}/photos", json={"content_type": "image/jpeg"}
+        )
+    ).json()
+    assert httpx.put(created["upload_url"], content=b"worker-validates-this").status_code == 200
+    queued: list[str] = []
+    monkeypatch.setattr(optimize_photo, "delay", queued.append)
+    monkeypatch.setattr(
+        storage,
+        "get_object_bytes",
+        lambda key: pytest.fail("api must not download or decode photo bytes"),
+    )
+
+    response = await client.post(
+        f"/api/v1/stories/{story_id}/photos/{created['photo_id']}/complete"
+    )
+
+    assert response.status_code == 202
+    assert queued == [created["photo_id"]]
 
 
 @needs_minio
@@ -215,8 +308,7 @@ async def test_optimize_marks_failed_on_corrupt_bytes(client, db_session):
 
     httpx.put(created["upload_url"], content=b"not-an-image")
 
-    with pytest.raises(Exception):
-        await _optimize(photo_id)
+    await _optimize(photo_id)
 
     db_session.expire_all()
     photo = await photos_repo.get(db_session, photo_id)

@@ -14,7 +14,8 @@ async def check_rate_limit(
     try:
         async with redis.pipeline(transaction=True) as pipe:
             pipe.incr(key)
-            pipe.expire(key, window_seconds)
+            # set expiry only on the first hit so sustained traffic cannot extend the window
+            pipe.expire(key, window_seconds, nx=True)
             results = await pipe.execute()
     except RedisError as exc:
         raise HTTPException(
@@ -35,5 +36,8 @@ def client_identifier(request: Request, trust_proxy_headers: bool) -> str:
     if trust_proxy_headers:
         forwarded = request.headers.get("x-forwarded-for")
         if forwarded:
-            return forwarded.split(",")[0].strip()
+            # trust only the address appended by the reverse proxy
+            parts = [part.strip() for part in forwarded.split(",") if part.strip()]
+            if parts:
+                return parts[-1]
     return request.client.host if request.client else "unknown"

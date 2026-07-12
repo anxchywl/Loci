@@ -92,7 +92,7 @@ jobs:
   migration-safety:
     name: Migration Safety Check
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v6
@@ -124,6 +124,30 @@ jobs:
         run: |
           docker compose -f docker/docker-compose.yml --env-file .env.example config -q
           docker compose -f docker/docker-compose.prod.yml config -q --no-interpolate
+
+      - name: Validate production capacity and operations
+        run: |
+          echo "CADDY_DOMAIN=ci.example.com" >> .env
+          echo "GRAFANA_ADMIN_PASSWORD=ci-placeholder-not-for-production" >> .env
+          COMPOSE_ENV_FILE="$PWD/.env" deploy/check-capacity-model.sh
+          docker run --rm -v "$PWD:/mnt:ro" koalaman/shellcheck:v0.11.0 \
+            /mnt/deploy/backup.sh /mnt/deploy/check-capacity-model.sh \
+            /mnt/deploy/deploy.sh /mnt/deploy/preflight.sh /mnt/deploy/restore.sh \
+            /mnt/deploy/setup-server.sh /mnt/deploy/verify-backup.sh
+          docker run --rm -v "$PWD/docker/monitoring:/etc/prometheus:ro" \
+            --entrypoint promtool prom/prometheus:v3.7.3 \
+            check config /etc/prometheus/prometheus.yml
+          jq -e . docker/monitoring/grafana/dashboards/loci-api.json >/dev/null
+          docker run --rm -e BASE_URL=http://127.0.0.1:8000 \
+            -v "$PWD/load_tests/k6:/scripts:ro" \
+            grafana/k6:2.1.0 inspect /scripts/map_browse.js >/dev/null
+          for script in authenticated_writes.js upload_soak.js; do
+            docker run --rm -e BASE_URL=http://127.0.0.1:8000 \
+              -e ALLOW_WRITES=true -e ACCESS_TOKENS=placeholder \
+              -e STORY_IDS=00000000-0000-0000-0000-000000000001 \
+              -v "$PWD/load_tests/k6:/scripts:ro" \
+              grafana/k6:2.1.0 inspect "/scripts/$script" >/dev/null
+          done
 
   docker-build:
     name: Docker Build
@@ -182,7 +206,7 @@ jobs:
     needs: [lint-and-test, migration-safety, docker-build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Deploy to production server
@@ -203,8 +227,9 @@ jobs:
             fi
             cd "$REPO"
             git fetch origin main
-            git reset --hard origin/main
+            git checkout main
+            git pull --ff-only origin main
             echo "$ENV_FILE_CONTENT" > .env
+            chmod 600 .env
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-            docker compose -f docker/docker-compose.prod.yml pull
-            docker compose -f docker/docker-compose.prod.yml up -d --remove-orphans --wait
+            DEPLOYMENT_TARGET=shared-host DEPLOY_USE_PREBUILT=true deploy/deploy.sh

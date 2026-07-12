@@ -73,6 +73,19 @@ class PhotoResponse(BaseModel):
     height: int | None
 
 
+class StoryPinResponse(BaseModel):
+    id: uuid.UUID
+    category_id: int
+    lat: float
+    lon: float
+
+
+class MapClusterResponse(BaseModel):
+    lat: float
+    lon: float
+    count: int
+
+
 class StoryResponse(BaseModel):
     id: uuid.UUID
     share_token: str

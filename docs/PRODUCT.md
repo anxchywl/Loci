@@ -73,9 +73,15 @@ badges, global stats.
 - Async re-encode after upload (Celery): WebP, max edge 2048 px, plus a
   thumbnail; originals are not served.
 - Presigned PUT URLs: scoped to a single object key, expire in **10 minutes**.
+- Presigned GET URLs are cached server-side (Redis, 80% of their validity) so
+  repeat story views hand the browser the same URL and images stay
+  browser-cacheable; a client always receives a URL with ≥20% lifetime left.
 - The completion endpoint checks the stored object size before queueing work;
   files over 10 MB are deleted and marked failed. The worker decodes the bytes
   (including HEIC) before producing served WebP variants.
+- Pending or failed photo uploads older than **24 hours** are deleted from
+  object storage and PostgreSQL by the daily maintenance worker. Ready photos
+  are never eligible for this cleanup.
 
 ### Moderation
 - Every public story is **pending** on creation and is only discoverable after an
@@ -173,7 +179,9 @@ re-check visibility on the server for every request.
 | `GET /api/v1/stories/{id}` | Story with author (null when anonymous), public point only, counts, viewer flags, ready photos via presigned GETs |
 | `DELETE /api/v1/stories/{id}` | Author only; cascades photos/comments/reactions/bookmarks/reports |
 | `GET /api/v1/stories/nearby?lat&lon&radius_meters&category_id&limit` | Geography-cast `ST_DWithin` (metric, antimeridian-safe), ordered by distance |
-| `GET /api/v1/stories/bbox?min_lat&min_lon&max_lat&max_lon&category_id&limit` | Viewport query for the map |
+| `GET /api/v1/stories/bbox?min_lat&min_lon&max_lat&max_lon&category_id&limit` | Viewport query with full story payloads (used by list panels). Longitudes accept world-wrapped values; viewports crossing the antimeridian are handled |
+| `GET /api/v1/stories/map?min_lat&min_lon&max_lat&max_lon&category_id&limit` | Slim marker payload for map rendering: `[{id, category_id, lat, lon}]`, discoverable stories only, `limit` ≤ 500 (default 300), antimeridian-safe (added 2026-07-12) |
+| `GET /api/v1/stories/map-clusters?min_lat&min_lon&max_lat&max_lon&zoom&category_id` | Low-zoom grid aggregation: `[{lat, lon, count}]` per occupied cell (zoom 0–10). Redis-cached 60 s per quantized viewport, so counts may lag moderation by ≤1 min (added 2026-07-12) |
 | `GET /api/v1/stories/trending?limit` | Ordered by reactions+comments, then recency |
 | `GET /api/v1/stories/search?q&limit` | ILIKE over title+body; respects visibility |
 | `GET/POST /api/v1/stories/{id}/comments` | List (hidden excluded) / create (≤1000 chars). An optional `Idempotency-Key` makes safe client retries return the original comment. |
@@ -183,7 +191,7 @@ re-check visibility on the server for every request.
 | `POST /api/v1/stories/{id}/report`, `POST /api/v1/comments/{id}/report` | One report per user per target; auto-hide at threshold of distinct non-author reporters |
 | `POST /api/v1/stories/{id}/photos` | Author only; ≤5 photos; returns single-key presigned PUT (10 min) |
 | `PUT /api/v1/stories/{id}/photos/{photo_id}/upload` | Backend proxy fallback when the direct presigned PUT can't reach storage; stores the raw bytes |
-| `POST /api/v1/stories/{id}/photos/{photo_id}/complete` | Author confirms upload; validates and queues Celery WebP re-encode (2048 px + thumb); original deleted after |
+| `POST /api/v1/stories/{id}/photos/{photo_id}/complete` | Author confirms upload; API size-checks and queues Celery validation + WebP re-encode (2048 px + thumb); invalid files are marked failed and never surface; original deleted after success |
 | `GET /api/v1/profile/me` · `/me/stories` · `/me/bookmarks` | Own profile; own list includes anonymous stories (only there) |
 
 Admin-only (`is_admin`), all writing an immutable audit log:

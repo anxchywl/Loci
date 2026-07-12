@@ -5,7 +5,7 @@ from geoalchemy2 import Geography
 from sqlalchemy import Select, and_, cast, false, func, or_, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Bookmark, Comment, Reaction, Story, StoryVisibility, User
+from app.db.models import Bookmark, Reaction, Story, StoryVisibility, User
 from app.db.models.story import LocationPrecision, ModerationStatus
 
 # location_exact is never selected on any read path; when precision is exact the
@@ -33,24 +33,9 @@ STORY_READ_COLUMNS = (
 
 
 def _counts(viewer_id: int | None):
-    # correlate(Story) is required: without it these subqueries auto-correlate against
-    # a joined reactions/bookmarks table and lose their own FROM clause
-    reactions = (
-        select(func.count())
-        .select_from(Reaction)
-        .where(Reaction.story_id == Story.id)
-        .correlate(Story)
-        .scalar_subquery()
-        .label("reaction_count")
-    )
-    comments = (
-        select(func.count())
-        .select_from(Comment)
-        .where(and_(Comment.story_id == Story.id, Comment.is_hidden.is_(False)))
-        .correlate(Story)
-        .scalar_subquery()
-        .label("comment_count")
-    )
+    # stored counters avoid per-row aggregation on discovery reads
+    reactions = Story.reaction_count.label("reaction_count")
+    comments = Story.comment_count.label("comment_count")
     if viewer_id is None:
         return (
             reactions,
@@ -207,6 +192,28 @@ async def list_nearby(
     return (await db.execute(stmt)).mappings().all()
 
 
+def _normalize_lon(lon: float) -> float:
+    return ((lon + 180.0) % 360.0) - 180.0
+
+
+def _bbox_condition(min_lat: float, min_lon: float, max_lat: float, max_lon: float):
+    """build an antimeridian-safe viewport predicate"""
+    if max_lon - min_lon >= 360.0:
+        min_lon, max_lon = -180.0, 180.0
+    else:
+        min_lon = _normalize_lon(min_lon)
+        max_lon = _normalize_lon(max_lon)
+    if min_lon <= max_lon:
+        envelope = func.ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
+        return func.ST_Intersects(Story.location_public, envelope)
+    west = func.ST_MakeEnvelope(min_lon, min_lat, 180.0, max_lat, 4326)
+    east = func.ST_MakeEnvelope(-180.0, min_lat, max_lon, max_lat, 4326)
+    return or_(
+        func.ST_Intersects(Story.location_public, west),
+        func.ST_Intersects(Story.location_public, east),
+    )
+
+
 async def list_in_bbox(
     db: AsyncSession,
     *,
@@ -218,11 +225,67 @@ async def list_in_bbox(
     category_id: int | None,
     limit: int,
 ):
-    envelope = func.ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
-    stmt = _discoverable_select(viewer_id).where(func.ST_Intersects(Story.location_public, envelope))
+    stmt = _discoverable_select(viewer_id).where(
+        _bbox_condition(min_lat, min_lon, max_lat, max_lon)
+    )
     if category_id is not None:
         stmt = stmt.where(Story.category_id == category_id)
     stmt = stmt.order_by(Story.created_at.desc()).limit(limit)
+    return (await db.execute(stmt)).mappings().all()
+
+
+async def list_pins_in_bbox(
+    db: AsyncSession,
+    *,
+    min_lat: float,
+    min_lon: float,
+    max_lat: float,
+    max_lon: float,
+    category_id: int | None,
+    limit: int,
+):
+    """fetch only fields rendered by map markers"""
+    stmt = (
+        select(
+            Story.id,
+            Story.category_id,
+            func.ST_Y(Story.location_public).label("lat"),
+            func.ST_X(Story.location_public).label("lon"),
+        )
+        .where(_DISCOVERABLE)
+        .where(_bbox_condition(min_lat, min_lon, max_lat, max_lon))
+    )
+    if category_id is not None:
+        stmt = stmt.where(Story.category_id == category_id)
+    stmt = stmt.order_by(Story.created_at.desc()).limit(limit)
+    return (await db.execute(stmt)).mappings().all()
+
+
+async def aggregate_pins_in_bbox(
+    db: AsyncSession,
+    *,
+    min_lat: float,
+    min_lon: float,
+    max_lat: float,
+    max_lon: float,
+    cell_degrees: float,
+    category_id: int | None,
+):
+    """aggregate low-zoom markers without truncating counts"""
+    cell = func.ST_SnapToGrid(Story.location_public, cell_degrees)
+    centroid = func.ST_Centroid(func.ST_Collect(Story.location_public))
+    stmt = (
+        select(
+            func.ST_Y(centroid).label("lat"),
+            func.ST_X(centroid).label("lon"),
+            func.count().label("count"),
+        )
+        .where(_DISCOVERABLE)
+        .where(_bbox_condition(min_lat, min_lon, max_lat, max_lon))
+        .group_by(cell)
+    )
+    if category_id is not None:
+        stmt = stmt.where(Story.category_id == category_id)
     return (await db.execute(stmt)).mappings().all()
 
 
@@ -232,7 +295,8 @@ async def list_trending(db: AsyncSession, *, viewer_id: int | None, limit: int):
         select(*STORY_READ_COLUMNS, reactions, comments, reacted, bookmarked)
         .outerjoin(User, User.id == Story.author_id)
         .where(_DISCOVERABLE)
-        .order_by((reactions + comments).desc(), Story.created_at.desc())
+        # preserve the trending index order
+        .order_by((Story.reaction_count + Story.comment_count).desc(), Story.created_at.desc())
         .limit(limit)
     )
     return (await db.execute(stmt)).mappings().all()

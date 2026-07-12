@@ -3,9 +3,15 @@
 import maplibregl, { type Map as MapLibreMap } from "maplibre-gl";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 
-import type { Category, Story } from "@/features/stories/api";
+import type { Category, MapCluster, StoryPin } from "@/features/stories/api";
 import { addCategoryGlyphImages, createMap, MAP_STYLE_DARK_URL, MAP_STYLE_URL, setMapLanguage } from "@/lib/map/setup";
-import { addStoryLayers, storiesToGeoJson, updateStoryData } from "@/lib/map/story-layers";
+import {
+  addStoryLayers,
+  clustersToGeoJson,
+  storiesToGeoJson,
+  updateServerClusterData,
+  updateStoryData,
+} from "@/lib/map/story-layers";
 import { useUiStore } from "@/stores/ui-store";
 
 export interface MapBounds {
@@ -13,6 +19,7 @@ export interface MapBounds {
   minLon: number;
   maxLat: number;
   maxLon: number;
+  zoom: number;
 }
 
 export interface MapViewHandle {
@@ -23,12 +30,13 @@ export interface MapViewHandle {
 
 interface MapViewProps {
   categories: Category[];
-  stories: Story[];
+  stories: StoryPin[];
+  clusters: MapCluster[];
   onBoundsChange: (bounds: MapBounds) => void;
 }
 
 export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
-  { categories, stories, onBoundsChange },
+  { categories, stories, clusters, onBoundsChange },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -43,6 +51,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   const theme = useUiStore((state) => state.theme);
   const categoriesRef = useRef(categories);
   const storiesRef = useRef(stories);
+  const clustersRef = useRef(clusters);
   const [mapLoading, setMapLoading] = useState(false);
 
   useImperativeHandle(ref, () => ({
@@ -90,6 +99,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         minLon: bounds.getWest(),
         maxLat: bounds.getNorth(),
         maxLon: bounds.getEast(),
+        zoom: map.getZoom(),
       });
     };
 
@@ -106,6 +116,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
           });
           readyRef.current = true;
           updateStoryData(map, storiesToGeoJson(stories));
+          updateServerClusterData(map, clustersToGeoJson(clustersRef.current));
           emitBounds();
         })
         .catch((error) => {
@@ -137,6 +148,12 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   }, [stories]);
 
   useEffect(() => {
+    if (mapRef.current && readyRef.current) {
+      updateServerClusterData(mapRef.current, clustersToGeoJson(clusters));
+    }
+  }, [clusters]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     if (mode === "compose" && pickedLocation) {
@@ -154,6 +171,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
 
   useEffect(() => { categoriesRef.current = categories; }, [categories]);
   useEffect(() => { storiesRef.current = stories; }, [stories]);
+  useEffect(() => { clustersRef.current = clusters; }, [clusters]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -180,6 +198,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
           });
           readyRef.current = true;
           updateStoryData(map, storiesToGeoJson(storiesRef.current));
+          updateServerClusterData(map, clustersToGeoJson(clustersRef.current));
           setMapLanguage(map, useUiStore.getState().locale);
           setMapLoading(false);
         })
@@ -209,8 +228,11 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   return (
     <div className="absolute inset-0">
       <div ref={containerRef} className="absolute inset-0" data-testid="map" />
-      {/* Instant colour bridge while the tile style reloads */}
+      {/* Instant colour bridge while the tile style reloads. isDark reads
+          matchMedia, so the server always renders the light value — suppress
+          the expected one-attribute hydration diff on dark clients */}
       <div
+        suppressHydrationWarning
         className="pointer-events-none absolute inset-0 transition-opacity duration-300"
         style={{ backgroundColor: isDark ? "#1c1c1e" : "#f8f8f8", opacity: mapLoading ? 1 : 0 }}
       />

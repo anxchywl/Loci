@@ -93,11 +93,15 @@ export interface BboxParams {
   categoryId: number | null;
 }
 
-export function fetchCategories(): Promise<Category[]> {
-  return apiFetch<Category[]>("/categories");
+// marker-only payload for map rendering — see docs/PRODUCT.md /stories/map
+export interface StoryPin {
+  id: string;
+  category_id: number;
+  lat: number;
+  lon: number;
 }
 
-export function fetchBboxStories(params: BboxParams): Promise<Story[]> {
+function bboxQuery(params: BboxParams): URLSearchParams {
   const query = new URLSearchParams({
     min_lat: String(params.minLat),
     min_lon: String(params.minLon),
@@ -105,15 +109,49 @@ export function fetchBboxStories(params: BboxParams): Promise<Story[]> {
     max_lon: String(params.maxLon),
   });
   if (params.categoryId !== null) query.set("category_id", String(params.categoryId));
-  return apiFetch<Story[]>(`/stories/bbox?${query}`);
+  return query;
+}
+
+export function fetchCategories(): Promise<Category[]> {
+  return apiFetch<Category[]>("/categories");
+}
+
+export function fetchBboxStories(params: BboxParams, signal?: AbortSignal): Promise<Story[]> {
+  return apiFetch<Story[]>(`/stories/bbox?${bboxQuery(params)}`, { signal });
+}
+
+export function fetchMapPins(params: BboxParams, signal?: AbortSignal): Promise<StoryPin[]> {
+  const query = bboxQuery(params);
+  query.set("limit", "500");
+  return apiFetch<StoryPin[]>(`/stories/map?${query}`, { signal });
+}
+
+// low-zoom aggregation — see docs/PRODUCT.md /stories/map-clusters
+export interface MapCluster {
+  lat: number;
+  lon: number;
+  count: number;
+}
+
+export interface ClusterParams extends BboxParams {
+  zoom: number;
+}
+
+export function fetchMapClusters(
+  params: ClusterParams,
+  signal?: AbortSignal,
+): Promise<MapCluster[]> {
+  const query = bboxQuery(params);
+  query.set("zoom", String(params.zoom));
+  return apiFetch<MapCluster[]>(`/stories/map-clusters?${query}`, { signal });
 }
 
 export function fetchTrending(): Promise<Story[]> {
   return apiFetch<Story[]>("/stories/trending");
 }
 
-export function searchStories(q: string): Promise<Story[]> {
-  return apiFetch<Story[]>(`/stories/search?${new URLSearchParams({ q })}`);
+export function searchStories(q: string, signal?: AbortSignal): Promise<Story[]> {
+  return apiFetch<Story[]>(`/stories/search?${new URLSearchParams({ q })}`, { signal });
 }
 
 export function fetchStoryByToken(shareToken: string): Promise<Story> {

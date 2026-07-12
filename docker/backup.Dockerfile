@@ -1,6 +1,6 @@
 FROM alpine:3.20
 
-RUN apk add --no-cache postgresql16-client bash
+RUN apk add --no-cache postgresql16-client bash aws-cli age
 
 COPY deploy/backup.sh /usr/local/bin/backup.sh
 COPY deploy/verify-backup.sh /usr/local/bin/verify-backup.sh

@@ -1,9 +1,9 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Comment, User
+from app.db.models import Comment, Story, User
 
 COMMENT_READ_COLUMNS = (
     Comment.id,
@@ -16,15 +16,34 @@ COMMENT_READ_COLUMNS = (
 )
 
 
+async def _bump_comment_count(db: AsyncSession, story_id: uuid.UUID, delta: int) -> None:
+    # only visible comments contribute to the public counter
+    await db.execute(
+        update(Story)
+        .where(Story.id == story_id)
+        .values(comment_count=func.greatest(Story.comment_count + delta, 0))
+    )
+
+
 async def create(db: AsyncSession, *, story_id: uuid.UUID, author_id: int, body: str) -> Comment:
     comment = Comment(story_id=story_id, author_id=author_id, body=body)
     db.add(comment)
+    await _bump_comment_count(db, story_id, 1)
     await db.flush()
     return comment
 
 
 async def get(db: AsyncSession, comment_id: uuid.UUID) -> Comment | None:
     return await db.get(Comment, comment_id)
+
+
+async def get_row(db: AsyncSession, comment_id: uuid.UUID):
+    result = await db.execute(
+        select(*COMMENT_READ_COLUMNS)
+        .outerjoin(User, User.id == Comment.author_id)
+        .where(Comment.id == comment_id)
+    )
+    return result.mappings().one_or_none()
 
 
 async def list_for_story(db: AsyncSession, story_id: uuid.UUID, limit: int):
@@ -39,12 +58,16 @@ async def list_for_story(db: AsyncSession, story_id: uuid.UUID, limit: int):
 
 
 async def delete(db: AsyncSession, comment: Comment) -> None:
+    if not comment.is_hidden:
+        await _bump_comment_count(db, comment.story_id, -1)
     await db.delete(comment)
     await db.flush()
 
 
 async def set_hidden(db: AsyncSession, comment_id: uuid.UUID, hidden: bool) -> None:
     comment = await db.get(Comment, comment_id)
-    if comment is not None:
-        comment.is_hidden = hidden
-        await db.flush()
+    if comment is None or comment.is_hidden == hidden:
+        return
+    comment.is_hidden = hidden
+    await _bump_comment_count(db, comment.story_id, -1 if hidden else 1)
+    await db.flush()

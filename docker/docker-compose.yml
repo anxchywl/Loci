@@ -114,7 +114,7 @@ services:
       context: ..
       dockerfile: docker/backend.Dockerfile
     container_name: loci-worker
-    command: celery -A app.workers.celery_app worker --loglevel=INFO --concurrency=2
+    command: celery -A app.workers.celery_app worker --loglevel=INFO --concurrency=2 -Q images
     environment: *backend-env
     volumes:
       - ../backend/app:/app/app
@@ -124,6 +124,42 @@ services:
       redis:
         condition: service_healthy
       minio:
+        condition: service_healthy
+    networks:
+      - loci-data
+
+  worker-events:
+    build:
+      context: ..
+      dockerfile: docker/backend.Dockerfile
+    container_name: loci-worker-events
+    command: celery -A app.workers.celery_app worker --loglevel=INFO --concurrency=1 -Q notifications,maintenance
+    environment: *backend-env
+    volumes:
+      - ../backend/app:/app/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - loci-data
+
+  beat:
+    build:
+      context: ..
+      dockerfile: docker/backend.Dockerfile
+    container_name: loci-beat
+    command: celery -A app.workers.celery_app beat --loglevel=INFO
+    environment: *backend-env
+    volumes:
+      - ../backend/app:/app/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - loci-data

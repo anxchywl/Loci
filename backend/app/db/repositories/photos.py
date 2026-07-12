@@ -1,6 +1,7 @@
 import uuid
+from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import PhotoStatus, StoryPhoto
@@ -32,6 +33,37 @@ async def get(db: AsyncSession, photo_id: uuid.UUID) -> StoryPhoto | None:
     return await db.get(StoryPhoto, photo_id)
 
 
+async def get_for_update(db: AsyncSession, photo_id: uuid.UUID) -> StoryPhoto | None:
+    result = await db.execute(
+        select(StoryPhoto).where(StoryPhoto.id == photo_id).with_for_update()
+    )
+    return result.scalar_one_or_none()
+
+
+async def list_stale_uploads_for_update(
+    db: AsyncSession, cutoff: datetime, limit: int
+) -> list[StoryPhoto]:
+    result = await db.execute(
+        select(StoryPhoto)
+        .where(
+            StoryPhoto.status.in_((PhotoStatus.pending, PhotoStatus.failed)),
+            StoryPhoto.created_at < cutoff,
+        )
+        .order_by(StoryPhoto.created_at)
+        .limit(limit)
+        .with_for_update(skip_locked=True)
+    )
+    return list(result.scalars().all())
+
+
+async def delete_by_ids(db: AsyncSession, photo_ids: list[uuid.UUID]) -> int:
+    if not photo_ids:
+        return 0
+    result = await db.execute(delete(StoryPhoto).where(StoryPhoto.id.in_(photo_ids)))
+    await db.flush()
+    return result.rowcount
+
+
 async def list_for_story(db: AsyncSession, story_id: uuid.UUID) -> list[StoryPhoto]:
     result = await db.execute(
         select(StoryPhoto)
@@ -60,7 +92,14 @@ async def list_for_stories(
 
 
 async def count_for_story(db: AsyncSession, story_id: uuid.UUID) -> int:
-    stmt = select(func.count()).select_from(StoryPhoto).where(StoryPhoto.story_id == story_id)
+    stmt = (
+        select(func.count())
+        .select_from(StoryPhoto)
+        .where(
+            StoryPhoto.story_id == story_id,
+            StoryPhoto.status != PhotoStatus.failed,
+        )
+    )
     return (await db.execute(stmt)).scalar_one()
 
 

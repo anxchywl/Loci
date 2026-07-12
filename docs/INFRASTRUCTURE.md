@@ -19,6 +19,30 @@ Mini App launcher. Production application containers run as unprivileged users
 with read-only root filesystems, dropped capabilities, process/memory limits,
 and only private Compose networks. Only Caddy publishes host ports.
 
+## Initial production topology
+
+The first dedicated production stage targets one DigitalOcean Basic Droplet:
+
+| Resource | Selection |
+|---|---|
+| Compute | 4 shared vCPUs, 8 GiB RAM |
+| Disk | 160 GiB local SSD |
+| Transfer | 5,000 GiB/month |
+| Droplet backups | daily |
+| Application backup | daily PostgreSQL custom dump to local disk and a separate private R2 bucket |
+
+The Droplet is currently $48/month and daily Droplet backups add 30%, keeping
+the baseline near $62.40/month before tax. Verify current pricing before
+provisioning. PostgreSQL has a 3 GiB container limit and 2 GiB shared buffers;
+Redis has a 512 MiB container limit and a 384 MiB no-eviction data ceiling; API
+and photo workers each have 1 GiB limits. The preflight script rejects hosts
+below 4 vCPUs, 8 GiB RAM, or 40 GiB remaining disk.
+
+Application cache/session/rate-limit keys use Redis database 0, Celery broker
+keys use database 1, and short-lived Celery results use database 2. This is
+namespace separation, not failure isolation; all three initially share one
+Redis process and memory ceiling.
+
 ## Environment variables
 
 Single source: `.env` at the repo root (copy from `.env.example`). Compose
@@ -34,14 +58,24 @@ injects everything; the backend reads them via `pydantic-settings`
 | `JWT_SECRET_KEY` / `JWT_ALGORITHM` | token signing |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` / `REFRESH_TOKEN_EXPIRE_DAYS` | token lifetimes |
 | `POSTGRES_*` | database connection parts |
+| `DATABASE_URL` | complete managed PostgreSQL URL; overrides `POSTGRES_*` when set |
 | `REDIS_*` | cache / rate-limit / replay-guard store |
+| `REDIS_URL` | complete managed application Redis URL; overrides `REDIS_*` when set |
+| `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND` | optional independent managed Redis URLs for Celery |
 | `S3_*` | object storage — MinIO in dev, R2 in prod (endpoint + keys differ, code identical) |
 | `ALLOWED_ORIGINS` | JSON list for CORS |
 | `NEXT_PUBLIC_API_URL` | frontend → API base URL |
 | `CADDY_DOMAIN` | prod domain for TLS + routing |
 | `BACKUP_RETENTION_DAYS` / `BACKUP_DIR` | backup policy |
+| `BACKUP_MAX_AGE_HOURS` | maximum acceptable age for backup health, 26 hours by default |
+| `BACKUP_S3_*` | separate private R2 backup bucket and bucket-scoped credentials |
+| `BACKUP_AGE_RECIPIENT` | public age recipient used to encrypt every offsite database dump |
 | `ADMIN_TELEGRAM_IDS` | comma-separated Telegram IDs granted access to the admin panel |
 | `WEB_CONCURRENCY` | production Uvicorn worker count |
+| `METRICS_TOKEN` | optional bearer token for direct `/metrics` access; Caddy does not expose this route |
+| `GRAFANA_ADMIN_PASSWORD` | required before enabling the optional monitoring profile |
+| `MONITORING_ENABLED` | enables the Prometheus/Grafana profile during deployment |
+| `DEPLOYMENT_TARGET` | `dedicated` for the new Droplet or `shared-host` for the current server |
 
 ## Local development
 
@@ -52,7 +86,13 @@ environment, backup, and recovery details.
 
 ### Before the first deploy
 
-1. Provision a current Debian/Ubuntu host as root:
+1. Provision an Ubuntu 24.04 LTS Basic Droplet with 4 vCPUs, 8 GiB RAM,
+   160 GiB SSD, daily Droplet backups, an SSH key, and a Reserved IP. Select the
+   region only after latency testing from the expected user geography. Apply a
+   DigitalOcean Cloud Firewall allowing inbound SSH only from administrator
+   addresses and inbound TCP 80/443 plus UDP 443 from anywhere.
+
+2. Clone and provision as root:
 
    ```sh
    git clone <repository-url> /opt/loci/repo
@@ -62,7 +102,7 @@ environment, backup, and recovery details.
    chmod 600 .env
    ```
 
-2. Replace every development/default credential in `.env`. Generate independent
+3. Replace every development/default credential in `.env`. Generate independent
    secrets; never reuse the bot token, database password, JWT secret, Redis
    password, S3 secret, or location-fuzz secret.
 
@@ -70,7 +110,7 @@ environment, backup, and recovery details.
    openssl rand -base64 48
    ```
 
-3. Set the production endpoints:
+4. Set the production endpoints:
 
    - `APP_ENV=production`
    - `CADDY_DOMAIN` to the public hostname
@@ -78,18 +118,24 @@ environment, backup, and recovery details.
    - `ALLOWED_ORIGINS=["https://<CADDY_DOMAIN>"]`
    - `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME` to the bot username without `@`
    - Cloudflare R2 values for every `S3_*` variable, with HTTPS enabled
+   - a separate private `loci-db-backups` R2 bucket with credentials restricted
+     to that bucket in `BACKUP_S3_*`
+   - `BACKUP_AGE_RECIPIENT` set to a public recipient whose identity file is
+     stored offline and tested before launch
+   - `MONITORING_ENABLED=true` and an independent Grafana password of at least
+     24 characters
+   - leave `DATABASE_URL`, `REDIS_URL`, and both `CELERY_*` URLs empty during the
+     single-server stage
 
-4. Point the hostname's A/AAAA records at the server. Confirm inbound TCP
+5. Point the hostname's A/AAAA records at the Reserved IP. Confirm inbound TCP
    80/443 and outbound DNS/HTTPS work. Set the same HTTPS URL as the Mini App URL
    in BotFather.
 
-5. Validate configuration before creating containers:
+6. Validate the host, connection budget, secrets, offsite backup configuration,
+   disk, and Compose model before creating containers:
 
    ```sh
-   docker compose \
-     --env-file .env \
-     -f docker/docker-compose.prod.yml \
-     config -q
+   deploy/preflight.sh
    ```
 
 ### Deploy
@@ -100,7 +146,8 @@ Run from the repository checkout:
 deploy/deploy.sh
 ```
 
-The script performs a fast-forward pull, validates Compose, builds images,
+The script performs a fast-forward pull, runs the capacity/security preflight,
+validates Compose, builds images,
 starts PostgreSQL and Redis, creates and validates a pre-migration backup, runs
 Alembic in a one-off API container, starts the full stack with health waiting,
 verifies the mounted backup again, checks the public HTTPS health endpoint, and
@@ -122,9 +169,13 @@ must not have published host ports.
 ### Backups and restore
 
 The `backup` container runs `deploy/backup.sh` daily at 03:00 server time.
-Backups use PostgreSQL custom format, are validated with `pg_restore --list`
-before success is logged, live under `BACKUP_DIR`, and are retained for 14 days
-by default. Every deployment also creates a validated backup before migrations.
+Backups use PostgreSQL custom format, are written atomically, validated with
+`pg_restore --list`, checksummed, encrypted client-side with an age public
+recipient, copied to a separate private R2 bucket, and
+retained locally for 14 days by default. Configure an R2 lifecycle rule for the
+offsite retention period. Every deployment also creates and uploads a validated
+backup before migrations. Backup health fails when the newest dump is older
+than 26 hours or its checksum/restore catalog is invalid.
 
 Verify at any time:
 
@@ -142,9 +193,22 @@ quarterly. A production restore is destructive and confirmation-gated:
 deploy/restore.sh /opt/loci/backups/loci-YYYYMMDD-HHMMSS.dump
 ```
 
-The restore script reads database credentials inside the PostgreSQL container,
-restores with `--clean --if-exists`, and reapplies Alembic migrations. Run the
-public health check and a private/anonymous-story privacy smoke test afterward.
+The restore script validates the catalog and checksum, creates a new pre-restore
+backup, stops every writer, restores in one transaction with exit-on-error, and
+reapplies Alembic migrations. Services restart after success or transaction
+rollback. Run the public health check and a private/anonymous-story privacy
+smoke test afterward.
+
+R2 stores only `.dump.age` ciphertext and its checksum. To recover an offsite
+copy, download both files, verify the ciphertext checksum, and decrypt with the
+offline identity before calling the restore script:
+
+```sh
+sha256sum -c loci-YYYYMMDD-HHMMSS.dump.age.sha256
+age --decrypt --identity /secure/offline/loci-backup.agekey \
+  --output loci-YYYYMMDD-HHMMSS.dump loci-YYYYMMDD-HHMMSS.dump.age
+deploy/restore.sh /opt/loci/backups/loci-YYYYMMDD-HHMMSS.dump
+```
 
 ### Rollback and incident handling
 
@@ -165,16 +229,64 @@ public health check and a private/anonymous-story privacy smoke test afterward.
   privacy review before any data rewrite.
 
 This Compose deployment briefly restarts application containers and is not
-zero-downtime. The database and Redis remain up during normal deploys. Add a
-multi-host/orchestrated rollout only when availability requirements justify it.
+zero-downtime. PostgreSQL and Redis remain up during normal deploys.
 
-### Shared edge proxy
+### Temporary shared-host target
 
-If the host already has a Caddy container bound to ports 80/443, do not start a
-second public Caddy. Attach the existing Caddy container to Loci's app network
-and add a site block for `CADDY_DOMAIN` that routes `/api/*` and `/health` to
-`loci-api-1:8000`, and all other paths to `loci-web-1:3000`. Validate and reload
-the existing Caddy config before considering the deploy complete.
+Until the dedicated Droplet is provisioned, CI deploys with
+`DEPLOYMENT_TARGET=shared-host` and
+`docker/docker-compose.shared-host.yml`. The override keeps the existing Wished
+Caddy edge, two API workers, conservative PostgreSQL/Redis memory settings, one
+image worker, and one lightweight notification/maintenance worker. It does not
+start Prometheus, Grafana, or a second Caddy. Local validated PostgreSQL backups
+remain mandatory; encrypted R2 database backups are enabled when their five
+`BACKUP_*` values are present and become mandatory on the dedicated target.
+
+The shared target is a compatibility stage, not evidence for the target-scale
+capacity claim. `deploy/deploy.sh` auto-detects the existing `wished-caddy`
+container when `DEPLOYMENT_TARGET` is absent, while CI sets the target explicitly.
+
+### Migration from the shared host
+
+1. Lower DNS TTL to 300 seconds at least one day before cutover.
+2. Provision and deploy the dedicated Droplet without moving DNS.
+3. Confirm local health through an SSH tunnel, R2 access, a successful offsite
+   backup, metrics, and a restore rehearsal using a copy of production data.
+4. At the maintenance window, stop the old bot and application writers, create
+   and verify a final dump, and securely copy the dump plus checksum to the new
+   host.
+5. Restore on the new host, run migrations, and perform exact/approximate,
+   anonymous, private, moderation, upload, and Telegram authentication smoke
+   tests.
+6. Move the A/AAAA record to the Reserved IP, verify Caddy TLS and BotFather's
+   Mini App URL, then start the new bot. Never run both polling bots together.
+7. Keep the old host stopped but recoverable for 48 hours. Roll back DNS and
+   restart it only if no writes have been accepted on the new host; otherwise a
+   database rollback requires explicit reconciliation.
+
+### Horizontal migration path
+
+Scale only from measured pressure, not story count alone. Triggers include API
+CPU above 70% for 15 minutes, memory above 80%, database pool use above 70%,
+Redis p95 above 50 ms, sustained swap activity, or user-visible latency missing
+the documented engineering thresholds.
+
+1. Move PostgreSQL first when database memory/I/O or backup windows dominate.
+   Provision managed PostgreSQL with PostGIS and a connection pool, restore a
+   rehearsal copy, set `DATABASE_URL`, transfer backup ownership, and repeat the
+   privacy smoke suite before cutover.
+2. Move Redis next when latency, memory, or Celery contention appears. Use
+   independent managed endpoints for `REDIS_URL`, `CELERY_BROKER_URL`, and
+   `CELERY_RESULT_BACKEND`; replay/rate-limit/session state may expire naturally,
+   but drain Celery queues before broker cutover.
+3. Add at least two stateless API/web nodes behind a DigitalOcean Load Balancer.
+   JWT/session state already lives outside the API, R2 owns photo bytes, and
+   PostgreSQL remains authoritative, so no sticky sessions are required.
+4. Run image workers separately from API nodes and scale them from queue depth.
+   Keep one Celery Beat instance to avoid duplicate scheduled maintenance.
+5. Recalculate `WEB_CONCURRENCY × (DB_POOL_SIZE + DB_MAX_OVERFLOW)` across every
+   API replica before adding capacity; keep operational and migration reserve
+   below the database connection limit.
 
 ## Continuous integration
 
@@ -186,6 +298,53 @@ the existing Caddy config before considering the deploy complete.
 
 CI credentials are isolated placeholder values; no repository secret is baked
 into an image. A green workflow is required before production deployment.
+
+## Observability
+
+The API exports Prometheus metrics at internal-only `GET /metrics`. HTTP labels
+use route templates rather than raw paths, SQL labels are limited to operation
+type, and Redis labels contain commands but never keys. User IDs, story IDs,
+Telegram data, authorization values, query strings, and request bodies are not
+metric labels or structured log fields.
+
+Production uses `PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus`; the API entrypoint
+clears it before Uvicorn starts, and each scrape removes dead-worker gauge files
+before aggregating all live workers. Metrics cover request latency, status,
+request/response size, database query latency/errors, pool usage, Redis command
+latency, Celery queue depth and task outcomes, backup age/size, host resources,
+and per-container CPU and memory.
+
+Prometheus, Grafana, and the provisioned Loci dashboard use a Compose profile
+that `deploy/deploy.sh` enables when `MONITORING_ENABLED=true`. Set a strong
+independent password before the first deploy:
+
+```sh
+test -n "$GRAFANA_ADMIN_PASSWORD"
+docker compose --env-file .env -f docker/docker-compose.prod.yml \
+  --profile monitoring up -d prometheus grafana node-exporter cadvisor
+ssh -L 3001:127.0.0.1:3001 "deploy@$SERVER_HOST"
+```
+
+Open `http://127.0.0.1:3001` through the SSH tunnel. Grafana is bound only to
+host loopback; Prometheus has no published port; Caddy does not route `/metrics`.
+Alert rules cover scrape availability, 5xx ratio, HTTP p95 latency, database
+pool saturation, Redis latency, image-queue backlog, backup freshness, and host
+memory pressure. Connect an alert receiver before relying on them for paging.
+
+PostgreSQL starts with `pg_stat_statements` preloaded, and Alembic owns the
+extension. After deployment, verify collection and inspect the slowest
+normalized statements without selecting query parameters from application logs:
+
+```sh
+docker compose --env-file .env -f docker/docker-compose.prod.yml exec -T postgres \
+  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
+  "SELECT calls, total_exec_time, mean_exec_time, rows, query FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 20"
+```
+
+The read-only k6 workload, safety guard, dataset assumptions, engineering
+thresholds, cold/warm cache matrix, and evidence checklist live in
+`load_tests/README.md`. Load-test numbers are measurements only when the target,
+dataset, duration, concurrency, cache state, and command are recorded together.
 
 ## Object storage
 

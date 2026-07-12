@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db_session, get_redis
 from app.core.config import Settings, get_settings
+from app.core.security import session_cache
 from app.core.security.rate_limit import check_rate_limit, client_identifier
 from app.core.security.session_metadata import build_session_metadata
 from app.core.security.telegram import (
@@ -156,10 +157,13 @@ async def logout_auth_session(
     response: Response,
     db: Annotated[AsyncSession, Depends(get_db_session)],
     settings: Annotated[Settings, Depends(get_settings)],
+    redis: Annotated[Redis, Depends(get_redis)],
 ) -> Response:
     _check_cookie_request_origin(request, settings)
     refresh_token_value = request.cookies.get(REFRESH_TOKEN_COOKIE)
     if refresh_token_value:
-        await logout(db, refresh_token_value)
+        session_id = await logout(db, refresh_token_value)
+        if session_id is not None:
+            await session_cache.invalidate_session(redis, session_id)
     _clear_refresh_cookie(response, settings)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

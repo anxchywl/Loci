@@ -1,12 +1,11 @@
 import logging
 import uuid
-import warnings
-from io import BytesIO
+from collections.abc import AsyncIterator
+from tempfile import SpooledTemporaryFile
 
+import anyio
+import anyio.to_thread
 from fastapi import HTTPException, status
-from PIL import Image, UnidentifiedImageError
-from PIL.Image import DecompressionBombError, DecompressionBombWarning
-from pillow_heif import register_heif_opener
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
@@ -46,7 +45,7 @@ def _record_upload(path: str | None, outcome: str, duration_ms: int | None) -> N
     log_event(
         logger,
         "photo_upload_complete",
-        level=logging.INFO if outcome == "ready" else logging.WARNING,
+        level=logging.INFO if outcome in {"ready", "queued"} else logging.WARNING,
         path=labelled,
         outcome=outcome,
         duration_ms=duration_ms,
@@ -58,34 +57,8 @@ _EXTENSIONS = {
     "image/webp": "webp",
     "image/heic": "heic",
 }
-_FORMATS = {
-    "image/jpeg": {"JPEG"},
-    "image/png": {"PNG"},
-    "image/webp": {"WEBP"},
-    "image/heic": {"HEIF", "HEIC"},
-}
-_MAX_SOURCE_EDGE = 20_000
-_MAX_SOURCE_PIXELS = 40_000_000
-
-register_heif_opener()
-
-
-def _validate_image_bytes(raw: bytes, content_type: str) -> None:
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", DecompressionBombWarning)
-            with Image.open(BytesIO(raw)) as image:
-                width, height = image.size
-                if max(width, height) > _MAX_SOURCE_EDGE or width * height > _MAX_SOURCE_PIXELS:
-                    raise ValueError("image dimensions are too large")
-                if image.format not in _FORMATS[content_type]:
-                    raise ValueError("image content does not match its declared type")
-                image.verify()
-    except (DecompressionBombError, DecompressionBombWarning, UnidentifiedImageError, OSError, ValueError) as error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Uploaded file is not a valid supported image",
-        ) from error
+# bound concurrent blocking storage writes
+_image_work_limiter = anyio.CapacityLimiter(4)
 
 
 async def create_upload_url(
@@ -136,13 +109,7 @@ async def complete_upload(
     duration_ms: int | None = None,
     fallback_reason: str | None = None,
 ) -> None:
-    """Finalize an uploaded photo: size-check, validate, and queue optimization.
-
-    This is the single processing pipeline for BOTH transports. The direct
-    (presigned) and proxy paths only differ in how bytes land in the bucket; from
-    here on the size limit, content validation, optimization, metadata extraction
-    and any future content checks are identical because they all run here.
-    """
+    """size check uploaded bytes and queue worker validation"""
     # optimization is queued only after the client confirms the bytes are in the bucket
     story = await stories_repo.get_owned(db, story_id, author_id)
     if story is None:
@@ -161,14 +128,14 @@ async def complete_upload(
             reason=fallback_reason,
         )
 
-    object_size = storage.get_object_size(photo.object_key)
+    object_size = await anyio.to_thread.run_sync(storage.get_object_size, photo.object_key)
     if object_size is None:
         _record_upload(upload_path, "missing", duration_ms)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Photo upload not found")
 
     max_upload_bytes = settings.max_upload_size_mb * 1024 * 1024
     if object_size > max_upload_bytes:
-        storage.delete_object(photo.object_key)
+        await anyio.to_thread.run_sync(storage.delete_object, photo.object_key)
         await photos_repo.mark_failed(db, photo.id)
         await db.commit()
         _record_upload(upload_path, "too_large", duration_ms)
@@ -177,36 +144,29 @@ async def complete_upload(
             detail=f"Photo must not exceed {settings.max_upload_size_mb} MB",
         )
 
-    try:
-        raw = storage.get_object_bytes(photo.object_key)
-        _validate_image_bytes(raw, photo.content_type)
-    except HTTPException:
-        storage.delete_object(photo.object_key)
-        await photos_repo.mark_failed(db, photo.id)
-        await db.commit()
-        _record_upload(upload_path, "invalid", duration_ms)
-        raise
-
     from app.workers.tasks import optimize_photo
 
-    optimize_photo.delay(str(photo.id))
-    _record_upload(upload_path, "ready", duration_ms)
+    try:
+        await anyio.to_thread.run_sync(optimize_photo.delay, str(photo.id))
+    except Exception as error:
+        logger.warning("photo optimization could not be queued", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Photo processing is temporarily unavailable",
+        ) from error
+    _record_upload(upload_path, "queued", duration_ms)
 
 
-async def upload_bytes(
+async def upload_stream(
     db: AsyncSession,
     story_id: uuid.UUID,
     photo_id: uuid.UUID,
     author_id: int,
-    raw: bytes,
+    chunks: AsyncIterator[bytes],
     settings: Settings,
+    content_length: int | None,
 ) -> None:
-    """Proxy transport: store raw bytes in the bucket on the client's behalf.
-
-    Deliberately minimal — it only gets bytes into storage, exactly like a
-    successful direct presigned PUT would. All validation and processing happen
-    later in ``complete_upload`` so both transports share one pipeline.
-    """
+    """stream proxy uploads with bounded memory"""
     story = await stories_repo.get_owned(db, story_id, author_id)
     if story is None:
         counter("photo_proxy_upload_total", help=_PROXY_TOTAL_HELP, labels={"outcome": "not_found"})
@@ -215,9 +175,38 @@ async def upload_bytes(
     if photo is None or photo.story_id != story_id:
         counter("photo_proxy_upload_total", help=_PROXY_TOTAL_HELP, labels={"outcome": "not_found"})
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
-    if len(raw) > settings.max_upload_size_mb * 1024 * 1024:
+    max_bytes = settings.max_upload_size_mb * 1024 * 1024
+    if content_length is not None and content_length > max_bytes:
+        await photos_repo.mark_failed(db, photo.id)
+        await db.commit()
         counter("photo_proxy_upload_total", help=_PROXY_TOTAL_HELP, labels={"outcome": "too_large"})
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Photo is too large")
-    storage.put_object_bytes(photo.object_key, raw, photo.content_type)
+
+    total = 0
+    with SpooledTemporaryFile(max_size=1024 * 1024, mode="w+b") as upload:
+        async for chunk in chunks:
+            total += len(chunk)
+            if total > max_bytes:
+                await photos_repo.mark_failed(db, photo.id)
+                await db.commit()
+                counter(
+                    "photo_proxy_upload_total",
+                    help=_PROXY_TOTAL_HELP,
+                    labels={"outcome": "too_large"},
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Photo is too large",
+                )
+            await anyio.to_thread.run_sync(upload.write, chunk)
+        await anyio.to_thread.run_sync(upload.seek, 0)
+        await anyio.to_thread.run_sync(
+            storage.put_object_file,
+            photo.object_key,
+            upload,
+            total,
+            photo.content_type,
+            limiter=_image_work_limiter,
+        )
     counter("photo_proxy_upload_total", help=_PROXY_TOTAL_HELP, labels={"outcome": "stored"})
-    log_event(logger, "photo_proxy_stored", photo_id=str(photo_id), bytes=len(raw))
+    log_event(logger, "photo_proxy_stored", photo_id=str(photo_id), bytes=total)

@@ -11,6 +11,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    Integer,
     SmallInteger,
     Text,
     String,
@@ -76,6 +77,9 @@ class Story(Base):
     location_public: Mapped[object] = mapped_column(
         Geometry("POINT", srid=4326, spatial_index=False), nullable=False
     )
+    # stored counters keep discovery reads free of per-row aggregation
+    reaction_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    comment_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     is_hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     # set when reports auto-hide a story; distinguishes report-driven hiding from
     # any other hide and drives the "auto-hidden" state in the reported queue.
@@ -100,7 +104,35 @@ class Story(Base):
 
     __table_args__ = (
         Index("ix_stories_location_public", "location_public", postgresql_using="gist"),
+        # geography queries need a matching functional index
+        Index(
+            "ix_stories_location_public_geog",
+            text("(location_public::geography)"),
+            postgresql_using="gist",
+        ),
         Index("ix_stories_created_at", "created_at"),
         # supports the moderation queue (pending, oldest first) and discovery filters
         Index("ix_stories_moderation_status_created_at", "moderation_status", "created_at"),
+        # trigram indexes prevent sequential scans during search
+        Index(
+            "ix_stories_title_trgm",
+            "title",
+            postgresql_using="gin",
+            postgresql_ops={"title": "gin_trgm_ops"},
+        ),
+        Index(
+            "ix_stories_body_trgm",
+            "body",
+            postgresql_using="gin",
+            postgresql_ops={"body": "gin_trgm_ops"},
+        ),
+        # index only the subset eligible for trending
+        Index(
+            "ix_stories_trending",
+            text("(reaction_count + comment_count) DESC"),
+            text("created_at DESC"),
+            postgresql_where=text(
+                "moderation_status = 'approved' AND visibility = 'public' AND is_hidden = false"
+            ),
+        ),
     )

@@ -31,4 +31,23 @@ class User(Base):
         Index("ix_users_username_lower", func.lower(username)),
         Index("ix_users_first_name_lower", func.lower(first_name)),
         Index("ix_users_last_name_lower", func.lower(last_name)),
+        # mirror existing admin search indexes in model metadata
+        Index(
+            "ix_users_username_trgm",
+            func.lower(username),
+            postgresql_using="gin",
+            postgresql_ops={"lower": "gin_trgm_ops"},
+        ),
+        Index(
+            "ix_users_first_name_trgm",
+            func.lower(first_name),
+            postgresql_using="gin",
+            postgresql_ops={"lower": "gin_trgm_ops"},
+        ),
+        Index(
+            "ix_users_last_name_trgm",
+            func.lower(last_name),
+            postgresql_using="gin",
+            postgresql_ops={"lower": "gin_trgm_ops"},
+        ),
     )

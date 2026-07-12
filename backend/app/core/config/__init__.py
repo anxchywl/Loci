@@ -1,5 +1,5 @@
 from functools import lru_cache
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit, urlunsplit
 
 from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -32,6 +32,13 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 30
 
+    # pool limits apply per api process
+    db_pool_size: int = 10
+    db_max_overflow: int = 10
+    db_pool_timeout_seconds: int = 10
+    # bound query time to protect the connection pool
+    db_statement_timeout_ms: int = 30_000
+
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_db: str = "loci"
@@ -44,6 +51,8 @@ class Settings(BaseSettings):
     redis_db: int = 0
     redis_password: str | None = None
     redis_url: str | None = None
+    celery_broker_url: str | None = None
+    celery_result_backend: str | None = None
 
     s3_endpoint: str = "localhost:9000"
     s3_public_endpoint: str = "http://localhost:9000"
@@ -115,6 +124,28 @@ class Settings(BaseSettings):
         password = quote(self.redis_password, safe="") if self.redis_password else ""
         auth = f":{password}@" if password else ""
         return f"redis://{auth}{self.redis_host}:{self.redis_port}/{self.redis_db}"
+
+    @computed_field
+    @property
+    def celery_broker_dsn(self) -> str:
+        if self.celery_broker_url:
+            return self.celery_broker_url
+        return self._redis_dsn_for_database(1)
+
+    @computed_field
+    @property
+    def celery_result_backend_dsn(self) -> str:
+        if self.celery_result_backend:
+            return self.celery_result_backend
+        return self._redis_dsn_for_database(2)
+
+    def _redis_dsn_for_database(self, database: int) -> str:
+        if self.redis_url:
+            parsed = urlsplit(self.redis_url)
+            return urlunsplit(parsed._replace(path=f"/{database}"))
+        password = quote(self.redis_password, safe="") if self.redis_password else ""
+        auth = f":{password}@" if password else ""
+        return f"redis://{auth}{self.redis_host}:{self.redis_port}/{database}"
 
 
 @lru_cache

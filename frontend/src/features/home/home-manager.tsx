@@ -36,6 +36,8 @@ import { MyStoriesPanel, SavedPanel } from "@/features/profile/story-panels";
 import {
   useBboxStories,
   useCategories,
+  useMapClusters,
+  useMapPins,
   useSearch,
   useTrending,
 } from "@/features/stories/hooks";
@@ -89,8 +91,26 @@ export function HomeManager() {
   const mapViewRef = useRef<MapViewHandle>(null);
 
   const { data: categories = [] } = useCategories();
-  const { data: stories = [] } = useBboxStories(
-    bounds && { ...bounds, categoryId: categoryFilter },
+  // below the threshold the backend aggregates markers into grid clusters —
+  // correct counts at any story volume; above it, individual pins with
+  // client-side clustering. 0 disables server clustering entirely.
+  const serverClusterMaxZoom = Number(process.env.NEXT_PUBLIC_SERVER_CLUSTER_MAX_ZOOM ?? 9);
+  const clusterMode = bounds !== null && bounds.zoom < serverClusterMaxZoom;
+  // zoom is deliberately left out of the pins params: fractional zoom changes
+  // would otherwise churn the query cache key on every pinch
+  const { data: pins = [] } = useMapPins(
+    !clusterMode && bounds
+      ? {
+          minLat: bounds.minLat,
+          minLon: bounds.minLon,
+          maxLat: bounds.maxLat,
+          maxLon: bounds.maxLon,
+          categoryId: categoryFilter,
+        }
+      : null,
+  );
+  const { data: clusters = [] } = useMapClusters(
+    clusterMode && bounds ? { ...bounds, categoryId: categoryFilter } : null,
   );
   const nearbyBounds = nearbyLocation
     ? {
@@ -201,7 +221,13 @@ export function HomeManager() {
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-bg">
-      <MapView ref={mapViewRef} categories={categories} stories={stories} onBoundsChange={setBounds} />
+      <MapView
+        ref={mapViewRef}
+        categories={categories}
+        stories={clusterMode ? [] : pins}
+        clusters={clusterMode ? clusters : []}
+        onBoundsChange={setBounds}
+      />
 
       <DesktopSidebar
         open={sidebarOpen}

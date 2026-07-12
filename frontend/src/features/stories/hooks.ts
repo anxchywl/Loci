@@ -15,6 +15,8 @@ import {
   fetchBboxStories,
   fetchCategories,
   fetchComments,
+  fetchMapClusters,
+  fetchMapPins,
   fetchStory,
   fetchTrending,
   postComment,
@@ -26,6 +28,7 @@ import {
   updateStory,
   uploadStoryPhoto,
   type BboxParams,
+  type ClusterParams,
   type CreateStoryInput,
   type Story,
   type UpdateStoryInput,
@@ -38,8 +41,59 @@ export function useCategories() {
 export function useBboxStories(params: BboxParams | null) {
   return useQuery({
     queryKey: ["stories", "bbox", params],
-    queryFn: () => fetchBboxStories(params!),
+    queryFn: ({ signal }) => fetchBboxStories(params!, signal),
     enabled: params !== null,
+    placeholderData: (previous) => previous,
+  });
+}
+
+// grid step that snaps viewport edges outward so small pans reuse one cache key
+function gridStep(span: number): number {
+  const raw = Math.max(span / 2, 1e-5);
+  const pow = 10 ** Math.floor(Math.log10(raw));
+  const unit = raw / pow;
+  return (unit >= 5 ? 5 : unit >= 2 ? 2 : 1) * pow;
+}
+
+function snap(value: number, step: number, up: boolean): number {
+  const snapped = (up ? Math.ceil(value / step) : Math.floor(value / step)) * step;
+  // fixed precision keeps float noise out of the query key
+  return Number(snapped.toFixed(5));
+}
+
+export function quantizeBounds<T extends BboxParams>(params: T): T {
+  const latStep = gridStep(params.maxLat - params.minLat);
+  const lonStep = gridStep(params.maxLon - params.minLon);
+  return {
+    ...params,
+    minLat: Math.max(-90, snap(params.minLat, latStep, false)),
+    maxLat: Math.min(90, snap(params.maxLat, latStep, true)),
+    minLon: Math.max(-540, snap(params.minLon, lonStep, false)),
+    maxLon: Math.min(540, snap(params.maxLon, lonStep, true)),
+  };
+}
+
+export function useMapPins(params: BboxParams | null) {
+  const quantized = params && quantizeBounds(params);
+  return useQuery({
+    // quantized bounds make consecutive small pans hit the cache instead of the
+    // network; the abort signal cancels superseded requests during fast panning
+    queryKey: ["stories", "map", quantized],
+    queryFn: ({ signal }) => fetchMapPins(quantized!, signal),
+    enabled: quantized !== null,
+    staleTime: 30_000,
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useMapClusters(params: ClusterParams | null) {
+  const quantized = params && { ...quantizeBounds(params), zoom: Math.round(params.zoom) };
+  return useQuery({
+    queryKey: ["stories", "map-clusters", quantized],
+    queryFn: ({ signal }) => fetchMapClusters(quantized!, signal),
+    enabled: quantized !== null,
+    // server-side cache is 60s; matching staleTime avoids pointless refetches
+    staleTime: 60_000,
     placeholderData: (previous) => previous,
   });
 }
@@ -55,7 +109,7 @@ export function useSearch(query: string) {
   const normalized = query.trim().replace(/\s+/g, " ").slice(0, 100);
   return useQuery({
     queryKey: ["stories", "search", normalized],
-    queryFn: () => searchStories(normalized),
+    queryFn: ({ signal }) => searchStories(normalized, signal),
     enabled: normalized.length >= 2,
     placeholderData: (previous) => previous,
   });

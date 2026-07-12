@@ -97,11 +97,14 @@ async def rotate_refresh_token(
     return response, new_value
 
 
-async def logout(db: AsyncSession, refresh_token_value: str) -> None:
+async def logout(db: AsyncSession, refresh_token_value: str):
+    """return the revoked session id for immediate cache invalidation"""
     existing = await refresh_tokens_repo.get_by_hash_for_update(
         db, hash_token(refresh_token_value)
     )
-    if existing is not None:
-        now = datetime.now(UTC)
-        await refresh_tokens_repo.revoke_all_for_session(db, existing.session_id, now)
-        await db.commit()
+    if existing is None:
+        return None
+    now = datetime.now(UTC)
+    await refresh_tokens_repo.revoke_all_for_session(db, existing.session_id, now)
+    await db.commit()
+    return existing.session_id
