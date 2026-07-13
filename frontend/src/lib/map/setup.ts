@@ -202,6 +202,7 @@ export function loadCamera(): SavedCamera | null {
 
 export function createMap(container: HTMLElement, style = MAP_STYLE_URL): MapLibreMap {
   const saved = loadCamera();
+  const minZoom = container.clientWidth < 1024 ? 2 : MIN_ZOOM;
   const center = saved?.center ?? RANDOM_START_CENTERS[Math.floor(Math.random() * RANDOM_START_CENTERS.length)];
   return new maplibregl.Map({
     container,
@@ -210,7 +211,7 @@ export function createMap(container: HTMLElement, style = MAP_STYLE_URL): MapLib
     zoom: saved?.zoom ?? MIN_ZOOM,
     bearing: saved?.bearing ?? 0,
     pitch: saved?.pitch ?? 0,
-    minZoom: MIN_ZOOM,
+    minZoom,
     attributionControl: false,
   });
 }

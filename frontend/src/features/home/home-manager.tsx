@@ -197,8 +197,6 @@ export function HomeManager() {
 
   // keep the map controls in a separated vertical stack on desktop
   const locateBottom = "1.5rem";
-  const zoomBottom = "calc(1.5rem + 48px)";
-  const pinToggleBottom = "calc(1.5rem + 48px + 76px + 8px)";
 
   const openMobilePanel = (panel: Panel) => {
     if (panel === "nearby") {
@@ -423,28 +421,27 @@ export function HomeManager() {
 
           {/* Zoom controls — above locate */}
           <div
-            className="absolute right-3 z-10 flex flex-col overflow-hidden rounded-lg border border-border bg-bg shadow-sm"
-            style={{ bottom: zoomBottom }}
+            className="absolute right-3 bottom-[calc(1.5rem+36px+8px)] z-10 flex flex-col overflow-hidden rounded-lg border border-border bg-bg shadow-sm lg:bottom-[calc(1.5rem+48px)]"
           >
             <button aria-label="Zoom in" onClick={() => mapViewRef.current?.zoomIn()}
-              className="flex h-[38px] w-10 items-center justify-center text-[20px] leading-none text-text transition-colors hover:bg-surface hover:text-accent focus-visible:bg-surface focus-visible:text-accent active:bg-surface">
+              className="flex h-7 w-8 items-center justify-center text-[18px] leading-none text-text transition-colors hover:bg-surface hover:text-accent focus-visible:bg-surface focus-visible:text-accent active:bg-surface lg:h-[38px] lg:w-10 lg:text-[20px]">
               +
             </button>
             <div className="h-px bg-border" />
             <button aria-label="Zoom out" onClick={() => mapViewRef.current?.zoomOut()}
-              className="flex h-[38px] w-10 items-center justify-center text-[20px] leading-none text-text transition-colors hover:bg-surface hover:text-accent focus-visible:bg-surface focus-visible:text-accent active:bg-surface">
+              className="flex h-7 w-8 items-center justify-center text-[18px] leading-none text-text transition-colors hover:bg-surface hover:text-accent focus-visible:bg-surface focus-visible:text-accent active:bg-surface lg:h-[38px] lg:w-10 lg:text-[20px]">
               −
             </button>
           </div>
 
           {/* Pin display toggle — clustered counts vs. every pin visible */}
-          <div className="absolute right-3 z-10 block" style={{ bottom: pinToggleBottom }}>
+          <div className="absolute right-3 bottom-[calc(1.5rem+36px+8px+57px+8px)] z-10 block lg:bottom-[calc(1.5rem+48px+76px+8px)]">
             <button
               aria-label={t.mapView}
               aria-expanded={mapViewOpen}
               title={t.mapView}
               onClick={() => setMapViewOpen(!mapViewOpen)}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-bg text-muted shadow-sm transition-[color,border-color,background-color,transform] duration-150 ease-lm hover:border-accent hover:text-accent active:scale-95"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-bg text-muted shadow-sm transition-[color,border-color,background-color,transform] duration-150 ease-lm hover:border-accent hover:text-accent active:scale-95 lg:h-10 lg:w-10"
             >
               <Layers size={18} />
             </button>
