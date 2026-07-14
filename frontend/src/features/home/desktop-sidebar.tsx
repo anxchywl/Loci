@@ -1,11 +1,14 @@
 "use client";
 
 import {
+  ArrowUpRight,
   Bookmark,
   BookOpen,
   ChevronLeft,
+  FileText,
   Flame,
   Flag,
+  Github,
   Globe,
   Info,
   MapPin,
@@ -42,7 +45,9 @@ import { AppIcon } from "@/components/app-icon";
 import { categoryIcons } from "@/lib/icons/category-glyphs";
 import { type Locale, locales } from "@/lib/i18n/dict";
 import { useDict } from "@/lib/i18n/use-dict";
-import { openTelegramLink } from "@/lib/telegram/init";
+import { openExternalLink, openTelegramLink } from "@/lib/telegram/init";
+import { DocView, docTitlesFrom } from "./doc-view";
+import { legalDocs, type LegalDocId } from "./legal-content";
 import { type Theme, useUiStore } from "@/stores/ui-store";
 
 export type Panel =
@@ -439,14 +444,48 @@ export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void
   );
 }
 
-export function AboutPanel() {
+const REPO_URL = "https://github.com/anxchywl/loci";
+
+function AboutLinkRow({
+  icon,
+  label,
+  external,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  external?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="group flex w-full items-center gap-3 rounded-lg py-2.5 text-left text-[14px] font-medium text-text active:scale-[0.99]"
+    >
+      <span className="flex w-8 shrink-0 items-center justify-center text-muted transition-colors group-hover:text-accent">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1 transition-colors group-hover:text-accent">{label}</span>
+      {external && <ArrowUpRight size={15} className="shrink-0 text-muted transition-colors group-hover:text-accent" />}
+    </button>
+  );
+}
+
+export function AboutPanel({ onOpenDoc }: { onOpenDoc: (id: LegalDocId) => void }) {
   const t = useDict();
+
   const sections = [
     { title: t.aboutWhat, body: t.aboutWhatBody },
     { title: t.aboutHow, body: t.aboutHowBody },
     { title: t.aboutPrivacy, body: t.aboutPrivacyBody },
     { title: t.aboutTelegram, body: t.aboutTelegramBody },
   ];
+
+  const docLinks: { id: LegalDocId; icon: React.ReactNode; label: string }[] = [
+    { id: "privacy", icon: <ShieldCheck size={16} />, label: t.aboutPrivacyPolicy },
+    { id: "terms", icon: <FileText size={16} />, label: t.aboutTerms },
+  ];
+
   return (
     <div className="px-4 py-4">
       <p className="mb-5 text-[15px] font-medium text-muted">{t.aboutTagline}</p>
@@ -458,6 +497,17 @@ export function AboutPanel() {
           </div>
         ))}
       </div>
+
+      <div className="my-5 h-px bg-border" />
+
+      <div className="space-y-0.5">
+        {docLinks.map(({ id, icon, label }) => (
+          <AboutLinkRow key={id} icon={icon} label={label} onClick={() => onOpenDoc(id)} />
+        ))}
+        <AboutLinkRow icon={<Github size={16} />} label={t.aboutGithub} external
+          onClick={() => openExternalLink(REPO_URL)} />
+      </div>
+
       <div className="mt-8 text-center text-[12px] text-muted">Loci · v0.1</div>
     </div>
   );
@@ -480,17 +530,25 @@ export function DesktopSidebar({
   const openStory = useUiStore((s) => s.openStory);
   const requestPanTo = useUiStore((s) => s.requestPanTo);
   const { data: openedStory } = useStory(activePanel === "story" ? storyId : null);
+  const [openDoc, setOpenDoc] = useState<LegalDocId | null>(null);
+  const docTitles = docTitlesFrom(t);
+
+  // A document is a sub-view of the About panel; drop it whenever we leave About.
+  useEffect(() => {
+    if (activePanel !== "about") setOpenDoc(null);
+  }, [activePanel]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (activePanel) onSetActivePanel(null);
+        if (openDoc) setOpenDoc(null);
+        else if (activePanel) onSetActivePanel(null);
         else if (open) onClose();
       }
     };
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [open, onClose, activePanel, onSetActivePanel]);
+  }, [open, onClose, activePanel, onSetActivePanel, openDoc]);
 
   const openPanel = (panel: Panel) => {
     if (!open) onOpen();
@@ -504,6 +562,7 @@ export function DesktopSidebar({
   };
 
   const handleToggle = () => {
+    if (openDoc) { setOpenDoc(null); return; }
     if (activePanel) { onSetActivePanel(null); return; }
     if (open) onClose(); else onOpen();
   };
@@ -565,7 +624,7 @@ export function DesktopSidebar({
               "absolute left-12 text-[15px] font-semibold transition-all duration-[230ms] ease-lm",
               activePanel ? "translate-x-0 opacity-100" : "-translate-x-2 opacity-0 pointer-events-none",
             ].join(" ")}>
-              {activePanel ? panelLabels[activePanel] : ""}
+              {openDoc ? docTitles[openDoc] : activePanel ? panelLabels[activePanel] : ""}
             </div>
           </div>
         </div>
@@ -632,7 +691,15 @@ export function DesktopSidebar({
                 />
               )}
               {activePanel === "profile" && <ProfilePanel />}
-              {activePanel === "about" && <AboutPanel />}
+              {activePanel === "about" && (
+                <div key={openDoc ?? "about"} className="animate-fade-in">
+                  {openDoc ? (
+                    <DocView blocks={legalDocs[openDoc]} />
+                  ) : (
+                    <AboutPanel onOpenDoc={setOpenDoc} />
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

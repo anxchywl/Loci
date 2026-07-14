@@ -28,6 +28,8 @@ import {
   SettingsPanel,
   type Panel,
 } from "@/features/home/desktop-sidebar";
+import { DocView, docTitlesFrom } from "@/features/home/doc-view";
+import { legalDocs, type LegalDocId } from "@/features/home/legal-content";
 import { MapView, type MapBounds, type MapViewHandle } from "@/features/map/map-view";
 import { AddStorySheet } from "@/features/stories/add-story-sheet";
 import { BottomSheet } from "@/features/stories/components/bottom-sheet";
@@ -100,6 +102,7 @@ export function HomeManager() {
   const [activePanel, setActivePanel] = useState<Panel>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<Panel>(null);
+  const [mobileDoc, setMobileDoc] = useState<LegalDocId | null>(null);
   const mapViewOpen = useUiStore((state) => state.mapViewOpen);
   const setMapViewOpen = useUiStore((state) => state.setMapViewOpen);
   const [nearbyLocation, setNearbyLocation] = useState<{ lat: number; lon: number } | null>(null);
@@ -213,8 +216,22 @@ export function HomeManager() {
 
   const closeMobileMenu = () => {
     setMobileMenuOpen(false);
-    window.setTimeout(() => setMobilePanel(null), 250);
+    window.setTimeout(() => {
+      setMobilePanel(null);
+      setMobileDoc(null);
+    }, 250);
   };
+
+  // Cross-fade the sheet content the same way panel navigation does.
+  const runSheetTransition = (fn: () => void) => {
+    if (document.startViewTransition) {
+      document.startViewTransition(() => flushSync(fn));
+    } else {
+      fn();
+    }
+  };
+
+  const docTitles = docTitlesFrom(t);
 
   const mobilePanelTitles: Record<Exclude<Panel, "story" | null>, string> = {
     "my-stories": t.myStories,
@@ -233,6 +250,7 @@ export function HomeManager() {
   }[] = [
     { panel: "saved", label: t.savedStories, icon: <Bookmark size={16} /> },
     { panel: "my-stories", label: t.myStories, icon: <BookOpen size={16} /> },
+    { panel: "about", label: t.about, icon: <Info size={16} /> },
   ];
 
   return (
@@ -485,16 +503,19 @@ export function HomeManager() {
         <BottomSheet
           open={mobileMenuOpen}
           onClose={closeMobileMenu}
-          onBack={mobilePanel ? () => {
-            if (document.startViewTransition) {
-              document.startViewTransition(() => {
-                flushSync(() => setMobilePanel(null));
-              });
-            } else {
-              setMobilePanel(null);
-            }
+          onBack={(mobileDoc || mobilePanel) ? () => {
+            runSheetTransition(() => {
+              if (mobileDoc) setMobileDoc(null);
+              else setMobilePanel(null);
+            });
           } : undefined}
-          title={mobilePanel ? mobilePanelTitles[mobilePanel as Exclude<Panel, "story" | null>] : ""}
+          title={
+            mobileDoc
+              ? docTitles[mobileDoc]
+              : mobilePanel
+                ? mobilePanelTitles[mobilePanel as Exclude<Panel, "story" | null>]
+                : ""
+          }
         >
           {!mobilePanel && (
             <div className="space-y-0.5 px-1 pb-1 animate-fade-in">
@@ -506,12 +527,12 @@ export function HomeManager() {
                 <button
                   key={item.panel}
                   onClick={() => openMobilePanel(item.panel)}
-                  className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14px] font-medium text-text transition-all duration-150 ease-lm hover:bg-surface active:scale-[0.98] active:bg-surface"
+                  className="group flex w-full items-center gap-3 rounded-lg px-1 py-2.5 text-left text-[14px] font-medium text-text transition-colors duration-150 active:scale-[0.99]"
                 >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface text-muted transition-colors group-hover:bg-bg group-hover:text-accent">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center text-muted transition-colors group-hover:text-accent">
                     {item.icon}
                   </span>
-                  <span className="min-w-0 flex-1">{item.label}</span>
+                  <span className="min-w-0 flex-1 transition-colors group-hover:text-accent">{item.label}</span>
                 </button>
               ))}
             </div>
@@ -560,6 +581,15 @@ export function HomeManager() {
                   authenticated={authenticated}
                   onOpen={(story) => { closeMobileMenu(); openStory(story.id); requestPanTo(story.lat, story.lon); }}
                 />
+              )}
+              {mobilePanel === "about" && (
+                <div className="-mx-4">
+                  {mobileDoc ? (
+                    <DocView blocks={legalDocs[mobileDoc]} />
+                  ) : (
+                    <AboutPanel onOpenDoc={(id) => runSheetTransition(() => setMobileDoc(id))} />
+                  )}
+                </div>
               )}
               {mobilePanel === "settings" && (
                 <div className="-mx-4 animate-fade-in">

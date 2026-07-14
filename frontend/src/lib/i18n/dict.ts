@@ -116,6 +116,9 @@ interface Dict {
   aboutPrivacyBody: string;
   aboutTelegram: string;
   aboutTelegramBody: string;
+  aboutPrivacyPolicy: string;
+  aboutTerms: string;
+  aboutGithub: string;
   statusPending: string;
   statusApproved: string;
   statusRejected: string;
@@ -316,13 +319,16 @@ export const dict: Record<Locale, Dict> = {
     themeDark: "Dark",
     aboutTagline: "Your memories on the map.",
     aboutWhat: "What is Loci?",
-    aboutWhatBody: "Loci is a place to pin your personal stories to the real world. Every corner of a city holds memories — a first date, a favourite café, a moment you'll never forget. Loci makes those invisible threads visible.",
+    aboutWhatBody: "Loci is a place to pin your personal stories to the real world. Every corner of a city holds memories: a first date, a favourite café, a moment you'll never forget. Loci makes those invisible threads visible.",
     aboutHow: "How it works",
     aboutHowBody: "Browse the map to find stories from people around you. Tap any pin to read what happened there. To add your own story, drop a pin on a meaningful spot, write about it, and optionally attach photos. You can share it publicly or keep it just for yourself.",
     aboutPrivacy: "Privacy first",
-    aboutPrivacyBody: "Your location is never tracked in the background. When posting, you choose between an exact pin or an approximate one — shown within ~500 m of the real place. Anonymous posting is always available.",
+    aboutPrivacyBody: "Your location is never tracked in the background. When posting, you choose between an exact pin or an approximate one, shown within ~500 m of the real place. Anonymous posting is always available.",
     aboutTelegram: "Built for Telegram",
-    aboutTelegramBody: "Loci runs as a Telegram Mini App. Signing in is instant — no passwords, no forms. Your Telegram account is your identity, and your stories travel with you.",
+    aboutTelegramBody: "Loci runs as a Telegram Mini App. Signing in is instant, with no passwords and no forms. Your Telegram account is your identity, and your stories travel with you.",
+    aboutPrivacyPolicy: "Privacy Policy",
+    aboutTerms: "Terms & Guidelines",
+    aboutGithub: "GitHub",
     statusPending: "Pending review",
     statusApproved: "Approved",
     statusRejected: "Rejected",
@@ -541,6 +547,9 @@ export const dict: Record<Locale, Dict> = {
     aboutPrivacyBody: "Орналасқан жеріңіз фонда ешқашан бақыланбайды. Жариялаған кезде нақты немесе шамамен орынды таңдайсыз — нақты жерден ~500 м шегінде көрсетіледі. Анонимді жариялау әрқашан қолжетімді.",
     aboutTelegram: "Telegram үшін жасалған",
     aboutTelegramBody: "Loci Telegram Mini App ретінде жұмыс істейді. Кіру лезде — пароль де, форма да жоқ. Telegram аккаунтыңыз — сіздің жеке куәлігіңіз.",
+    aboutPrivacyPolicy: "Құпиялылық саясаты",
+    aboutTerms: "Шарттар мен ережелер",
+    aboutGithub: "GitHub",
     statusPending: "Тексерілуде",
     statusApproved: "Мақұлданған",
     statusRejected: "Қабылданбады",
@@ -759,6 +768,9 @@ export const dict: Record<Locale, Dict> = {
     aboutPrivacyBody: "Ваше местоположение никогда не отслеживается в фоне. При публикации вы сами выбираете: точное место или приблизительное — в пределах ~500 м. Анонимная публикация всегда доступна.",
     aboutTelegram: "Создано для Telegram",
     aboutTelegramBody: "Loci работает как Telegram Mini App. Вход мгновенный — никаких паролей и форм. Ваш аккаунт Telegram — это ваша личность.",
+    aboutPrivacyPolicy: "Политика конфиденциальности",
+    aboutTerms: "Условия и правила",
+    aboutGithub: "GitHub",
     statusPending: "На проверке",
     statusApproved: "Одобрено",
     statusRejected: "Отклонено",
