@@ -151,6 +151,25 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       });
     };
 
+    // Emit bounds *during* the zoom/pan, not only after it settles, so the pin/
+    // cluster fetch starts while the camera is still animating and is usually
+    // done by the time it lands. quantizeBounds (in the query hooks) dedupes to a
+    // grid cell so mid-flight emits that don't cross a cell are free, abort
+    // signals cancel superseded requests, and placeholderData keeps the current
+    // pins on screen meanwhile. Trailing-throttled to ~150ms so the parent (and
+    // its react-query keys) re-renders a handful of times during a gesture
+    // instead of once per frame — enough to start the fetch early without churn.
+    const MOVE_THROTTLE_MS = 150;
+    let moveTimer = 0;
+    const emitThrottled = () => {
+      if (moveTimer) return;
+      moveTimer = window.setTimeout(() => {
+        moveTimer = 0;
+        emitBounds();
+      }, MOVE_THROTTLE_MS);
+    };
+    map.on("move", emitThrottled);
+
     map.on("load", () => {
       // Read the *current* theme, not initialIsDarkTheme: preferences may have
       // hydrated (auto → dark) between mount and this async load event, and the
@@ -180,6 +199,10 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     });
 
     map.on("moveend", () => {
+      if (moveTimer) {
+        clearTimeout(moveTimer);
+        moveTimer = 0;
+      }
       emitBounds();
       saveCamera(map);
     });
@@ -192,6 +215,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     });
 
     return () => {
+      if (moveTimer) clearTimeout(moveTimer);
       map.remove();
       mapRef.current = null;
       userMarkerRef.current = null;
