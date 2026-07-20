@@ -401,3 +401,8 @@ Cloudflare R2 in production (zero egress fees), MinIO locally. Both are
 S3-compatible; the backend uses one client with `S3_*` env config. Bucket
 holds photo bytes only — metadata and moderation state live in PostgreSQL.
 Presigned PUT URLs are single-key-scoped and expire in 10 minutes.
+
+## Backup strategy
+
+PostgreSQL is backed up daily via `pg_dump` to a separate R2 bucket with
+30-day retention. Redis is ephemeral (cache + sessions only) and is not backed up.
