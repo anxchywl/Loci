@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ArrowLeft,
   Bookmark,
   BookOpen,
   ChevronLeft,
@@ -30,6 +29,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { useTelegramAuth } from "@/features/auth/hooks";
+import { authorLabel } from "@/features/stories/api";
 import { ReactionButton } from "@/features/stories/components/reaction-button";
 import { StoryListItem } from "@/features/stories/components/story-list-item";
 import { MyStoriesPanel, SavedPanel } from "@/features/profile/story-panels";
@@ -45,7 +45,6 @@ import {
 } from "@/features/stories/hooks";
 import { circularNeighbors } from "@/features/stories/proximity";
 import { AppIcon } from "@/components/app-icon";
-import { categoryIcons } from "@/lib/icons/category-glyphs";
 import { type Locale, locales } from "@/lib/i18n/dict";
 import { useDict } from "@/lib/i18n/use-dict";
 import { openExternalLink, openTelegramLink } from "@/lib/telegram/init";
@@ -167,8 +166,6 @@ function StoryPanel({
   const t = useDict();
   const showToast = useUiStore((state) => state.showToast);
   const openAdjacentStory = useUiStore((s) => s.openAdjacentStory);
-  const goBackStory = useUiStore((s) => s.goBackStory);
-  const storyHistory = useUiStore((s) => s.storyHistory);
   const adjacentPins = useUiStore((s) => s.adjacentPins);
   const requestPanTo = useUiStore((s) => s.requestPanTo);
   const { data: story } = useStory(storyId);
@@ -190,17 +187,7 @@ function StoryPanel({
     requestPanTo(pin.lat, pin.lon);
   };
 
-  const handleBack = () => {
-    const prevId = storyHistory[storyHistory.length - 1];
-    goBackStory();
-    const coords =
-      useUiStore.getState().storyCoords[prevId] ??
-      adjacentPins.find((p) => p.id === prevId);
-    if (coords) requestPanTo(coords.lat, coords.lon);
-  };
-
   const category = categories?.find((c) => c.id === story?.category_id);
-  const Icon = category ? categoryIcons[category.slug] : null;
 
   const confirmAction = () => {
     if (!story) return;
@@ -226,7 +213,8 @@ function StoryPanel({
     }
   };
 
-  if (!story) return <div className="px-4 py-6 text-[13px] text-muted">{t.loading}</div>;
+  // the panel slides in empty rather than flashing a loading label
+  if (!story) return null;
 
   // only approved stories accept reactions/bookmarks — pending/rejected ones are
   // author-only and must not be interactable
@@ -235,54 +223,49 @@ function StoryPanel({
   return (
     <div
       key={confirming ?? "story"}
-      className="space-y-4 px-4 py-3 motion-safe:animate-story-state"
+      className="space-y-3 px-3 py-2 motion-safe:animate-story-state"
     >
-      {!confirming && (prevPin || nextPin || storyHistory.length > 0) && (
-        <div className="flex items-center gap-1">
-          {storyHistory.length > 0 && (
-            <button
-              aria-label={t.backToPreviousStory}
-              onClick={handleBack}
-              className="mr-1 flex h-7 w-7 items-center justify-center rounded-full text-muted transition-colors hover:text-accent focus-visible:text-accent"
-            >
-              <ArrowLeft size={18} />
-            </button>
+      {/* title row: prev / next flank the story title, mirroring the mobile sheet */}
+      <div className="flex items-center gap-1">
+        <button
+          aria-label={t.previousStory}
+          onClick={prevPin && !confirming ? () => goTo(prevPin) : undefined}
+          disabled={!prevPin || !!confirming}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-accent focus-visible:text-accent disabled:opacity-0"
+        >
+          <ChevronLeft size={22} />
+        </button>
+        <div key={storyId} className="min-w-0 flex-1 text-center motion-safe:animate-fade-in">
+          <div
+            className="break-words text-[16px] font-semibold leading-tight"
+            style={category ? { color: category.color } : undefined}
+          >
+            {story.title}
+          </div>
+          {/* anonymous stories carry no byline at all — the slot stays empty */}
+          {authorLabel(story.author) && (
+            <div className="mt-0.5 break-words text-[12px] leading-tight text-muted">
+              {authorLabel(story.author)}
+            </div>
           )}
-          <button
-            aria-label={t.previousStory}
-            onClick={prevPin ? () => goTo(prevPin) : undefined}
-            disabled={!prevPin}
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted transition-colors hover:border-accent hover:text-accent focus-visible:border-accent focus-visible:text-accent disabled:opacity-30"
-          >
-            <ChevronLeft size={15} />
-          </button>
-          <button
-            aria-label={t.nextStory}
-            onClick={nextPin ? () => goTo(nextPin) : undefined}
-            disabled={!nextPin}
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted transition-colors hover:border-accent hover:text-accent focus-visible:border-accent focus-visible:text-accent disabled:opacity-30"
-          >
-            <ChevronRight size={15} />
-          </button>
         </div>
-      )}
-      <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
-        {category && Icon && (
-          <span className="flex items-center gap-1 rounded-full px-2.5 py-1 font-medium text-white"
-            style={{ backgroundColor: category.color }}>
-            <Icon size={13} color="#ffffff" />
-            {t.categories[category.slug]}
-          </span>
-        )}
-        <span>{story.author ? (story.author.username ? `@${story.author.username}` : story.author.first_name) : t.anonymous}</span>
+        <button
+          aria-label={t.nextStory}
+          onClick={nextPin && !confirming ? () => goTo(nextPin) : undefined}
+          disabled={!nextPin || !!confirming}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-accent focus-visible:text-accent disabled:opacity-0"
+        >
+          <ChevronRight size={22} />
+        </button>
       </div>
+      <div className="border-b border-border" />
 
       {story.photos.length > 0 && (
         story.photos.length === 1 ? (
           <div className="relative">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={story.photos[0].thumb_url ?? story.photos[0].url} alt=""
-              className="h-48 w-full rounded-lg object-cover" />
+              className="h-40 w-full rounded-lg object-cover" />
             {story.viewer_is_owner && (
               <button type="button" aria-label={t.deletePhoto} disabled={deletePhoto.isPending}
                 onClick={() => { if (window.confirm(t.deletePhoto)) deletePhoto.mutate(story.photos[0].id); }}
@@ -365,14 +348,16 @@ function StoryPanel({
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-2 border-t border-border pt-3 text-[13px] text-muted">
-        <span className="flex items-center gap-1">
-          <MapPin size={13} />
-          {story.location_precision === "approx" ? "≈" : ""}
-          {story.lat.toFixed(3)}, {story.lon.toFixed(3)}
-        </span>
-        {story.happened_on && <span>{formatDate(story.happened_on)}</span>}
-      </div>
+      {!confirming && (
+        <div className="flex items-center justify-between gap-2 border-t border-border pt-3 text-[13px] text-muted">
+          <span className="flex min-w-0 items-center gap-1 truncate">
+            <MapPin size={13} />
+            {story.location_precision === "approx" ? "≈" : ""}
+            {story.lat.toFixed(3)}, {story.lon.toFixed(3)}
+          </span>
+          {story.happened_on && <span className="shrink-0">{formatDate(story.happened_on)}</span>}
+        </div>
+      )}
     </div>
   );
 }
@@ -610,7 +595,6 @@ export function DesktopSidebar({
   const t = useDict();
   const openStory = useUiStore((s) => s.openStory);
   const requestPanTo = useUiStore((s) => s.requestPanTo);
-  const { data: openedStory } = useStory(activePanel === "story" ? storyId : null);
   const [openDoc, setOpenDoc] = useState<LegalDocId | null>(null);
   const docTitles = docTitlesFrom(t);
 
@@ -653,7 +637,8 @@ export function DesktopSidebar({
     "my-stories": t.myStories,
     profile: t.profile,
     about: t.about,
-    story: openedStory?.title ?? t.loading,
+    // the story panel renders its own title (colored by category) inline
+    story: "",
     trending: t.trending,
     nearby: t.nearby,
     settings: t.themeLabel,
@@ -713,7 +698,9 @@ export function DesktopSidebar({
         <div className="mx-3 h-px shrink-0 bg-border" />
 
         {/* ── Sliding content ── */}
-        <div className="flex-1 overflow-hidden">
+        {/* overflow-clip, not hidden: hidden is still programmatically scrollable,
+            so focusing an edge button (prev/next) would shift the track sideways */}
+        <div className="flex-1 overflow-clip">
           <div
             className="flex h-full transition-transform duration-[230ms] ease-lm will-change-transform"
             style={{ width: "640px", transform: activePanel ? "translateX(-320px)" : "translateX(0)" }}

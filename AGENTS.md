@@ -9,6 +9,7 @@ retroactive security-hardening pass. If a rule below conflicts with a
 request, say so and stop instead of silently picking one.
 
 **Sources of truth** (read before writing code):
+
 - Product rules and business logic: `docs/PRODUCT.md`
 - Infrastructure and deployment: `docs/INFRASTRUCTURE.md`
 - Design system: `docs/DESIGN.md`
@@ -23,6 +24,7 @@ real places on an interactive world map — a living, collective archive of
 human memories, not a social network.
 
 **Design principles (hard constraints):**
+
 - Map-first; stories are always the focus
 - Minimal, clean UI; fast interactions, smooth animations
 - One-tap publishing
@@ -68,7 +70,7 @@ badges, global stats.
 
 ## Repo layout
 
-```
+```text
 backend/
   app/
     api/v1/{feature}/router.py    transport only — no business logic
@@ -123,6 +125,7 @@ Data flow — frontend: `Route → Component → TanStack Query hook → API cli
 ## Pre-implementation checklist
 
 Before any non-trivial task, state:
+
 1. **Docs reviewed** — which files
 2. **Affected files** — exact paths
 3. **Edge cases** — cross-check `docs/PRODUCT.md`
@@ -141,7 +144,8 @@ component-library scaffold and not "AI generated." This section is
 normative, not aspirational: every screen must be checked against it.
 Tokens and exact values live in `docs/DESIGN.md`.
 
-**Icons**
+### Icons
+
 - SVG icons only, from Lucide exclusively (decided Phase 0 — never mix
   sets). No emoji anywhere in the shipped UI — not for categories, not for
   empty states, not for buttons, not in toast/notification copy.
@@ -151,7 +155,10 @@ Tokens and exact values live in `docs/DESIGN.md`.
 - Icons are single-color (`currentColor`) and inherit theme color — never
   multicolor illustrative icon packs, never 3D/skeuomorphic icon sets.
 
-**Anti-slop constraints** — reject a design if it has any of these:
+### Anti-slop constraints
+
+Reject a design if it has any of these:
+
 - Purple-to-blue or purple-to-pink gradients as a primary background or CTA
 - Generic hero illustrations of people/abstract blobs
 - Card-with-shadow-on-everything
@@ -161,7 +168,8 @@ Tokens and exact values live in `docs/DESIGN.md`.
 - Glassmorphism / frosted blur panels as a default surface treatment
 - Stock-photo-style or AI-generated-illustration empty states
 
-**What to do instead**
+### What to do instead
+
 - One accent color per category, a neutral base palette (2–3 grays +
   background), high contrast text. Exact hex values in `docs/DESIGN.md`,
   derived from Telegram theme params so light/dark just works.
@@ -182,6 +190,7 @@ State this check explicitly when reporting the phase.
 ## Rules
 
 ### General
+
 - Never invent fields, tables, routes, APIs, or business logic.
 - Never modify unrelated files; keep changes scoped.
 - Always ask when requirements are incomplete or ambiguous — stop, don't
@@ -189,6 +198,7 @@ State this check explicitly when reporting the phase.
   or visual design decisions not yet in `docs/DESIGN.md`.
 
 ### Backend
+
 - FastAPI; routers are transport-only, no business logic in handlers.
 - No endpoint, request model, or response model invented outside what's documented.
 - Never trust client-provided location precision, visibility, or ownership
@@ -198,6 +208,7 @@ State this check explicitly when reporting the phase.
 - All DB access through `db/repositories/` — no raw queries in services or routers.
 
 ### Frontend
+
 - Next.js App Router, TypeScript strict, Tailwind, Telegram Mini Apps SDK,
   TanStack Query for server state, Zustand only for local UI state.
 - No hardcoded backend URLs, secrets, or Telegram config.
@@ -206,6 +217,7 @@ State this check explicitly when reporting the phase.
 - Follow the Design system on every screen — no exceptions.
 
 ### Database
+
 - PostgreSQL + PostGIS is the source of truth. Never invent tables,
   columns, indexes, or enum values.
 - GiST spatial index on every geometry column used in a query.
@@ -214,12 +226,14 @@ State this check explicitly when reporting the phase.
 - No secrets stored in the DB.
 
 ### API
+
 - Never invent routes/payloads/status codes. Keep contracts stable unless a
   breaking change is explicitly requested.
 - Validate Telegram `initData` per the established pattern — no shortcuts.
 - Rate-limit all write endpoints (`core/security/rate_limit.py`).
 
 ### Docker / Infra
+
 - Docker Compose for local orchestration; dev and prod configs stay
   separate (`docker-compose.yml` vs `docker-compose.prod.yml`).
 - No secrets baked into Dockerfiles or images — env vars only,
@@ -228,6 +242,7 @@ State this check explicitly when reporting the phase.
 - Daily PostgreSQL backup cron from the first prod deploy.
 
 ### Testing
+
 - pytest for every backend endpoint, plus auth and geo-fuzzing logic
   specifically (these are the two things that leak privacy if wrong).
 - A few component tests on frontend critical flows (add story, reaction,
@@ -261,6 +276,7 @@ genuinely surprise a reader. Default to no comment.
 - [ ] `.env.example` updated if new env vars were introduced
 
 ### General code style
+
 - Self-documenting code over comments.
 - snake_case Python, descriptive names over abbreviations.
 - No abstractions, config flags, or generalization for hypothetical future

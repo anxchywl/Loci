@@ -11,7 +11,8 @@ story passes through human moderation before it appears.
 
 ## Features
 
-**For everyone**
+### For everyone
+
 - Interactive world map with clustered markers and category filters (MapLibre GL)
 - Publish a story at a place, with up to several photos, a date, and a category
 - Public or private ("only me") visibility, and optional anonymous authorship
@@ -20,7 +21,8 @@ story passes through human moderation before it appears.
 - Report abusive content; one report per person per story
 - Trilingual UI — English, Kazakh, Russian — with Telegram-native light/dark theming
 
-**For moderators (admin panel)**
+### For moderators (admin panel)
+
 - Review queue: approve or reject pending stories with a reason
 - Reported-content workflow: stories that cross the report threshold are
   auto-hidden (never silently deleted) and queued for human review with the full

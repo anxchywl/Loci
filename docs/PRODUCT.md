@@ -56,6 +56,7 @@ badges, global stats.
 ## Policy decisions (approved 2026-07-10)
 
 ### Location fuzzing
+
 - Approximate mode: random offset within a **250–750 m ring** around the
   exact point, computed server-side before storage.
 - Deterministic per (story ID, exact point): the offset is derived from
@@ -68,6 +69,7 @@ badges, global stats.
   log, or payload.
 
 ### Photos
+
 - Max **5 photos per story**, max **10 MB per file** before processing.
 - Accepted upload types: JPEG, PNG, WebP, HEIC.
 - Async re-encode after upload (Celery): WebP, max edge 2048 px, plus a
@@ -84,6 +86,7 @@ badges, global stats.
   are never eligible for this cleanup.
 
 ### Moderation
+
 - Every public story is **pending** on creation and is only discoverable after an
   admin approves it. Private ("only me") stories skip review. Admins approve or
   reject from the review queue; rejection carries a private reason shown only to
@@ -122,6 +125,7 @@ badges, global stats.
   categories.
 
 ### Rate limits (per user, Redis-backed)
+
 | Action | Limit |
 |---|---|
 | Auth (per IP, transport-level) | 10 / min |
@@ -134,29 +138,34 @@ badges, global stats.
 | Request upload URL | 20 / hour |
 
 ### Auth thresholds
+
 - `initData` with `auth_date` older than **300 s** rejected (same bound the
   `wished` production config enforces).
 - Replayed `initData` hashes rejected via Redis guard.
 - JWT: access **15 min**, refresh **30 days** with rotation.
 
 ### Reactions (decided 2026-07-10)
+
 - Single reaction kind, `heart`; tap to toggle. One reaction per user per
   story (`(story_id, user_id)` primary key).
 - The `type` column exists with default `'heart'` so adding kinds later is
   a data change, not a migration.
 
 ### Text limits (decided 2026-07-10)
+
 - Story title ≤ **120** chars, body ≤ **4000** chars — enforced at the API
   boundary (Phase 4); DB columns are `text`, so limits can change without a
   migration.
 
 ### Localization
+
 - Locales: `en`, `kk`, `ru` (Kazakh uses ISO 639-1 code `kk`).
 - Auto-selected from Telegram `language_code`, falling back to `en`.
 
 ## API contract (grows per phase; never extended without documenting here first)
 
 ### Auth (Phase 3)
+
 | Route | Behavior |
 |---|---|
 | `POST /api/v1/auth/telegram` | Body `{init_data}`. HMAC-validates, rejects stale (>300 s), future-dated, and replayed payloads; upserts the user from the Telegram payload; returns access JWT + user, sets httpOnly `refresh_token` cookie scoped to `/api/v1/auth` |

@@ -39,7 +39,7 @@ export function MyStoriesPanel({ authenticated, onOpen }: PanelProps) {
   }
 
   return (
-    <div className="px-1 animate-fade-in">
+    <div className="px-2 py-2 animate-fade-in">
       {stories.map((story) => (
         <StoryListItem
           key={story.id}

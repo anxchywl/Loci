@@ -139,7 +139,7 @@ export function StorySheet({ authenticated }: StorySheetProps) {
       open
       onClose={closeStory}
       title={confirming === "delete" ? undefined : story?.title}
-      subtitle={story ? authorLabel(story.author) ?? t.anonymous : undefined}
+      subtitle={story ? authorLabel(story.author) ?? undefined : undefined}
       titleColor={category?.color}
       onPrev={prevPin && !confirming ? () => goTo(prevPin) : undefined}
       onNext={nextPin && !confirming ? () => goTo(nextPin) : undefined}
