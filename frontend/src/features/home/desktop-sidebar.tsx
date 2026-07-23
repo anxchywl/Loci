@@ -437,7 +437,7 @@ export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void
             <Link
               href="/admin"
               className={[
-                "flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-bg hover:text-accent focus-visible:bg-bg focus-visible:text-accent",
+                "flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:text-accent focus-visible:text-accent",
                 onSettingsClick ? "" : "ml-auto",
               ].join(" ")}
               aria-label={t.moderation}
@@ -449,7 +449,7 @@ export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void
             <button
               onClick={onSettingsClick}
               aria-label={t.themeLabel}
-              className="ml-auto flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-bg hover:text-accent focus-visible:bg-bg focus-visible:text-accent"
+              className="ml-auto flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:text-accent focus-visible:text-accent"
             >
               <Settings size={18} />
             </button>
