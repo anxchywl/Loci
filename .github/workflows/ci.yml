@@ -193,6 +193,20 @@ jobs:
             echo "NEXT_PUBLIC_SUPPORT_EMAIL=privacy@ci.example" >> .env
           fi
 
+          ensure_build_value() {
+            key="$1"
+            value="$2"
+            if ! grep -Eq "^${key}=.+$" .env; then
+              echo "${key}=${value}" >> .env
+            fi
+          }
+
+          ensure_build_value EMAIL_CODE_SECRET ci-build-email-code-secret-0123456789
+          ensure_build_value EMAIL_HOST smtp.ci.example.com
+          ensure_build_value EMAIL_USERNAME ci-placeholder
+          ensure_build_value EMAIL_PASSWORD ci-placeholder
+          ensure_build_value EMAIL_FROM 'Loci <noreply@ci.example.com>'
+
       - name: Require public support contact in the web image
         run: |
           SUPPORT_EMAIL=$(sed -n 's/^NEXT_PUBLIC_SUPPORT_EMAIL=//p' .env | tail -n 1)
