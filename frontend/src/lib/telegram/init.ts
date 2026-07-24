@@ -84,6 +84,11 @@ export async function initTelegram(): Promise<TelegramLaunch | null> {
   return null;
 }
 
+/** true only inside a Telegram client, where the app runs in an embedded webview */
+export function isTelegramWebApp(): boolean {
+  return webApp() !== null;
+}
+
 export function openTelegramLink(url: string): boolean {
   const tg = webApp();
   if (tg?.openTelegramLink) {

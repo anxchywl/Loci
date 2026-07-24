@@ -6,5 +6,8 @@ export function currentAuthRedirectTarget(): string {
   const storyId = useUiStore.getState().openStoryId;
   target.searchParams.delete("auth");
   if (storyId) target.searchParams.set("story", storyId);
-  return `${target.pathname}${target.search}${target.hash}`;
+  // the hash is dropped deliberately: in the mini app it holds Telegram's
+  // launch payload (tgWebAppData…), which is both useless as a destination and
+  // long enough to blow past the redirect parameter's length limit
+  return `${target.pathname}${target.search}`;
 }

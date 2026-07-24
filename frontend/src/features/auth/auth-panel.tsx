@@ -75,7 +75,9 @@ export function AuthPanel() {
 
   const onGoogle = () =>
     run(async () => {
-      await startGoogleLogin(currentAuthRedirectTarget());
+      // in Telegram the provider page opens outside the app, so say where it went
+      const handoff = await startGoogleLogin(currentAuthRedirectTarget());
+      if (handoff === "external") setNotice(t.continueInBrowser);
     });
 
   const onLogin = () =>

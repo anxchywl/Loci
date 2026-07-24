@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
 import { useTelegramAuth } from "@/features/auth/hooks";
@@ -108,6 +108,9 @@ export function HomeManager() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<Panel>(null);
   const [mobileDoc, setMobileDoc] = useState<LegalDocId | null>(null);
+  // account steps (log out, remove a device, add a method, delete the account)
+  // borrow the sheet's header instead of expanding inside the list
+  const [settingsView, setSettingsView] = useState<{ title: string; onBack: () => void } | null>(null);
   const mobileCloseTimer = useRef<number | null>(null);
   const mapViewOpen = useUiStore((state) => state.mapViewOpen);
   const setMapViewOpen = useUiStore((state) => state.setMapViewOpen);
@@ -248,6 +251,7 @@ export function HomeManager() {
     mobileCloseTimer.current = window.setTimeout(() => {
       setMobilePanel(null);
       setMobileDoc(null);
+      setSettingsView(null);
       mobileCloseTimer.current = null;
     }, 250);
   };
@@ -261,6 +265,14 @@ export function HomeManager() {
     }
   };
 
+  // the sheet lends its header to the account steps: they set the title and the
+  // back target, and their content swaps inside the same view transition
+  const settingsSheet = useMemo(
+    () => ({ setView: setSettingsView, transition: runSheetTransition }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- both are stable
+    [],
+  );
+
   const docTitles = docTitlesFrom(t);
 
   const mobilePanelTitles: Record<Exclude<Panel, "story" | null>, string> = {
@@ -270,7 +282,7 @@ export function HomeManager() {
     profile: t.profile,
     nearby: t.nearby,
     trending: t.trending,
-    settings: t.themeLabel,
+    settings: t.settings,
   };
 
   const mobileMenuItems: {
@@ -537,19 +549,21 @@ export function HomeManager() {
         <BottomSheet
           open={mobileMenuOpen}
           onClose={closeMobileMenu}
-          scrollKey={mobileDoc}
-          onBack={(mobileDoc || mobilePanel) ? () => {
-            runSheetTransition(() => {
-              if (mobileDoc) setMobileDoc(null);
-              else setMobilePanel(null);
-            });
+          scrollKey={mobileDoc ?? settingsView?.title ?? null}
+          onBack={(mobileDoc || settingsView || mobilePanel) ? () => {
+            if (mobileDoc) { runSheetTransition(() => setMobileDoc(null)); return; }
+            // the step owns its own dismissal, which also runs the transition
+            if (settingsView) { settingsView.onBack(); return; }
+            runSheetTransition(() => setMobilePanel(null));
           } : undefined}
           title={
             mobileDoc
               ? docTitles[mobileDoc]
-              : mobilePanel
-                ? mobilePanelTitles[mobilePanel as Exclude<Panel, "story" | null>]
-                : ""
+              : settingsView
+                ? settingsView.title
+                : mobilePanel
+                  ? mobilePanelTitles[mobilePanel as Exclude<Panel, "story" | null>]
+                  : ""
           }
         >
           {!mobilePanel && (
@@ -621,7 +635,7 @@ export function HomeManager() {
               )}
               {mobilePanel === "settings" && (
                 <div className="-mx-4 animate-fade-in">
-                  <SettingsPanel />
+                  <SettingsPanel includeAccount sheet={settingsSheet} stepActive={settingsView !== null} />
                 </div>
               )}
             </div>

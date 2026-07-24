@@ -18,6 +18,13 @@ CALLBACK = "/api/v1/auth/google/callback"
 EMAIL_LINK_START = "/api/v1/auth/identities/email/start"
 EMAIL_LINK_VERIFY = "/api/v1/auth/identities/email/verify"
 PASSWORD = "a strong enough passphrase"
+PHONE_UA = (
+    "Mozilla/5.0 (Linux; Android 13; SM-A536E; wv) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Version/4.0 Chrome/137.0.7151.72 Mobile Safari/537.36"
+)
+LAPTOP_UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+)
 
 
 async def _fake_google(client, fake_redis, monkeypatch, sub, email="g@example.com"):
@@ -140,11 +147,11 @@ async def test_recent_auth_required_for_unlink(client, db_session, fake_redis, m
 
 
 async def test_sessions_list_and_revoke_other(client, db_session):
-    await authenticate(client, telegram_id=1)  # session A (kept as current below)
+    await authenticate(client, telegram_id=1, user_agent=PHONE_UA)  # session A
     first_sessions = (await client.get(SESSIONS)).json()
     session_a = first_sessions[0]["id"]
 
-    await authenticate(client, telegram_id=1)  # session B, now current
+    await authenticate(client, telegram_id=1, user_agent=LAPTOP_UA)  # session B, now current
     sessions = (await client.get(SESSIONS)).json()
     assert len(sessions) == 2
 
@@ -157,6 +164,44 @@ async def test_sessions_list_and_revoke_other(client, db_session):
         )
     ).scalars().all()
     assert active == []
+
+
+async def test_repeat_sign_in_from_same_device_reuses_its_session(client, db_session):
+    # a telegram webview that dropped the refresh cookie re-authenticates on every
+    # launch; those launches must not pile up as separate devices
+    await authenticate(client, telegram_id=1, user_agent=PHONE_UA)
+    opened = (await client.get(SESSIONS)).json()
+    await authenticate(client, telegram_id=1, user_agent=PHONE_UA)
+    await authenticate(client, telegram_id=1, user_agent=PHONE_UA)
+
+    sessions = (await client.get(SESSIONS)).json()
+    assert [s["id"] for s in sessions] == [opened[0]["id"]]
+    assert sessions[0]["current"] is True
+    # three logins, one session, and its lifetime still starts at the first
+    tokens = (await db_session.execute(select(RefreshToken))).scalars().all()
+    assert len({t.session_id for t in tokens}) == 1
+    assert sessions[0]["created_at"] == opened[0]["created_at"]
+
+
+async def test_session_reports_device_details_from_user_agent(client):
+    await authenticate(client, telegram_id=1, user_agent=PHONE_UA)
+    session = (await client.get(SESSIONS)).json()[0]
+
+    assert session["device_type"] == "mobile"
+    assert session["device_model"] == "SM-A536E"
+    assert session["browser"] == "Chrome"
+    assert session["browser_version"] == "137"
+    assert session["operating_system"] == "Android"
+    assert session["os_version"] == "13"
+    assert session["in_app"] is True
+
+
+async def test_unidentified_clients_get_their_own_sessions(client):
+    # nothing distinguishes two callers that send no user agent, so they must not
+    # be merged into one device entry
+    await authenticate(client, telegram_id=1, user_agent="")
+    await authenticate(client, telegram_id=1, user_agent="")
+    assert len((await client.get(SESSIONS)).json()) == 2
 
 
 async def test_revoke_other_users_session_is_404(client, db_session):
@@ -175,7 +220,7 @@ async def test_revoke_other_users_session_is_404(client, db_session):
 
 async def test_logout_everywhere_revokes_all_and_clears_cookie(client, db_session):
     await authenticate(client, telegram_id=1)
-    await authenticate(client, telegram_id=1)  # two sessions
+    await authenticate(client, telegram_id=1)  # a second login on the same session
     resp = await client.post("/api/v1/auth/logout-all")
     assert resp.status_code == 204
 

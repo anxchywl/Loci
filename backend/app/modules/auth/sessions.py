@@ -7,9 +7,32 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import session_cache
+from app.core.security.session_metadata import describe_user_agent
 from app.db.repositories import audit as audit_repo
 from app.db.repositories import refresh_tokens as refresh_tokens_repo
 from app.modules.auth.schemas import SessionSummary
+
+
+def _summarize(row, current_session_id: uuid.UUID | None) -> SessionSummary:
+    # device details are re-derived from the stored user agent so older sessions
+    # benefit from parser improvements; the columns captured at sign-in are the
+    # fallback for rows whose user agent was never recorded
+    described = describe_user_agent(row.user_agent_summary)
+    known = bool(row.user_agent_summary) and row.user_agent_summary != "unknown"
+    return SessionSummary(
+        id=str(row.session_id),
+        current=row.session_id == current_session_id,
+        active=bool(row.active),
+        created_at=row.created_at,
+        last_used_at=row.last_used_at,
+        device_type=described.device_type if known else row.device_type,
+        device_model=described.device_model,
+        browser=described.browser if known else row.browser,
+        browser_version=described.browser_version,
+        operating_system=described.operating_system if known else row.operating_system,
+        os_version=described.os_version,
+        in_app=described.in_app,
+    )
 
 
 async def list_sessions(
@@ -17,19 +40,7 @@ async def list_sessions(
 ) -> list[SessionSummary]:
     now = datetime.now(UTC)
     rows = await refresh_tokens_repo.list_sessions(db, user_id, now)
-    summaries = [
-        SessionSummary(
-            id=str(row.session_id),
-            current=row.session_id == current_session_id,
-            active=row.revoked_at is None and row.expires_at > now,
-            created_at=row.created_at,
-            last_used_at=row.last_used_at,
-            device_type=row.device_type,
-            browser=row.browser,
-            operating_system=row.operating_system,
-        )
-        for row in rows
-    ]
+    summaries = [_summarize(row, current_session_id) for row in rows]
     # active first, then most recently used
     summaries.sort(key=lambda s: (s.active, s.last_used_at), reverse=True)
     return summaries

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, LogOut, Monitor, Smartphone, Trash2 } from "lucide-react";
+import { Loader2, LogOut, Monitor, Smartphone, Tablet, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 
 import {
@@ -10,32 +10,132 @@ import {
   fetchAuthProviders,
   eraseAccount,
   logout,
-  logoutEverywhere,
   revokeSession,
   startEmailLink,
   startGoogleLink,
   unlinkIdentity,
   verifyEmailLink,
   type IdentitySummary,
+  type SessionSummary,
 } from "@/features/auth/api";
+import { SettingsRow, SettingsSection } from "@/components/settings-section";
 import { signOutState } from "@/features/auth/hooks";
 import { currentAuthRedirectTarget } from "@/features/auth/redirect";
 import { ApiError } from "@/lib/api";
+import type { AuthStrings } from "@/lib/i18n/dict";
 import { useDict } from "@/lib/i18n/use-dict";
 import { useAuthStore } from "@/stores/auth-store";
+import { useUiStore } from "@/stores/ui-store";
 
 const PROVIDERS: IdentitySummary["provider"][] = ["telegram", "google", "email"];
 const ACCOUNT_ERASURE_PHRASE = "DELETE MY ACCOUNT";
 
-export function AccountSettings() {
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+function relativeTime(iso: string, locale: string): string {
+  const elapsed = Date.now() - new Date(iso).getTime();
+  const format = (value: number, unit: Intl.RelativeTimeFormatUnit) =>
+    new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(-value, unit);
+  if (elapsed < HOUR) return format(Math.max(1, Math.round(elapsed / MINUTE)), "minute");
+  if (elapsed < DAY) return format(Math.round(elapsed / HOUR), "hour");
+  if (elapsed < 30 * DAY) return format(Math.round(elapsed / DAY), "day");
+  return format(Math.round(elapsed / (30 * DAY)), "month");
+}
+
+/** "Other" is the parser giving up — show nothing rather than a meaningless word. */
+const known = (value: string | null | undefined) =>
+  value && value !== "Other" ? value : null;
+
+function deviceLines(session: SessionSummary, t: AuthStrings) {
+  const deviceTypes: Record<string, string> = {
+    mobile: t.devicePhone,
+    tablet: t.deviceTablet,
+    desktop: t.deviceComputer,
+  };
+  const device = session.device_model ?? deviceTypes[session.device_type ?? ""] ?? null;
+  const os = [known(session.operating_system), session.os_version].filter(Boolean).join(" ");
+  const browser = [known(session.browser), session.browser_version].filter(Boolean).join(" ");
+  return {
+    device: [device, os].filter(Boolean).join(" · ") || t.unknownDevice,
+    client: [browser, session.in_app ? t.inAppBrowser : null].filter(Boolean).join(" · "),
+  };
+}
+
+function SessionRow({
+  session,
+  onRevoke,
+}: {
+  session: SessionSummary;
+  onRevoke: () => void;
+}) {
+  const t = useDict().auth;
+  const locale = useUiStore((state) => state.locale);
+  const { device, client } = deviceLines(session, t);
+  const Icon =
+    session.device_type === "mobile" ? Smartphone : session.device_type === "tablet" ? Tablet : Monitor;
+
+  return (
+    <SettingsRow>
+      <Icon size={17} className="shrink-0 text-muted" />
+      <div className="min-w-0">
+        <div className="truncate text-[15px] font-medium leading-snug">{device}</div>
+        {client && <div className="truncate text-[12px] leading-snug text-muted">{client}</div>}
+        {/* one fact per line: a narrow phone truncates anything longer */}
+        <div className="truncate text-[12px] leading-snug">
+          {session.current ? (
+            <>
+              <span className="text-accent">{t.thisDevice}</span>
+              <span className="text-muted"> · {t.signedIn} {relativeTime(session.created_at, locale)}</span>
+            </>
+          ) : (
+            <span className="text-muted">
+              {t.lastActive} {relativeTime(session.last_used_at, locale)}
+            </span>
+          )}
+        </div>
+      </div>
+      {!session.current && (
+        <button
+          onClick={onRevoke}
+          className="ml-auto shrink-0 self-start text-[13px] font-medium text-muted transition-colors hover:text-[var(--lm-danger,#dc2626)]"
+        >
+          {t.remove}
+        </button>
+      )}
+    </SettingsRow>
+  );
+}
+
+/** every step that leaves the list behind and takes over the panel */
+type Confirm =
+  | { kind: "log-out" }
+  | { kind: "remove-device"; session: SessionSummary }
+  | { kind: "remove-method"; provider: IdentitySummary["provider"] }
+  | { kind: "add-method"; provider: "google" | "email" }
+  | { kind: "delete-account" };
+
+/** how a host sheet lends its header to one of those steps */
+export interface SettingsSheet {
+  /** null restores the host's own title and back behaviour */
+  setView: (view: { title: string; onBack: () => void } | null) => void;
+  /** applies the swap inside the host's view transition, so both animate as one */
+  transition: (apply: () => void) => void;
+}
+
+/**
+ * `sheet` is passed by surfaces that can give a step its own header and back
+ * button (the mobile bottom sheet). Without it — the desktop panel — the step
+ * takes over the panel body and carries its own cancel control instead.
+ */
+export function AccountSettings({ sheet }: { sheet?: SettingsSheet } = {}) {
   const t = useDict().auth;
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
-  const [addingEmail, setAddingEmail] = useState(false);
-  const [confirmProvider, setConfirmProvider] = useState<IdentitySummary["provider"] | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [accountActionPending, setAccountActionPending] = useState(false);
-  const [deletionOpen, setDeletionOpen] = useState(false);
-  const [deletionConfirmation, setDeletionConfirmation] = useState("");
   const returnNotice = useAuthStore((state) => state.returnNotice);
   const setReturnNotice = useAuthStore((state) => state.setReturnNotice);
 
@@ -50,11 +150,29 @@ export function AccountSettings() {
   const providerName = (p: IdentitySummary["provider"]) =>
     p === "telegram" ? t.telegram : p === "google" ? t.google : t.emailProvider;
 
+  const apply = (fn: () => void) => (sheet ? sheet.transition(fn) : fn());
+
+  const closeConfirm = () =>
+    apply(() => {
+      setConfirm(null);
+      setError(null);
+      setNotice(null);
+      sheet?.setView(null);
+    });
+
+  const openConfirm = (next: Confirm, title: string) =>
+    apply(() => {
+      setConfirm(next);
+      setError(null);
+      setNotice(null);
+      sheet?.setView({ title, onBack: closeConfirm });
+    });
+
   const unlink = useMutation({
     mutationFn: unlinkIdentity,
-    onSuccess: () => {
-      setConfirmProvider(null);
-      return qc.invalidateQueries({ queryKey: ["identities"] });
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["identities"] });
+      closeConfirm();
     },
     onError: (err) => {
       if (err instanceof ApiError && err.status === 403) setError(t.reauthNeeded);
@@ -66,15 +184,20 @@ export function AccountSettings() {
 
   const revoke = useMutation({
     mutationFn: revokeSession,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["sessions"] }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["sessions"] });
+      closeConfirm();
+    },
     onError: () => setError(t.accountActionError),
   });
 
   const linked = new Map((identities.data ?? []).map((i) => [i.provider, i]));
+  const activeSessions = (sessions.data ?? []).filter((s) => s.active);
 
   async function runAccountAction(action: () => Promise<void>) {
     setAccountActionPending(true);
     setError(null);
+    setNotice(null);
     setReturnNotice(null);
     try {
       await action();
@@ -91,8 +214,15 @@ export function AccountSettings() {
     setAccountActionPending(true);
     setError(null);
     setReturnNotice(null);
+    setNotice(null);
     try {
-      await startGoogleLink(currentAuthRedirectTarget());
+      // outside Telegram this navigates away; inside, Google opens in a real
+      // browser (it rejects webviews) and the link lands when the user returns —
+      // the app revalidates its queries on focus, so the row updates itself
+      if ((await startGoogleLink(currentAuthRedirectTarget())) === "external") {
+        setNotice(t.continueInBrowser);
+        setAccountActionPending(false);
+      }
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) setError(t.reauthNeeded);
       else if (err instanceof ApiError && err.status === 409) setError(t.providerConflict);
@@ -112,23 +242,48 @@ export function AccountSettings() {
     window.location.assign("/profile");
   }
 
-  async function deleteAccount() {
-    setAccountActionPending(true);
-    setError(null);
-    try {
-      await eraseAccount(deletionConfirmation);
-      signOutState();
-      window.location.assign("/");
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 403) setError(t.reauthNeeded);
-      else setError(t.deleteAccountError);
-    } finally {
-      setAccountActionPending(false);
-    }
+  const errorBanner = error ? (
+    <div className="flex flex-col gap-2">
+      <p role="alert" className="text-[13px] text-[var(--lm-danger,#dc2626)]">{error}</p>
+      {error === t.reauthNeeded && (
+        <button
+          disabled={accountActionPending}
+          onClick={() => void reauthenticate()}
+          className="self-start text-[13px] font-semibold text-accent disabled:opacity-60"
+        >
+          {t.reauthAction}
+        </button>
+      )}
+    </div>
+  ) : null;
+
+  if (confirm) {
+    return (
+      <ConfirmStep
+        confirm={confirm}
+        providerName={providerName}
+        pending={accountActionPending || unlink.isPending || revoke.isPending}
+        banner={errorBanner}
+        notice={notice}
+        // a back button in the host's header replaces the cancel control
+        onCancel={sheet ? undefined : closeConfirm}
+        onConfirm={() => {
+          setError(null);
+          if (confirm.kind === "log-out") void runAccountAction(logout);
+          else if (confirm.kind === "remove-device") revoke.mutate(confirm.session.id);
+          else if (confirm.kind === "remove-method") unlink.mutate(confirm.provider);
+          else if (confirm.kind === "add-method") void addGoogle();
+        }}
+        onEmailLinked={() => {
+          void qc.invalidateQueries({ queryKey: ["identities"] });
+          closeConfirm();
+        }}
+      />
+    );
   }
 
   return (
-    <div className="mt-6 flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       {error && (
         <div className="flex flex-col gap-2">
           <p role="alert" className="text-[13px] text-[var(--lm-danger,#dc2626)]">{error}</p>
@@ -143,26 +298,26 @@ export function AccountSettings() {
           )}
         </div>
       )}
+      {notice && <p role="status" className="px-1 text-[13px] text-muted">{notice}</p>}
       {!error && returnNotice === "error" && <p role="alert" className="text-[13px] text-[var(--lm-danger,#dc2626)]">{t.genericError}</p>}
       {!error && returnNotice === "cancelled" && <p role="status" className="text-[13px] text-muted">{t.cancelled}</p>}
 
-      <section>
-        <h2 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-muted">{t.methods}</h2>
-        <div className="divide-y divide-border rounded-lg border border-border">
+      <SettingsSection title={t.methods}>
+        <>
           {identities.isPending && (
-            <div role="status" className="flex items-center justify-center gap-2 px-3 py-6 text-[13px] text-muted">
+            <div role="status" className="flex items-center justify-center gap-2 px-3.5 py-6 text-[13px] text-muted">
               <Loader2 size={15} className="animate-spin" /> {t.loadingAccount}
             </div>
           )}
           {identities.isError && (
-            <p role="alert" className="px-3 py-4 text-[13px] text-[var(--lm-danger,#dc2626)]">{t.accountLoadError}</p>
+            <p role="alert" className="px-3.5 py-4 text-[13px] text-[var(--lm-danger,#dc2626)]">{t.accountLoadError}</p>
           )}
           {identities.isSuccess && PROVIDERS.filter(
             (provider) => provider !== "google" || providers.data?.google,
           ).map((provider) => {
             const identity = linked.get(provider);
             return (
-              <div key={provider} className="flex items-center gap-3 px-3 py-2.5">
+              <SettingsRow key={provider}>
                 <div className="min-w-0">
                   <div className="text-[15px] font-medium">{providerName(provider)}</div>
                   {identity?.email && <div className="truncate text-[12px] text-muted">{identity.email}</div>}
@@ -170,146 +325,252 @@ export function AccountSettings() {
                 <div className="ml-auto">
                   {identity ? (
                     (identities.data?.length ?? 0) > 1 ? (
-                      confirmProvider === provider ? (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setConfirmProvider(null)}
-                            className="text-[13px] text-muted transition-colors hover:text-text"
-                          >
-                            {t.cancel}
-                          </button>
-                          <button
-                            disabled={unlink.isPending}
-                            onClick={() => { setError(null); unlink.mutate(provider); }}
-                            className="text-[13px] font-semibold text-[var(--lm-danger,#dc2626)] disabled:opacity-60"
-                          >
-                            {t.confirmRemove}
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => { setError(null); setConfirmProvider(provider); }}
-                          className="text-[13px] font-medium text-muted transition-colors hover:text-[var(--lm-danger,#dc2626)]"
-                        >
-                          {t.remove}
-                        </button>
-                      )
+                      <button
+                        onClick={() =>
+                          openConfirm({ kind: "remove-method", provider }, t.removeMethodTitle)
+                        }
+                        className="text-[13px] font-medium text-muted transition-colors hover:text-[var(--lm-danger,#dc2626)]"
+                      >
+                        {t.remove}
+                      </button>
                     ) : (
                       <span className="text-[13px] text-muted">{t.connected}</span>
                     )
-                  ) : provider === "google" ? (
-                    <button disabled={accountActionPending} onClick={addGoogle} className="text-[13px] font-semibold text-accent disabled:opacity-60">{t.add}</button>
-                  ) : provider === "email" ? (
-                    <button onClick={() => setAddingEmail((v) => !v)} className="text-[13px] font-semibold text-accent">{t.add}</button>
+                  ) : provider === "google" || provider === "email" ? (
+                    <button
+                      onClick={() =>
+                        openConfirm(
+                          { kind: "add-method", provider },
+                          `${t.add} ${providerName(provider)}`,
+                        )
+                      }
+                      className="text-[13px] font-semibold text-accent"
+                    >
+                      {t.add}
+                    </button>
                   ) : null}
                 </div>
-              </div>
+              </SettingsRow>
             );
           })}
-        </div>
-        {addingEmail && !linked.get("email") && (
-          <AddEmail onDone={() => { setAddingEmail(false); qc.invalidateQueries({ queryKey: ["identities"] }); }} />
-        )}
-      </section>
+        </>
+      </SettingsSection>
 
-      <section>
-        <h2 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-muted">{t.sessions}</h2>
-        <div className="divide-y divide-border rounded-lg border border-border">
+      <SettingsSection title={t.sessions}>
+        <>
           {sessions.isPending && (
-            <div role="status" className="flex items-center justify-center gap-2 px-3 py-6 text-[13px] text-muted">
+            <div role="status" className="flex items-center justify-center gap-2 px-3.5 py-6 text-[13px] text-muted">
               <Loader2 size={15} className="animate-spin" /> {t.loadingAccount}
             </div>
           )}
           {sessions.isError && (
-            <p role="alert" className="px-3 py-4 text-[13px] text-[var(--lm-danger,#dc2626)]">{t.accountLoadError}</p>
+            <p role="alert" className="px-3.5 py-4 text-[13px] text-[var(--lm-danger,#dc2626)]">{t.accountLoadError}</p>
           )}
-          {sessions.isSuccess && sessions.data.length === 0 && (
-            <p className="px-3 py-4 text-[13px] text-muted">{t.noSessions}</p>
+          {/* revoked and expired sessions are nothing the user can act on — the
+              section is about the devices that can reach the account right now */}
+          {sessions.isSuccess && activeSessions.length === 0 && (
+            <p className="px-3.5 py-4 text-[13px] text-muted">{t.noSessions}</p>
           )}
-          {sessions.data?.map((s) => (
-            <div key={s.id} className="flex items-center gap-3 px-3 py-2.5">
-              {s.device_type === "mobile" ? <Smartphone size={16} className="text-muted" /> : <Monitor size={16} className="text-muted" />}
-              <div className="min-w-0">
-                <div className="text-[14px]">{[s.browser, s.operating_system].filter(Boolean).join(" · ") || "—"}</div>
-                {s.current && <div className="text-[12px] text-accent">{t.thisDevice}</div>}
-              </div>
-              {!s.current && s.active && (
-                <button onClick={() => revoke.mutate(s.id)} className="ml-auto text-[13px] font-medium text-muted transition-colors hover:text-[var(--lm-danger,#dc2626)]">{t.remove}</button>
-              )}
-            </div>
+          {activeSessions.map((s) => (
+            <SessionRow
+              key={s.id}
+              session={s}
+              onRevoke={() => openConfirm({ kind: "remove-device", session: s }, t.removeDeviceTitle)}
+            />
           ))}
-        </div>
-      </section>
+        </>
+      </SettingsSection>
 
-      <div className="flex flex-col gap-2">
-        <button
-          disabled={accountActionPending}
-          onClick={() => runAccountAction(logout)}
-          className="flex items-center justify-center gap-2 rounded-lg border border-border px-3 py-2.5 text-[15px] font-medium transition-colors hover:border-accent"
-        >
-          {accountActionPending ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />} {t.logOut}
-        </button>
-        <button
-          disabled={accountActionPending}
-          onClick={() => runAccountAction(logoutEverywhere)}
-          className="text-[13px] text-muted transition-colors hover:text-text disabled:opacity-60"
-        >
-          {t.logOutEverywhere}
-        </button>
-      </div>
+      <button
+        onClick={() => openConfirm({ kind: "log-out" }, t.logOut)}
+        className="flex w-full items-center gap-3 rounded-2xl bg-surface px-3.5 py-2.5 text-left text-[15px] font-medium transition-colors hover:text-accent"
+      >
+        <LogOut size={17} /> {t.logOut}
+      </button>
 
-      <section>
-        <h2 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-muted">{t.dangerZone}</h2>
-        <div className="rounded-lg border border-border p-3">
+      <SettingsSection title={t.dangerZone} framed={false}>
+        <div className="rounded-2xl bg-surface p-3">
           <div className="text-[15px] font-medium">{t.deleteAccount}</div>
-          <p className="mt-1 text-[13px] text-muted">{t.deleteAccountDescription}</p>
-          {!deletionOpen ? (
-            <button
-              onClick={() => setDeletionOpen(true)}
-              className="mt-3 flex items-center gap-2 text-[13px] font-semibold text-[var(--lm-danger,#dc2626)]"
-            >
-              <Trash2 size={15} /> {t.deleteAccount}
-            </button>
-          ) : (
-            <div className="mt-3 border-t border-border pt-3">
-              <p className="text-[13px] font-medium text-[var(--lm-danger,#dc2626)]">{t.deleteAccountWarning}</p>
-              <label className="mt-3 block text-[13px] text-muted" htmlFor="account-erasure-confirmation">
-                {t.deleteConfirmationLabel} <span className="font-mono text-text">{ACCOUNT_ERASURE_PHRASE}</span>
-              </label>
-              <input
-                id="account-erasure-confirmation"
-                value={deletionConfirmation}
-                onChange={(event) => setDeletionConfirmation(event.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-                className="mt-2 w-full rounded-lg border border-border bg-bg px-3 py-2 text-[15px] outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-[var(--lm-focus)]"
-              />
-              <div className="mt-3 flex gap-2">
-                <button
-                  disabled={accountActionPending}
-                  onClick={() => { setDeletionOpen(false); setDeletionConfirmation(""); }}
-                  className="flex-1 rounded-lg border border-border px-3 py-2 text-[14px]"
-                >
-                  {t.cancel}
-                </button>
-                <button
-                  disabled={deletionConfirmation !== ACCOUNT_ERASURE_PHRASE || accountActionPending}
-                  onClick={() => void deleteAccount()}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[var(--lm-danger,#dc2626)] px-3 py-2 text-[14px] font-semibold text-white disabled:opacity-40"
-                >
-                  {accountActionPending && <Loader2 size={15} className="animate-spin" />}
-                  {t.deleteAccountAction}
-                </button>
-              </div>
-            </div>
-          )}
+          <p className="mt-0.5 text-[13px] leading-snug text-muted">{t.deleteAccountDescription}</p>
+          <button
+            onClick={() => openConfirm({ kind: "delete-account" }, t.deleteAccount)}
+            className="mt-2.5 flex items-center gap-2 text-[13px] font-semibold text-[var(--lm-danger,#dc2626)]"
+          >
+            <Trash2 size={15} /> {t.deleteAccount}
+          </button>
         </div>
-      </section>
+      </SettingsSection>
     </div>
   );
 }
 
-function AddEmail({ onDone }: { onDone: () => void }) {
+/**
+ * The body of a confirmation step. Every one of them looks the same — a short
+ * explanation, the thing being acted on, and a single decisive button — so the
+ * sheet feels like one flow whether you are signing out, dropping a device,
+ * adding a sign-in method, or erasing the account.
+ */
+function ConfirmStep({
+  confirm,
+  providerName,
+  pending,
+  banner,
+  notice,
+  onCancel,
+  onConfirm,
+  onEmailLinked,
+}: {
+  confirm: Confirm;
+  providerName: (p: IdentitySummary["provider"]) => string;
+  pending: boolean;
+  banner: React.ReactNode;
+  notice: string | null;
+  onCancel?: () => void;
+  onConfirm: () => void;
+  onEmailLinked: () => void;
+}) {
+  const t = useDict().auth;
+
+  if (confirm.kind === "delete-account") {
+    return (
+      <div className="flex flex-col gap-3">
+        {banner}
+        <DeleteAccountForm onCancel={onCancel} />
+      </div>
+    );
+  }
+
+  if (confirm.kind === "add-method" && confirm.provider === "email") {
+    return (
+      <div className="flex flex-col gap-3">
+        {banner}
+        <AddEmail onDone={onEmailLinked} onCancel={onCancel} />
+      </div>
+    );
+  }
+
+  const danger = confirm.kind !== "add-method";
+  const { body, item, action } =
+    confirm.kind === "log-out"
+      ? { body: t.logOutConfirm, item: null, action: t.logOut }
+      : confirm.kind === "remove-device"
+        ? {
+            body: t.removeDeviceConfirm,
+            item: deviceLines(confirm.session, t).device,
+            action: t.remove,
+          }
+        : confirm.kind === "remove-method"
+          ? {
+              body: t.removeMethodConfirm,
+              item: providerName(confirm.provider),
+              action: t.confirmRemove,
+            }
+          : { body: t.addGoogleBody, item: null, action: t.continueGoogle };
+
+  return (
+    <div className="flex flex-col gap-3">
+      {banner}
+      {item && (
+        <div className="rounded-2xl bg-surface px-3.5 py-2.5 text-[15px] font-medium">{item}</div>
+      )}
+      <p className="text-[14px] leading-snug text-muted">{body}</p>
+      {notice && <p role="status" className="text-[13px] text-muted">{notice}</p>}
+      <div className="flex gap-2">
+        {onCancel && (
+          <button
+            disabled={pending}
+            onClick={onCancel}
+            className="flex-1 rounded-xl border border-border px-3 py-2.5 text-[14px]"
+          >
+            {t.cancel}
+          </button>
+        )}
+        <button
+          disabled={pending}
+          onClick={onConfirm}
+          className={[
+            "flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-[14px] font-semibold disabled:opacity-50",
+            danger ? "bg-[var(--lm-danger,#dc2626)] text-white" : "bg-accent text-accent-text",
+          ].join(" ")}
+        >
+          {pending && <Loader2 size={15} className="animate-spin" />}
+          {action}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The irreversible step, on its own so the mobile sheet can navigate to it as a
+ * view with a title and a back button while the desktop panel expands it inline.
+ * `onCancel` renders a cancel control; surfaces with a back button omit it.
+ */
+export function DeleteAccountForm({ onCancel }: { onCancel?: () => void }) {
+  const t = useDict().auth;
+  const [confirmation, setConfirmation] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    setPending(true);
+    setError(null);
+    try {
+      await eraseAccount(confirmation);
+      signOutState();
+      window.location.assign("/");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 403) setError(t.reauthNeeded);
+      else setError(t.deleteAccountError);
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <p className="text-[13px] font-medium leading-snug text-[var(--lm-danger,#dc2626)]">
+        {t.deleteAccountWarning}
+      </p>
+      <div>
+        <label className="block text-[13px] text-muted" htmlFor="account-erasure-confirmation">
+          {t.deleteConfirmationLabel} <span className="font-mono text-text">{ACCOUNT_ERASURE_PHRASE}</span>
+        </label>
+        <input
+          id="account-erasure-confirmation"
+          value={confirmation}
+          onChange={(event) => setConfirmation(event.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+          className="mt-1.5 w-full rounded-xl border border-border bg-bg px-3 py-2.5 text-[15px] outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-[var(--lm-focus)]"
+        />
+      </div>
+      {error && (
+        <p role="alert" className="text-[13px] text-[var(--lm-danger,#dc2626)]">{error}</p>
+      )}
+      <div className="flex gap-2">
+        {onCancel && (
+          <button
+            disabled={pending}
+            onClick={() => { setConfirmation(""); onCancel(); }}
+            className="flex-1 rounded-xl border border-border px-3 py-2.5 text-[14px]"
+          >
+            {t.cancel}
+          </button>
+        )}
+        <button
+          disabled={confirmation !== ACCOUNT_ERASURE_PHRASE || pending}
+          onClick={() => void submit()}
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--lm-danger,#dc2626)] px-3 py-2.5 text-[14px] font-semibold text-white disabled:opacity-40"
+        >
+          {pending && <Loader2 size={15} className="animate-spin" />}
+          {t.deleteAccountAction}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AddEmail({ onDone, onCancel }: { onDone: () => void; onCancel?: () => void }) {
   const t = useDict().auth;
   const fieldId = useId();
   const [step, setStep] = useState<"form" | "code">("form");
@@ -319,7 +580,7 @@ function AddEmail({ onDone }: { onDone: () => void }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const input = "w-full rounded-lg border border-border bg-bg px-3 py-2 text-[15px] outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-[var(--lm-focus)]";
+  const input = "w-full rounded-xl border border-border bg-bg px-3 py-2.5 text-[15px] outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-[var(--lm-focus)]";
 
   async function submit() {
     setPending(true);
@@ -343,8 +604,9 @@ function AddEmail({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <form className="mt-3 flex flex-col gap-2 rounded-lg border border-border p-3" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-      <div className="text-[13px] font-semibold">{t.addEmailTitle}</div>
+    <form className="flex flex-col gap-2" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+      {/* the host sheet's header already names the step; the desktop panel has none */}
+      {onCancel && <div className="text-[13px] font-semibold">{t.addEmailTitle}</div>}
       {step === "form" ? (
         <>
           <label htmlFor={`${fieldId}-email`} className="sr-only">{t.email}</label>
@@ -360,10 +622,18 @@ function AddEmail({ onDone }: { onDone: () => void }) {
         </>
       )}
       {error && <p role="alert" className="text-[13px] text-[var(--lm-danger,#dc2626)]">{error}</p>}
-      <button type="submit" disabled={pending} className="flex items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-[14px] font-semibold text-accent-text disabled:opacity-60">
-        {pending && <Loader2 size={15} className="animate-spin" />}
-        {step === "form" ? t.sendCode : t.verifyAction}
-      </button>
+      <div className="flex gap-2">
+        {onCancel && (
+          <button type="button" disabled={pending} onClick={onCancel}
+            className="flex-1 rounded-xl border border-border px-3 py-2.5 text-[14px]">
+            {t.cancel}
+          </button>
+        )}
+        <button type="submit" disabled={pending} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent px-3 py-2.5 text-[14px] font-semibold text-accent-text disabled:opacity-60">
+          {pending && <Loader2 size={15} className="animate-spin" />}
+          {step === "form" ? t.sendCode : t.verifyAction}
+        </button>
+      </div>
     </form>
   );
 }

@@ -31,7 +31,7 @@ describe("AuthPanel", () => {
     vi.mocked(registerEmail).mockResolvedValue({ detail: "accepted" });
     vi.mocked(fetchAuthProviders).mockResolvedValue({ google: true, email: true });
     vi.mocked(requestPasswordReset).mockResolvedValue({ detail: "accepted" });
-    vi.mocked(startGoogleLogin).mockResolvedValue();
+    vi.mocked(startGoogleLogin).mockResolvedValue("same-tab");
     window.history.replaceState(null, "", "/profile");
     useAuthStore.setState({
       status: "signed-out",
@@ -58,16 +58,16 @@ describe("AuthPanel", () => {
     expect(screen.getByRole("button", { name: "Continue with email" })).toBeInTheDocument();
   });
 
-  it("preserves query, hash, and open-story intent for Google", async () => {
+  it("preserves query and open-story intent for Google, without the hash", async () => {
+    // the hash carries Telegram's launch payload in the mini app, which the API
+    // rejects on length — nothing in the app routes on it
     window.history.replaceState(null, "", "/profile?lang=en&auth=cancelled#account");
     useUiStore.setState({ openStoryId: "story-1" });
     renderWithQuery(<AuthPanel />);
     fireEvent.click(await screen.findByRole("button", { name: "Continue with Google" }));
 
     await waitFor(() =>
-      expect(startGoogleLogin).toHaveBeenCalledWith(
-        "/profile?lang=en&story=story-1#account",
-      ),
+      expect(startGoogleLogin).toHaveBeenCalledWith("/profile?lang=en&story=story-1"),
     );
   });
 

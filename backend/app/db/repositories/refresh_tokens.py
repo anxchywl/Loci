@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import and_, delete, exists, or_, select, update
+from sqlalchemy import and_, delete, exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.refresh_token import RefreshToken
@@ -113,15 +113,56 @@ async def session_belongs_to_user(
     return bool((await db.execute(stmt)).scalar_one())
 
 
-async def list_sessions(db: AsyncSession, user_id: int, now: datetime) -> list[RefreshToken]:
-    # one row per session (the newest token, which reflects current state)
+async def find_device_session(
+    db: AsyncSession, user_id: int, user_agent_summary: str, now: datetime
+) -> uuid.UUID | None:
+    """The user's newest live session that was opened from this same client.
+
+    Signing in again from a device the user is already signed in on continues
+    that session instead of opening another one, so the sessions list stays a
+    list of devices. Matching is on the user agent alone: mobile IPs rotate
+    constantly, and keying on the (hashed) IP too would spawn a fresh session
+    every time the network changed.
+    """
     stmt = (
-        select(RefreshToken)
+        select(RefreshToken.session_id)
+        .where(
+            RefreshToken.user_id == user_id,
+            RefreshToken.user_agent_summary == user_agent_summary,
+            RefreshToken.revoked_at.is_(None),
+            RefreshToken.expires_at > now,
+        )
+        .order_by(RefreshToken.created_at.desc())
+        .limit(1)
+    )
+    return (await db.execute(stmt)).scalars().first()
+
+
+async def list_sessions(db: AsyncSession, user_id: int, now: datetime):
+    """One row per session: newest token for the metadata, aggregates for the rest.
+
+    A session spans every token in its rotation chain, so its lifetime is the
+    earliest token's creation through the latest use, and it counts as live
+    while any of its tokens is unrevoked and unexpired.
+    """
+    partition = {"partition_by": RefreshToken.session_id}
+    live = and_(RefreshToken.revoked_at.is_(None), RefreshToken.expires_at > now)
+    stmt = (
+        select(
+            RefreshToken.session_id,
+            RefreshToken.user_agent_summary,
+            RefreshToken.device_type,
+            RefreshToken.browser,
+            RefreshToken.operating_system,
+            func.min(RefreshToken.created_at).over(**partition).label("created_at"),
+            func.max(RefreshToken.last_used_at).over(**partition).label("last_used_at"),
+            func.bool_or(live).over(**partition).label("active"),
+        )
         .where(RefreshToken.user_id == user_id)
         .order_by(RefreshToken.session_id, RefreshToken.created_at.desc())
         .distinct(RefreshToken.session_id)
     )
-    return list((await db.execute(stmt)).scalars().all())
+    return list((await db.execute(stmt)).all())
 
 
 async def has_active_session(db: AsyncSession, session_id: uuid.UUID, now: datetime) -> bool:

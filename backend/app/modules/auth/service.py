@@ -60,6 +60,18 @@ async def authenticate_telegram_user(
     return response, refresh_value
 
 
+async def _device_session_id(
+    db: AsyncSession, user_id: int, session_metadata: SessionMetadata | None, now: datetime
+):
+    """Continue this device's existing session when there is one, else start fresh."""
+    summary = getattr(session_metadata, "user_agent_summary", None)
+    # an absent or unidentifiable client can't be told apart from any other, so
+    # those logins always get their own session
+    if not summary or summary == "unknown":
+        return None
+    return await refresh_tokens_repo.find_device_session(db, user_id, summary, now)
+
+
 async def issue_session_tokens(
     db: AsyncSession,
     user,
@@ -74,8 +86,14 @@ async def issue_session_tokens(
     now = datetime.now(UTC)
     refresh_value = generate_refresh_token()
     refresh_expires_at = now + timedelta(days=settings.refresh_token_expire_days)
+    # a mini-app launch re-authenticates whenever the webview dropped the refresh
+    # cookie, so without this every launch would leave another entry in the
+    # user's sessions list; the earlier tokens stay valid (revoking them would
+    # make a replay from a stale tab look like theft and kill the live session)
+    session_id = await _device_session_id(db, user.id, session_metadata, now)
     refresh = await refresh_tokens_repo.create(
         db, user.id, hash_token(refresh_value), refresh_expires_at, session_metadata,
+        session_id=session_id,
         authenticated_at=now,
     )
     access_token, access_expires_at = create_access_token(
