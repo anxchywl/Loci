@@ -124,12 +124,49 @@ export interface SettingsSheet {
   transition: (apply: () => void) => void;
 }
 
+export function LogoutIconButton() {
+  const t = useDict().auth;
+  const showToast = useUiStore((state) => state.showToast);
+  const [pending, setPending] = useState(false);
+
+  const handleLogout = async () => {
+    setPending(true);
+    try {
+      await logout();
+      signOutState();
+      window.location.assign("/");
+    } catch {
+      setPending(false);
+      showToast(t.accountActionError);
+    }
+  };
+
+  return (
+    <button
+      onClick={() => void handleLogout()}
+      disabled={pending}
+      aria-label={t.logOut}
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-accent focus-visible:text-accent disabled:opacity-50"
+    >
+      {pending ? <Loader2 size={17} className="animate-spin" /> : <LogOut size={17} />}
+    </button>
+  );
+}
+
 /**
  * `sheet` is passed by surfaces that can give a step its own header and back
  * button (the mobile bottom sheet). Without it — the desktop panel — the step
  * takes over the panel body and carries its own cancel control instead.
  */
-export function AccountSettings({ sheet }: { sheet?: SettingsSheet } = {}) {
+export function AccountSettings({
+  sheet,
+  showLogout = true,
+  compactDanger = false,
+}: {
+  sheet?: SettingsSheet;
+  showLogout?: boolean;
+  compactDanger?: boolean;
+} = {}) {
   const t = useDict().auth;
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
@@ -381,22 +418,29 @@ export function AccountSettings({ sheet }: { sheet?: SettingsSheet } = {}) {
         </>
       </SettingsSection>
 
-      <button
-        onClick={() => openConfirm({ kind: "log-out" }, t.logOut)}
-        className="flex w-full items-center gap-3 rounded-2xl bg-surface px-3.5 py-2.5 text-left text-[15px] font-medium transition-colors hover:text-accent"
-      >
-        <LogOut size={17} /> {t.logOut}
-      </button>
+      {showLogout && (
+        <button
+          onClick={() => openConfirm({ kind: "log-out" }, t.logOut)}
+          className="flex w-full items-center gap-3 rounded-2xl bg-surface px-3.5 py-2.5 text-left text-[15px] font-medium transition-colors hover:text-accent"
+        >
+          <LogOut size={17} /> {t.logOut}
+        </button>
+      )}
 
-      <SettingsSection title={t.dangerZone} framed={false}>
-        <div className="rounded-2xl bg-surface p-3">
-          <div className="text-[15px] font-medium">{t.deleteAccount}</div>
-          <p className="mt-0.5 text-[13px] leading-snug text-muted">{t.deleteAccountDescription}</p>
+      <SettingsSection title={t.dangerZone} framed={compactDanger}>
+        <div className={compactDanger ? "flex items-start gap-3 px-3.5 py-2.5" : "rounded-2xl bg-surface p-3"}>
+          <div className="min-w-0 flex-1">
+            <div className="text-[15px] font-medium">{t.deleteAccount}</div>
+            <p className="mt-0.5 text-[13px] leading-snug text-muted">{t.deleteAccountDescription}</p>
+          </div>
           <button
             onClick={() => openConfirm({ kind: "delete-account" }, t.deleteAccount)}
-            className="mt-2.5 flex items-center gap-2 text-[13px] font-semibold text-[var(--lm-danger,#dc2626)]"
+            aria-label={t.deleteAccount}
+            className={compactDanger
+              ? "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--lm-danger,#dc2626)] transition-colors hover:bg-bg"
+              : "mt-2.5 flex items-center gap-2 text-[13px] font-semibold text-[var(--lm-danger,#dc2626)]"}
           >
-            <Trash2 size={15} /> {t.deleteAccount}
+            <Trash2 size={15} /> {!compactDanger && t.deleteAccount}
           </button>
         </div>
       </SettingsSection>

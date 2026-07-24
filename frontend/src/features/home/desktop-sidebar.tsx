@@ -27,7 +27,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { SettingsSection } from "@/components/settings-section";
-import { AccountSettings, type SettingsSheet } from "@/features/auth/account-settings";
+import { AccountSettings, LogoutIconButton, type SettingsSheet } from "@/features/auth/account-settings";
 import { AuthPanel } from "@/features/auth/auth-panel";
 import { EditableName } from "@/features/auth/editable-name";
 import { useTelegramAuth } from "@/features/auth/hooks";
@@ -388,7 +388,7 @@ export function SettingsPanel({
       {/* the account groups continue the same section rhythm below a divider */}
       {includeAccount && user && (
         <div className={stepActive ? "" : "border-t border-border pt-4"}>
-          <AccountSettings sheet={sheet} />
+          <AccountSettings sheet={sheet} showLogout={false} compactDanger />
         </div>
       )}
     </div>
@@ -428,6 +428,7 @@ export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void
               <Settings size={18} />
             </button>
           )}
+          <LogoutIconButton />
         </div>
       ) : (
         <div className="flex flex-1 flex-col justify-center px-1 py-6">
@@ -446,7 +447,7 @@ export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void
       {/* with a gear in the card (mobile), the account settings live behind it */}
       {user && !onSettingsClick && (
         <div className="overflow-y-auto">
-          <AccountSettings />
+          <AccountSettings showLogout={false} compactDanger />
         </div>
       )}
 
@@ -715,7 +716,7 @@ export function DesktopSidebar({
                   onOpen={(story) => handleStoryOpen(story.id, story.lat, story.lon, "my-stories")}
                 />
               )}
-              {activePanel === "profile" && <ProfilePanel onSettingsClick={() => onSetActivePanel("settings")} />}
+              {activePanel === "profile" && <ProfilePanel />}
               {activePanel === "settings" && <SettingsPanel includeAccount />}
               {activePanel === "about" && (
                 <div key={openDoc ?? "about"} className="animate-fade-in">
