@@ -6,6 +6,12 @@ import { useUiStore } from "@/stores/ui-store";
 
 export function ThemeProvider() {
   const theme = useUiStore((s) => s.theme);
+  const hydratePreferences = useUiStore((s) => s.hydratePreferences);
+
+  useEffect(() => {
+    hydratePreferences();
+  }, [hydratePreferences]);
+
   useEffect(() => {
     const root = document.documentElement;
     if (theme === "auto") root.removeAttribute("data-theme");

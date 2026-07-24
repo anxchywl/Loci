@@ -4,6 +4,8 @@ import { ArrowLeft, BookmarkX, MapPinned, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { AccountSettings } from "@/features/auth/account-settings";
+import { AuthPanel } from "@/features/auth/auth-panel";
 import { useTelegramAuth } from "@/features/auth/hooks";
 import { useMyBookmarks, useMyStories } from "@/features/profile/hooks";
 import { StoryListItem } from "@/features/stories/components/story-list-item";
@@ -17,7 +19,6 @@ type Tab = "stories" | "saved";
 export function ProfileManager() {
   const t = useDict();
   const { status, user } = useTelegramAuth();
-  const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME;
   const authenticated = status === "authenticated";
   const openStory = useUiStore((state) => state.openStory);
 
@@ -47,19 +48,8 @@ export function ProfileManager() {
         </div>
 
         {status === "signed-out" && (
-          <div className="flex flex-col items-center gap-2 py-16 text-center">
-            <MapPinned size={24} className="text-muted" />
-            <span className="text-[15px] text-muted">{t.openInTelegram}</span>
-            {botUsername && (
-              <a
-                href={`https://t.me/${botUsername}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[15px] font-semibold text-accent transition-colors hover:underline"
-              >
-                @{botUsername}
-              </a>
-            )}
+          <div className="py-12">
+            <AuthPanel />
           </div>
         )}
 
@@ -131,6 +121,8 @@ export function ProfileManager() {
                 />
               ))}
             </div>
+
+            <AccountSettings />
           </>
         )}
       </div>

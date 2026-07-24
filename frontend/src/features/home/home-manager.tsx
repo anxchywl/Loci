@@ -29,7 +29,7 @@ import {
   type Panel,
 } from "@/features/home/desktop-sidebar";
 import { DocView, docTitlesFrom } from "@/features/home/doc-view";
-import { legalDocs, type LegalDocId } from "@/features/home/legal-content";
+import { legalDocsFrom, type LegalDocId } from "@/features/home/legal-content";
 import { MapView, type MapBounds, type MapViewHandle } from "@/features/map/map-view";
 import { AddStorySheet } from "@/features/stories/add-story-sheet";
 import { BottomSheet } from "@/features/stories/components/bottom-sheet";
@@ -83,13 +83,11 @@ export function HomeManager() {
   const mapLabelDensity = useUiStore((state) => state.mapLabelDensity);
   const setMapLabelDensity = useUiStore((state) => state.setMapLabelDensity);
   const hydrateShowAllPins = useUiStore((state) => state.hydrateShowAllPins);
-  const hydratePreferences = useUiStore((state) => state.hydratePreferences);
   // apply the persisted pin-display preference after mount (kept out of the
   // initial render so SSR and first client render match)
   useEffect(() => {
-    hydratePreferences();
     hydrateShowAllPins();
-  }, [hydratePreferences, hydrateShowAllPins]);
+  }, [hydrateShowAllPins]);
   const startPickLocation = useUiStore((state) => state.startPickLocation);
   const cancelCompose = useUiStore((state) => state.cancelCompose);
   const trendingOpen = useUiStore((state) => state.trendingOpen);
@@ -615,7 +613,7 @@ export function HomeManager() {
               {mobilePanel === "about" && (
                 <div className="-mx-4">
                   {mobileDoc ? (
-                    <DocView blocks={legalDocs[mobileDoc]} />
+                    <DocView blocks={legalDocsFrom(t.legal)[mobileDoc]} />
                   ) : (
                     <AboutPanel onOpenDoc={(id) => runSheetTransition(() => setMobileDoc(id))} />
                   )}

@@ -111,10 +111,6 @@ export const useUiStore = create<UiState>((set) => ({
     set({
       locale: loadPref("loci_locale", defaultLocale) as Locale,
       theme: loadPref("loci_theme", "auto") as Theme,
-      openStoryId: null,
-      storyHistory: [],
-      navAnchor: null,
-      adjacentPins: [],
     }),
   startPickLocation: () =>
     set({ mode: "pick-location", openStoryId: null, trendingOpen: false, storyHistory: [], navAnchor: null, adjacentPins: [] }),

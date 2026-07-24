@@ -136,4 +136,12 @@ describe("ui-store story navigation", () => {
     useUiStore.getState().requestPanTo(1, 2);
     expect(useUiStore.getState().panRequest?.paddingBottom).toBeUndefined();
   });
+
+  it("hydrates preferences without clearing a pending story deep link", () => {
+    useUiStore.getState().openStory("deep-linked-story");
+
+    useUiStore.getState().hydratePreferences();
+
+    expect(useUiStore.getState().openStoryId).toBe("deep-linked-story");
+  });
 });

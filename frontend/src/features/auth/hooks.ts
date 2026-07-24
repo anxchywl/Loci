@@ -1,22 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 
 import { fetchCurrentUser, postTelegramAuth, type AuthUser } from "@/features/auth/api";
 import { refreshAccessToken, setAccessToken } from "@/lib/api";
 import { resolveLocale } from "@/lib/i18n/dict";
 import { initTelegram, type TelegramLaunch } from "@/lib/telegram/init";
+import {
+  useAuthStore,
+  type AuthReturnNotice,
+  type AuthStatus,
+} from "@/stores/auth-store";
 import { useUiStore } from "@/stores/ui-store";
 
-export type AuthStatus = "loading" | "authenticated" | "signed-out";
+export type { AuthStatus };
 
-let cachedUser: AuthUser | null = null;
+let bootstrapPromise: Promise<void> | null = null;
 
-// Telegram reuses the same initData for the lifetime of a launch, so re-submitting it
-// on every reopen trips the backend's single-use replay guard. Restore the persistent
-// refresh-token session first and only fall back to a fresh Telegram auth when there
-// is no session to restore.
 async function restoreSession(): Promise<AuthUser | null> {
   if (!(await refreshAccessToken())) return null;
   try {
@@ -27,76 +27,107 @@ async function restoreSession(): Promise<AuthUser | null> {
   }
 }
 
-export function useTelegramAuth(): { status: AuthStatus; user: AuthUser | null } {
-  const queryClient = useQueryClient();
-  const [status, setStatus] = useState<AuthStatus>(cachedUser ? "authenticated" : "loading");
-  const [user, setUser] = useState<AuthUser | null>(cachedUser);
-  const setLocale = useUiStore((state) => state.setLocale);
-  const openStory = useUiStore((state) => state.openStory);
-
-  useEffect(() => {
-    if (cachedUser) return;
-    let cancelled = false;
-
-    const handleStartParam = (launch: TelegramLaunch | null): void => {
-      if (!launch?.startParam) return;
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(launch.startParam);
-      if (isUuid) {
-        openStory(launch.startParam);
-      } else {
-        // It's a share_token, fetch the story by token to get its true ID
-        import("@/features/stories/api").then(({ fetchStoryByToken }) => {
-          fetchStoryByToken(launch.startParam!)
-            .then((story) => openStory(story.id))
-            .catch(() => { /* handle invalid token gracefully */ });
-        });
-      }
-    };
-
-    void (async () => {
-      const launch = await initTelegram();
-      if (cancelled) return;
-      if (launch) setLocale(resolveLocale(launch.languageCode));
-
-      const applyUser = (authUser: AuthUser): void => {
-        const previousUserId = cachedUser?.id;
-        if (previousUserId !== undefined && previousUserId !== authUser.id) {
-          queryClient.clear();
-        }
-        cachedUser = authUser;
-        setUser(authUser);
-        setStatus("authenticated");
-        handleStartParam(launch);
-      };
-
-      // 1. Try restoring an existing session via the refresh cookie.
-      const restored = await restoreSession();
-      if (cancelled) return;
-      if (restored) {
-        applyUser(restored);
-        return;
-      }
-
-      // 2. No session to restore — authenticate fresh via Telegram initData.
-      if (!launch) {
-        queryClient.clear();
-        setStatus("signed-out");
-        return;
-      }
-      try {
-        const response = await postTelegramAuth(launch.initDataRaw);
-        if (cancelled) return;
-        setAccessToken(response.access_token);
-        applyUser(response.user);
-      } catch {
-        if (!cancelled) setStatus("signed-out");
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [setLocale, openStory, queryClient]);
-
-  return { status, user };
+export function applySession(user: AuthUser, accessToken: string): void {
+  setAccessToken(accessToken);
+  const store = useAuthStore.getState();
+  store.setReturnNotice(null);
+  store.setSession(user, "authenticated");
 }
+
+export function signOutState(): void {
+  setAccessToken(null);
+  const store = useAuthStore.getState();
+  store.setReturnNotice(null);
+  store.setSession(null, "signed-out");
+}
+
+function consumeAuthReturn(): AuthReturnNotice {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  const value = params.get("auth");
+  if (value !== "cancelled" && value !== "error") return null;
+  params.delete("auth");
+  const query = params.toString();
+  const url = window.location.pathname + (query ? `?${query}` : "") + window.location.hash;
+  window.history.replaceState(null, "", url);
+  return value;
+}
+
+function applyTelegramLaunch(launch: TelegramLaunch | null): void {
+  const store = useAuthStore.getState();
+  store.setInTelegram(launch !== null);
+  if (launch) useUiStore.getState().setLocale(resolveLocale(launch.languageCode));
+}
+
+function handleStartParam(launch: TelegramLaunch | null): void {
+  if (!launch?.startParam) return;
+  const openStory = useUiStore.getState().openStory;
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(launch.startParam);
+  if (isUuid) {
+    openStory(launch.startParam);
+  } else {
+    import("@/features/stories/api").then(({ fetchStoryByToken }) => {
+      fetchStoryByToken(launch.startParam!)
+        .then((story) => openStory(story.id))
+        .catch(() => {});
+    });
+  }
+}
+
+function consumeStoryParam(): void {
+  if (typeof window === "undefined") return;
+  const params = new URLSearchParams(window.location.search);
+  const storyId = params.get("story");
+  if (!storyId) return;
+  params.delete("story");
+  const query = params.toString();
+  window.history.replaceState(null, "", window.location.pathname + (query ? `?${query}` : "") + window.location.hash);
+  useUiStore.getState().openStory(storyId);
+}
+
+async function bootstrap(): Promise<void> {
+  const { setReturnNotice, setSession } = useAuthStore.getState();
+  setReturnNotice(consumeAuthReturn());
+  consumeStoryParam();
+  const launchPromise = initTelegram();
+
+  const restored = await restoreSession();
+  if (restored) {
+    setSession(restored, "authenticated");
+    const launch = await launchPromise;
+    applyTelegramLaunch(launch);
+    handleStartParam(launch);
+    return;
+  }
+
+  const launch = await launchPromise;
+  applyTelegramLaunch(launch);
+  if (!launch) {
+    setSession(null, "signed-out");
+    return;
+  }
+  try {
+    const response = await postTelegramAuth(launch.initDataRaw);
+    setAccessToken(response.access_token);
+    setSession(response.user, "authenticated");
+    handleStartParam(launch);
+  } catch {
+    setSession(null, "signed-out");
+  }
+}
+
+export function useAuthBootstrap(): void {
+  useEffect(() => {
+    if (!bootstrapPromise) bootstrapPromise = bootstrap();
+  }, []);
+}
+
+export function useAuth(): { status: AuthStatus; user: AuthUser | null; inTelegram: boolean } {
+  const status = useAuthStore((state) => state.status);
+  const user = useAuthStore((state) => state.user);
+  const inTelegram = useAuthStore((state) => state.inTelegram);
+  useAuthBootstrap();
+  return { status, user, inTelegram };
+}
+
+export const useTelegramAuth = useAuth;

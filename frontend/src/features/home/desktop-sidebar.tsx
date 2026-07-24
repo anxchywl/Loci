@@ -12,7 +12,6 @@ import {
   Globe,
   Info,
   MapPin,
-  MapPinned,
   Menu,
   Moon,
   Navigation,
@@ -28,6 +27,8 @@ import {
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { AccountSettings } from "@/features/auth/account-settings";
+import { AuthPanel } from "@/features/auth/auth-panel";
 import { useTelegramAuth } from "@/features/auth/hooks";
 import { authorLabel } from "@/features/stories/api";
 import { ReactionButton } from "@/features/stories/components/reaction-button";
@@ -48,7 +49,7 @@ import { type Locale, locales } from "@/lib/i18n/dict";
 import { useDict } from "@/lib/i18n/use-dict";
 import { openExternalLink, openTelegramLink } from "@/lib/telegram/init";
 import { DocView, docTitlesFrom } from "./doc-view";
-import { legalDocs, type LegalDocId } from "./legal-content";
+import { legalDocsFrom, type LegalDocId } from "./legal-content";
 import { type Theme, useUiStore } from "@/stores/ui-store";
 
 export type Panel =
@@ -377,7 +378,6 @@ export function SettingsPanel() {
 export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void }) {
   const t = useDict();
   const { user } = useTelegramAuth();
-  const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME;
 
   return (
     <div className="flex h-full flex-col gap-5 px-4 py-2">
@@ -417,25 +417,22 @@ export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void
           )}
         </div>
       ) : (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-3 py-6 text-center">
-          <MapPinned size={22} className="text-muted" />
-          <span className="text-[13px] text-muted">{t.openInTelegram}</span>
-          <a
-            href={`https://t.me/${botUsername ?? "loci_app_bot"}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[13px] font-semibold text-accent transition-colors hover:underline"
-          >
-            @{botUsername ?? "loci_app_bot"}
-          </a>
+        <div className="flex flex-1 flex-col justify-center px-1 py-6">
+          <AuthPanel />
           {onSettingsClick && (
             <button
               onClick={onSettingsClick}
-              className="mt-3 inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[13px] font-medium text-muted transition-colors hover:border-accent hover:text-accent focus-visible:border-accent focus-visible:text-accent"
+              className="mt-6 inline-flex items-center justify-center gap-2 self-center rounded-full border border-border px-4 py-2 text-[13px] font-medium text-muted transition-colors hover:border-accent hover:text-accent focus-visible:border-accent focus-visible:text-accent"
             >
               <Settings size={16} /> {t.settings}
             </button>
           )}
+        </div>
+      )}
+
+      {user && (
+        <div className="overflow-y-auto">
+          <AccountSettings />
         </div>
       )}
 
@@ -708,7 +705,7 @@ export function DesktopSidebar({
               {activePanel === "about" && (
                 <div key={openDoc ?? "about"} className="animate-fade-in">
                   {openDoc ? (
-                    <DocView blocks={legalDocs[openDoc]} />
+                    <DocView blocks={legalDocsFrom(t.legal)[openDoc]} />
                   ) : (
                     <AboutPanel onOpenDoc={setOpenDoc} />
                   )}

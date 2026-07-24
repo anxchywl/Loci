@@ -3,6 +3,19 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
 let accessToken: string | null = null;
 let refreshPromise: Promise<boolean> | null = null;
 
+function csrfToken(): string | null {
+  if (typeof document === "undefined") return null;
+  const pair = document.cookie
+    .split("; ")
+    .find((cookie) => cookie.startsWith("csrf_token="));
+  return pair ? decodeURIComponent(pair.slice("csrf_token=".length)) : null;
+}
+
+function csrfHeaders(): Record<string, string> {
+  const token = csrfToken();
+  return token ? { "X-CSRF-Token": token } : {};
+}
+
 export function setAccessToken(token: string | null): void {
   accessToken = token;
 }
@@ -27,6 +40,7 @@ export async function refreshAccessToken(): Promise<boolean> {
       const response = await fetch(`${BASE_URL}/auth/refresh`, {
         method: "POST",
         credentials: "include",
+        headers: csrfHeaders(),
       });
       if (!response.ok) {
         accessToken = null;
@@ -55,6 +69,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
       headers: {
         ...(init.body ? { "Content-Type": "application/json" } : {}),
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...csrfHeaders(),
         ...init.headers,
       },
     });

@@ -180,8 +180,11 @@ jobs:
             echo "TELEGRAM_BOT_TOKEN=ci-placeholder" >> .env
             echo "TELEGRAM_BOT_USERNAME=ci-placeholder" >> .env
             echo "CADDY_DOMAIN=ci.example.com" >> .env
-            echo "NEXT_PUBLIC_SUPPORT_EMAIL=privacy@ci.example" >> .env
             echo "ADMIN_TELEGRAM_IDS=[]" >> .env
+          fi
+
+          if ! grep -Eq '^NEXT_PUBLIC_SUPPORT_EMAIL=[^[:space:]]+@[^[:space:]]+\.[^[:space:]]+$' .env; then
+            echo "NEXT_PUBLIC_SUPPORT_EMAIL=privacy@ci.example" >> .env
           fi
 
       - name: Require public support contact in the web image

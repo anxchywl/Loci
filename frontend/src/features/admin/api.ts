@@ -4,7 +4,7 @@ import type { Story } from "@/features/stories/api";
 
 export interface AdminUserItem {
   id: number;
-  telegram_id: number;
+  telegram_id: number | null;
   username: string | null;
   display_name: string;
   photo_url: string | null;
@@ -12,6 +12,7 @@ export interface AdminUserItem {
   last_active_at: string | null;
   status: "active" | "blocked" | "deleted";
   is_admin: boolean;
+  erased_at: string | null;
   stories_count: number;
   approved_stories: number;
   pending_stories: number;
