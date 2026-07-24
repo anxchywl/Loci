@@ -178,6 +178,7 @@ jobs:
       - name: Prepare build environment
         env:
           ENV_FILE_CONTENT: ${{ secrets.ENV_FILE }}
+          PUBLIC_SUPPORT_EMAIL: ${{ vars.NEXT_PUBLIC_SUPPORT_EMAIL }}
         run: |
           if [ -n "$ENV_FILE_CONTENT" ]; then
             echo "$ENV_FILE_CONTENT" > .env
@@ -189,7 +190,10 @@ jobs:
             echo "ADMIN_TELEGRAM_IDS=[]" >> .env
           fi
 
-          if ! grep -Eq '^NEXT_PUBLIC_SUPPORT_EMAIL=[^[:space:]]+@[^[:space:]]+\.[^[:space:]]+$' .env; then
+          if [ -n "$PUBLIC_SUPPORT_EMAIL" ]; then
+            sed -i '/^NEXT_PUBLIC_SUPPORT_EMAIL=/d' .env
+            echo "NEXT_PUBLIC_SUPPORT_EMAIL=$PUBLIC_SUPPORT_EMAIL" >> .env
+          elif ! grep -Eq '^NEXT_PUBLIC_SUPPORT_EMAIL=[^[:space:]]+@[^[:space:]]+\.[^[:space:]]+$' .env; then
             echo "NEXT_PUBLIC_SUPPORT_EMAIL=privacy@ci.example" >> .env
           fi
 
