@@ -245,7 +245,14 @@ jobs:
             git checkout main
             git fetch origin main
             git reset --hard origin/main
-            echo "$ENV_FILE_CONTENT" > .env
+            if [ -f .env ]; then
+              echo "preserving existing production environment"
+            elif [ -n "${ENV_FILE_CONTENT:-}" ]; then
+              printf '%s\n' "$ENV_FILE_CONTENT" > .env
+            else
+              echo "error: .env is missing and ENV_FILE secret is empty" >&2
+              exit 1
+            fi
             chmod 600 .env
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
             DEPLOYMENT_TARGET=shared-host DEPLOY_USE_PREBUILT=true deploy/deploy.sh
