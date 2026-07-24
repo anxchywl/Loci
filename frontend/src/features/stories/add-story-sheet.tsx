@@ -173,6 +173,7 @@ export function AddStorySheet() {
       open={mode === "compose"}
       onClose={close}
       title={calendarOpen ? undefined : editingPhotoIndex !== null ? t.editPhoto : t.newStory}
+      desktopModal
       isEditing={focusMode.isFocusMode}
     >
       <div key={calendarOpen ? "calendar" : editingPhotoIndex !== null ? "photo-editor" : "story-form"} className="motion-safe:animate-story-state">

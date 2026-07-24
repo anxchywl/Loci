@@ -1,6 +1,6 @@
 "use client";
 
-import { MapPin } from "lucide-react";
+import { Loader2, MapPin } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { distanceMeters, formatDistance } from "@/features/stories/api";
@@ -49,7 +49,7 @@ export function NearbyPanel({ location, onOpen, className = "px-2 py-2" }: Nearb
   }, [isLastRing, isFetching, stories]);
 
   if (!location) {
-    return <div className="py-8 text-center text-[13px] text-muted">{t.loading}</div>;
+    return <div className="flex justify-center py-8" aria-hidden="true"><Loader2 size={18} className="animate-spin text-muted" /></div>;
   }
 
   const withDistance = (stories ?? [])

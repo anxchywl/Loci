@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AccountSettings, DeleteAccountIconButton } from "@/features/auth/account-settings";
+import { AccountSettings, DeleteAccountIconButton, LogoutIconButton } from "@/features/auth/account-settings";
 import { renderWithQuery } from "@/test/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUiStore } from "@/stores/ui-store";
@@ -19,6 +19,11 @@ vi.mock("@/features/auth/api", () => ({
   verifyEmailLink: vi.fn(),
 }));
 
+vi.mock("@/lib/telegram/init", () => ({
+  isTelegramWebApp: vi.fn(() => false),
+  openTelegramLink: vi.fn(),
+}));
+
 import {
   fetchAuthProviders,
   eraseAccount,
@@ -27,6 +32,7 @@ import {
   revokeSession,
   unlinkIdentity,
 } from "@/features/auth/api";
+import { isTelegramWebApp, openTelegramLink } from "@/lib/telegram/init";
 
 const now = "2026-07-24T00:00:00Z";
 
@@ -161,6 +167,25 @@ describe("AccountSettings", () => {
     renderWithQuery(<AccountSettings />);
 
     expect(screen.getByText("Sign-in was cancelled.")).toHaveAttribute("role", "status");
+  });
+
+  it("explains how to add Telegram when it is not linked", async () => {
+    renderWithQuery(<AccountSettings />);
+    const telegramLabel = await screen.findByText("Telegram");
+    const telegramRow = telegramLabel.closest<HTMLElement>("div.flex.items-center");
+    if (!telegramRow) throw new Error("telegram identity row missing");
+
+    fireEvent.click(within(telegramRow).getByRole("button", { name: "Add" }));
+
+    expect(screen.getByText("Open @loci_app_bot")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Open @loci_app_bot"));
+    expect(openTelegramLink).toHaveBeenCalledWith("https://t.me/loci_app_bot");
+  });
+
+  it("does not render logout inside Telegram", () => {
+    vi.mocked(isTelegramWebApp).mockReturnValue(true);
+    renderWithQuery(<LogoutIconButton />);
+    expect(screen.queryByRole("button", { name: "Log out" })).not.toBeInTheDocument();
   });
 
   it("requires the exact phrase before permanently deleting the account", async () => {

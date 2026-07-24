@@ -1,6 +1,6 @@
 "use client";
 
-import { BookmarkX, MapPinned } from "lucide-react";
+import { BookmarkX, Loader2, MapPinned } from "lucide-react";
 
 import type { Story } from "@/features/stories/api";
 import { StoryListItem } from "@/features/stories/components/story-list-item";
@@ -22,6 +22,10 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
   );
 }
 
+function PanelLoader() {
+  return <div className="flex justify-center py-12" aria-hidden="true"><Loader2 size={18} className="animate-spin text-muted" /></div>;
+}
+
 /** Author's own stories with moderation status. */
 export function MyStoriesPanel({ authenticated, onOpen }: PanelProps) {
   const t = useDict();
@@ -32,7 +36,7 @@ export function MyStoriesPanel({ authenticated, onOpen }: PanelProps) {
     return <EmptyState icon={<MapPinned size={24} className="text-muted" />} text={t.openInTelegram} />;
   }
   if (isLoading && !stories) {
-    return <div className="py-12 text-center text-[13px] text-muted">{t.loading}</div>;
+    return <PanelLoader />;
   }
   if (!stories || stories.length === 0) {
     return <EmptyState icon={<MapPinned size={24} className="text-muted" />} text={t.noStoriesYet} />;
@@ -63,7 +67,7 @@ export function SavedPanel({ authenticated, onOpen }: PanelProps) {
     return <EmptyState icon={<BookmarkX size={24} className="text-muted" />} text={t.openInTelegram} />;
   }
   if (isLoading && !stories) {
-    return <div className="py-12 text-center text-[13px] text-muted">{t.loading}</div>;
+    return <PanelLoader />;
   }
   if (!stories || stories.length === 0) {
     return <EmptyState icon={<BookmarkX size={24} className="text-muted" />} text={t.noSavedYet} />;

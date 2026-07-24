@@ -19,6 +19,7 @@ interface BottomSheetProps {
   subtitle?: string;
   titleColor?: string;
   isEditing?: boolean;
+  desktopModal?: boolean;
   scrollKey?: string | null;
   children: ReactNode;
 }
@@ -43,6 +44,7 @@ export function BottomSheet({
   subtitle,
   titleColor,
   isEditing = false,
+  desktopModal = false,
   scrollKey,
   children,
 }: BottomSheetProps) {
@@ -105,7 +107,7 @@ export function BottomSheet({
       />
       <div
         ref={scrollRef}
-        className={`absolute inset-x-0 bottom-0 max-h-[80dvh] overflow-y-auto rounded-t-sheet bg-bg pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_32px_rgba(0,0,0,0.18)] motion-safe:animate-sheet-up transition-[transform,max-height] duration-250 ease-lm ${isEditing ? "keyboard-sheet-editing" : ""}`}
+        className={`absolute inset-x-0 bottom-0 max-h-[80dvh] overflow-y-auto rounded-t-sheet bg-bg pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_32px_rgba(0,0,0,0.18)] motion-safe:animate-sheet-up transition-[transform,max-height] duration-250 ease-lm lg:inset-0 lg:m-auto lg:max-h-[80dvh] lg:w-[calc(100%-2rem)] lg:max-w-[640px] lg:rounded-sheet lg:shadow-[0_12px_40px_rgba(0,0,0,0.18)] ${desktopModal ? "lg:motion-safe:animate-dialog-in" : ""} ${isEditing ? "keyboard-sheet-editing" : ""}`}
         style={dragY > 0 ? { transform: `translateY(${dragY}px)`, transition: "none" } : undefined}
       >
         <div 
@@ -114,7 +116,7 @@ export function BottomSheet({
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
-          <div className="mb-3 h-1.5 w-20 shrink-0 rounded-full bg-border/80" />
+          <div className="mb-3 h-1.5 w-20 shrink-0 rounded-full bg-border/80 lg:hidden" />
           {!navigationAtBottom && (title || onBack || onPrev || onNext) ? (
             <div className={`keyboard-sheet-title-row relative flex w-full min-h-[32px] items-center justify-center pb-3 ${isEditing ? "keyboard-sheet-title-row-editing" : ""}`}>
               {/* left cluster: history back (ArrowLeft, only when adjacent nav is

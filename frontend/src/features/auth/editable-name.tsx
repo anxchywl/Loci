@@ -21,7 +21,7 @@ export interface NameEditorSheet {
   transition: (apply: () => void) => void;
 }
 
-function NameEditor({ user, onClose }: { user: AuthUser; onClose: () => void }) {
+export function NameEditor({ user, onClose, inline = false }: { user: AuthUser; onClose: () => void; inline?: boolean }) {
   const t = useDict();
   const qc = useQueryClient();
   const updateUser = useAuthStore((state) => state.updateUser);
@@ -53,14 +53,13 @@ function NameEditor({ user, onClose }: { user: AuthUser; onClose: () => void }) 
     save.mutate(trimmed);
   };
 
-  if (typeof document === "undefined") return null;
-
-  return createPortal(
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="edit-name-title">
-      <button aria-label={t.cancel} onClick={onClose} className="absolute inset-0 bg-black/30 motion-safe:animate-fade-in" />
+  const content = (
+    <div className={inline ? "flex flex-col gap-3" : "fixed inset-0 z-[60] flex items-center justify-center bg-black/30 p-4 motion-safe:animate-fade-in"} role="dialog" aria-modal="true" aria-labelledby="edit-name-title">
       <form
         onSubmit={(event) => { event.preventDefault(); commit(); }}
-        className="relative w-full max-w-sm rounded-sheet border border-border bg-bg p-4 shadow-[0_12px_40px_rgba(0,0,0,0.18)] motion-safe:animate-dialog-in"
+        className={inline
+          ? "flex flex-col gap-3"
+          : "relative w-full max-w-sm rounded-sheet border border-border bg-bg p-4 shadow-[0_12px_40px_rgba(0,0,0,0.18)] motion-safe:animate-dialog-in"}
       >
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -93,9 +92,11 @@ function NameEditor({ user, onClose }: { user: AuthUser; onClose: () => void }) 
           </button>
         </div>
       </form>
-    </div>,
-    document.body,
+    </div>
   );
+
+  if (inline || typeof document === "undefined") return content;
+  return createPortal(content, document.body);
 }
 
 export function EditableName({ user, className = "" }: { user: AuthUser; className?: string }) {
@@ -108,22 +109,36 @@ export function ChangeNameButton({
   user,
   iconOnly = false,
   sheet,
+  onEditStateChange,
 }: {
   user: AuthUser;
   iconOnly?: boolean;
   sheet?: NameEditorSheet;
+  onEditStateChange?: (editing: boolean) => void;
 }) {
   const t = useDict();
   const [editing, setEditing] = useState(false);
   const close = () => {
-    if (sheet) sheet.transition(() => setEditing(false));
-    else setEditing(false);
-    sheet?.setView(null);
+    if (sheet) sheet.transition(() => {
+      setEditing(false);
+      onEditStateChange?.(false);
+      sheet.setView(null);
+    });
+    else {
+      setEditing(false);
+      onEditStateChange?.(false);
+    }
   };
   const begin = () => {
-    if (sheet) sheet.transition(() => setEditing(true));
-    else setEditing(true);
-    sheet?.setView({ title: t.editName, onBack: close });
+    if (sheet) sheet.transition(() => {
+      setEditing(true);
+      onEditStateChange?.(true);
+      sheet.setView({ title: t.editName, onBack: close });
+    });
+    else {
+      setEditing(true);
+      onEditStateChange?.(true);
+    }
   };
 
   return (
@@ -138,7 +153,7 @@ export function ChangeNameButton({
       >
         {iconOnly ? <Pencil size={17} /> : t.changeName}
       </button>
-      {editing && <NameEditor user={user} onClose={close} />}
+      {editing && !onEditStateChange && <NameEditor user={user} onClose={close} />}
     </>
   );
 }

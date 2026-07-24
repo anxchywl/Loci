@@ -20,12 +20,13 @@ import {
   type SessionSummary,
 } from "@/features/auth/api";
 import { SettingsRow, SettingsSection } from "@/components/settings-section";
-import { ChangeNameButton } from "@/features/auth/editable-name";
+import { ChangeNameButton, NameEditor } from "@/features/auth/editable-name";
 import { signOutState } from "@/features/auth/hooks";
 import { currentAuthRedirectTarget } from "@/features/auth/redirect";
 import { ApiError } from "@/lib/api";
 import type { AuthStrings } from "@/lib/i18n/dict";
 import { useDict } from "@/lib/i18n/use-dict";
+import { isTelegramWebApp, openTelegramLink } from "@/lib/telegram/init";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUiStore } from "@/stores/ui-store";
 
@@ -116,7 +117,7 @@ type Confirm =
   | { kind: "log-out" }
   | { kind: "remove-device"; session: SessionSummary }
   | { kind: "remove-method"; provider: IdentitySummary["provider"] }
-  | { kind: "add-method"; provider: "google" | "email" };
+  | { kind: "add-method"; provider: IdentitySummary["provider"] };
 
 /** how a host sheet lends its header to one of those steps */
 export interface SettingsSheet {
@@ -130,6 +131,8 @@ export function LogoutIconButton() {
   const t = useDict().auth;
   const showToast = useUiStore((state) => state.showToast);
   const [pending, setPending] = useState(false);
+
+  if (isTelegramWebApp()) return null;
 
   const handleLogout = async () => {
     setPending(true);
@@ -155,31 +158,52 @@ export function LogoutIconButton() {
   );
 }
 
-export function DeleteAccountIconButton() {
+export function DeleteAccountIconButton({
+  sheet,
+  onOpenChange,
+}: {
+  sheet?: SettingsSheet;
+  onOpenChange?: (open: boolean) => void;
+} = {}) {
   const t = useDict().auth;
   const [open, setOpen] = useState(false);
+  const controlled = onOpenChange !== undefined;
+  const close = () => {
+    if (sheet) sheet.transition(() => {
+      onOpenChange?.(false);
+      sheet.setView(null);
+    });
+    else setOpen(false);
+  };
+  const begin = () => {
+    if (sheet) sheet.transition(() => {
+      onOpenChange?.(true);
+      sheet.setView({ title: t.deleteAccount, onBack: close });
+    });
+    else setOpen(true);
+  };
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={begin}
         aria-label={t.deleteAccount}
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[var(--lm-danger,#dc2626)] transition-colors hover:bg-surface focus-visible:bg-surface"
       >
         <Trash2 size={17} />
       </button>
-      {open && typeof document !== "undefined" && createPortal(
+      {!controlled && open && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="delete-account-title">
-          <button type="button" aria-label={t.cancel} onClick={() => setOpen(false)} className="absolute inset-0 bg-black/30 motion-safe:animate-fade-in" />
+          <button type="button" aria-label={t.cancel} onClick={close} className="absolute inset-0 bg-black/30 motion-safe:animate-fade-in" />
           <div className="relative w-full max-w-sm rounded-sheet border border-border bg-bg p-4 shadow-[0_12px_40px_rgba(0,0,0,0.18)] motion-safe:animate-dialog-in">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 id="delete-account-title" className="text-[17px] font-semibold">{t.deleteAccount}</h2>
-              <button type="button" aria-label={t.cancel} onClick={() => setOpen(false)} className="rounded-lg p-1.5 text-muted transition-colors hover:bg-surface hover:text-text">
+              <button type="button" aria-label={t.cancel} onClick={close} className="rounded-lg p-1.5 text-muted transition-colors hover:bg-surface hover:text-text">
                 <X size={17} />
               </button>
             </div>
-            <DeleteAccountForm onCancel={() => setOpen(false)} />
+            <DeleteAccountForm onCancel={close} />
           </div>
         </div>,
         document.body,
@@ -208,6 +232,8 @@ export function AccountSettings({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const [nameEditing, setNameEditing] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [accountActionPending, setAccountActionPending] = useState(false);
   const returnNotice = useAuthStore((state) => state.returnNotice);
   const setReturnNotice = useAuthStore((state) => state.setReturnNotice);
@@ -346,6 +372,7 @@ export function AccountSettings({
           if (confirm.kind === "log-out") void runAccountAction(logout);
           else if (confirm.kind === "remove-device") revoke.mutate(confirm.session.id);
           else if (confirm.kind === "remove-method") unlink.mutate(confirm.provider);
+          else if (confirm.kind === "add-method" && confirm.provider === "telegram") openTelegramLink("https://t.me/loci_app_bot");
           else if (confirm.kind === "add-method") void addGoogle();
         }}
         onEmailLinked={() => {
@@ -354,6 +381,24 @@ export function AccountSettings({
         }}
       />
     );
+  }
+
+  const closeNameEditor = () => apply(() => {
+    setNameEditing(false);
+    sheet?.setView(null);
+  });
+
+  const closeDelete = () => apply(() => {
+    setDeleteOpen(false);
+    sheet?.setView(null);
+  });
+
+  if (nameEditing && user) {
+    return <NameEditor user={user} inline onClose={closeNameEditor} />;
+  }
+
+  if (deleteOpen) {
+    return <DeleteAccountForm onCancel={closeDelete} />;
   }
 
   return (
@@ -382,7 +427,7 @@ export function AccountSettings({
             <div className="min-w-0 flex-1 truncate text-[15px] font-medium">
               {user.display_name || [user.first_name, user.last_name].filter(Boolean).join(" ").trim() || dict.profile}
             </div>
-            <ChangeNameButton user={user} sheet={sheet} />
+            <ChangeNameButton user={user} sheet={sheet} onEditStateChange={setNameEditing} />
           </SettingsRow>
         </SettingsSection>
       )}
@@ -421,7 +466,7 @@ export function AccountSettings({
                     ) : (
                       <span className="text-[13px] text-muted">{t.connected}</span>
                     )
-                  ) : provider === "google" || provider === "email" ? (
+                  ) : provider === "google" || provider === "email" || provider === "telegram" ? (
                     <button
                       onClick={() =>
                         openConfirm(
@@ -470,7 +515,7 @@ export function AccountSettings({
         <SettingsSection title={t.dangerZone}>
           <SettingsRow>
             <div className="min-w-0 flex-1 text-[15px] font-medium">{t.deleteAccount}</div>
-            <DeleteAccountIconButton />
+            <DeleteAccountIconButton sheet={sheet} onOpenChange={setDeleteOpen} />
           </SettingsRow>
         </SettingsSection>
       )}
@@ -511,6 +556,31 @@ function ConfirmStep({
       <div className="flex flex-col gap-3">
         {banner}
         <AddEmail onDone={onEmailLinked} onCancel={onCancel} />
+      </div>
+    );
+  }
+
+  if (confirm.kind === "add-method" && confirm.provider === "telegram") {
+    return (
+      <div className="flex flex-col gap-3">
+        {banner}
+        <p className="text-[14px] leading-snug text-muted">{t.addTelegramBody}</p>
+        <a
+          href="https://t.me/loci_app_bot"
+          target="_blank"
+          rel="noreferrer"
+          onClick={(event) => {
+            if (openTelegramLink("https://t.me/loci_app_bot")) event.preventDefault();
+          }}
+          className="font-semibold text-accent underline underline-offset-2"
+        >
+          {t.openTelegramBot}
+        </a>
+        {onCancel && (
+          <button onClick={onCancel} className="rounded-xl border border-border px-3 py-2.5 text-[14px]">
+            {t.cancel}
+          </button>
+        )}
       </div>
     );
   }
