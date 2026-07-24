@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, X } from "lucide-react";
+import { Loader2, Pencil, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 
@@ -14,6 +14,11 @@ const UNSAFE_INPUT_RE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u
 
 function cleanNameInput(value: string): string {
   return value.normalize("NFC").replace(UNSAFE_INPUT_RE, "").replace(/[\r\n]+/g, " ");
+}
+
+export interface NameEditorSheet {
+  setView: (view: { title: string; onBack: () => void } | null) => void;
+  transition: (apply: () => void) => void;
 }
 
 function NameEditor({ user, onClose }: { user: AuthUser; onClose: () => void }) {
@@ -99,15 +104,41 @@ export function EditableName({ user, className = "" }: { user: AuthUser; classNa
   return <span className={`truncate text-[15px] font-bold text-text ${className}`}>{name || t.profile}</span>;
 }
 
-export function ChangeNameButton({ user }: { user: AuthUser }) {
+export function ChangeNameButton({
+  user,
+  iconOnly = false,
+  sheet,
+}: {
+  user: AuthUser;
+  iconOnly?: boolean;
+  sheet?: NameEditorSheet;
+}) {
   const t = useDict();
   const [editing, setEditing] = useState(false);
+  const close = () => {
+    if (sheet) sheet.transition(() => setEditing(false));
+    else setEditing(false);
+    sheet?.setView(null);
+  };
+  const begin = () => {
+    if (sheet) sheet.transition(() => setEditing(true));
+    else setEditing(true);
+    sheet?.setView({ title: t.editName, onBack: close });
+  };
+
   return (
     <>
-      <button type="button" onClick={() => setEditing(true)} className="shrink-0 text-[13px] font-semibold text-accent transition-colors hover:text-accent/80">
-        {t.changeName}
+      <button
+        type="button"
+        onClick={begin}
+        aria-label={iconOnly ? t.editName : undefined}
+        className={iconOnly
+          ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface hover:text-accent focus-visible:bg-surface focus-visible:text-accent"
+          : "shrink-0 text-[13px] font-semibold text-accent transition-colors hover:text-accent/80"}
+      >
+        {iconOnly ? <Pencil size={17} /> : t.changeName}
       </button>
-      {editing && <NameEditor user={user} onClose={() => setEditing(false)} />}
+      {editing && <NameEditor user={user} onClose={close} />}
     </>
   );
 }

@@ -102,7 +102,7 @@ function SessionRow({
       {!session.current && (
         <button
           onClick={onRevoke}
-          className="ml-auto shrink-0 self-start text-[13px] font-medium text-muted transition-colors hover:text-[var(--lm-danger,#dc2626)]"
+          className="ml-auto shrink-0 self-center text-[13px] font-medium text-muted transition-colors hover:text-[var(--lm-danger,#dc2626)]"
         >
           {t.remove}
         </button>
@@ -195,8 +195,12 @@ export function DeleteAccountIconButton() {
  */
 export function AccountSettings({
   sheet,
+  showProfile = true,
+  showDelete = false,
 }: {
   sheet?: SettingsSheet;
+  showProfile?: boolean;
+  showDelete?: boolean;
 } = {}) {
   const dict = useDict();
   const t = dict.auth;
@@ -372,13 +376,13 @@ export function AccountSettings({
       {!error && returnNotice === "error" && <p role="alert" className="text-[13px] text-[var(--lm-danger,#dc2626)]">{t.genericError}</p>}
       {!error && returnNotice === "cancelled" && <p role="status" className="text-[13px] text-muted">{t.cancelled}</p>}
 
-      {user && (
+      {showProfile && user && (
         <SettingsSection title={dict.profile}>
           <SettingsRow>
             <div className="min-w-0 flex-1 truncate text-[15px] font-medium">
               {user.display_name || [user.first_name, user.last_name].filter(Boolean).join(" ").trim() || dict.profile}
             </div>
-            <ChangeNameButton user={user} />
+            <ChangeNameButton user={user} sheet={sheet} />
           </SettingsRow>
         </SettingsSection>
       )}
@@ -461,6 +465,15 @@ export function AccountSettings({
           ))}
         </>
       </SettingsSection>
+
+      {showDelete && (
+        <SettingsSection title={t.dangerZone}>
+          <SettingsRow>
+            <div className="min-w-0 flex-1 text-[15px] font-medium">{t.deleteAccount}</div>
+            <DeleteAccountIconButton />
+          </SettingsRow>
+        </SettingsSection>
+      )}
 
     </div>
   );

@@ -29,7 +29,7 @@ import { useEffect, useState } from "react";
 import { SettingsSection } from "@/components/settings-section";
 import { AccountSettings, DeleteAccountIconButton, LogoutIconButton, type SettingsSheet } from "@/features/auth/account-settings";
 import { AuthPanel } from "@/features/auth/auth-panel";
-import { EditableName } from "@/features/auth/editable-name";
+import { ChangeNameButton, EditableName } from "@/features/auth/editable-name";
 import { useTelegramAuth } from "@/features/auth/hooks";
 import { authorLabel } from "@/features/stories/api";
 import { ReactionButton } from "@/features/stories/components/reaction-button";
@@ -388,7 +388,7 @@ export function SettingsPanel({
       {/* the account groups continue the same section rhythm below a divider */}
       {includeAccount && user && (
         <div className={stepActive ? "" : "border-t border-border pt-4"}>
-          <AccountSettings sheet={sheet} />
+          <AccountSettings sheet={sheet} showDelete />
         </div>
       )}
     </div>
@@ -428,8 +428,9 @@ export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void
             </button>
           )}
           <div className="flex shrink-0 items-center gap-1">
-            <DeleteAccountIconButton />
+            {!onSettingsClick && <ChangeNameButton user={user} iconOnly />}
             <LogoutIconButton />
+            {!onSettingsClick && <DeleteAccountIconButton />}
           </div>
         </div>
       ) : (
@@ -449,7 +450,7 @@ export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void
       {/* with a gear in the card (mobile), the account settings live behind it */}
       {user && !onSettingsClick && (
         <div className="overflow-y-auto">
-          <AccountSettings />
+          <AccountSettings showProfile={false} />
         </div>
       )}
 

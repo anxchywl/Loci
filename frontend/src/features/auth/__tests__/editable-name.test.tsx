@@ -63,4 +63,18 @@ describe("EditableName", () => {
     // returns to the read view
     expect(screen.getByRole("button", { name: "Change name" })).toBeInTheDocument();
   });
+
+  it("updates the settings sheet title through its transition", () => {
+    const sheet = {
+      setView: vi.fn(),
+      transition: vi.fn((apply: () => void) => apply()),
+    };
+    renderWithQuery(<ChangeNameButton user={baseUser} sheet={sheet} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Change name" }));
+
+    expect(sheet.transition).toHaveBeenCalledOnce();
+    expect(sheet.setView).toHaveBeenCalledWith(expect.objectContaining({ title: "Edit name" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
 });
