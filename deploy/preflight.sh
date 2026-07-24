@@ -33,6 +33,7 @@ esac
 
 for pair in \
   "JWT_SECRET_KEY:change-me" \
+  "EMAIL_CODE_SECRET:change-me-email-code" \
   "LOCATION_FUZZ_SECRET:change-me-fuzz" \
   "POSTGRES_PASSWORD:loci" \
   "REDIS_PASSWORD:loci-redis" \
@@ -44,10 +45,19 @@ for pair in \
   [ "$VALUE" != "$INSECURE" ] || fail "$VARIABLE still has its development value"
 done
 
-for variable in JWT_SECRET_KEY LOCATION_FUZZ_SECRET POSTGRES_PASSWORD; do
+for variable in JWT_SECRET_KEY EMAIL_CODE_SECRET LOCATION_FUZZ_SECRET POSTGRES_PASSWORD; do
   VALUE=$(env_value "$variable")
   [ "${#VALUE}" -ge 24 ] || fail "$variable must be at least 24 characters"
 done
+
+EMAIL_HOST_VALUE=$(env_value EMAIL_HOST)
+[ -n "$EMAIL_HOST_VALUE" ] || fail "EMAIL_HOST must be set"
+[ "$EMAIL_HOST_VALUE" != "console" ] || fail "EMAIL_HOST must use a real SMTP provider"
+for variable in EMAIL_USERNAME EMAIL_PASSWORD EMAIL_FROM; do
+  [ -n "$(env_value "$variable")" ] || fail "$variable must be set"
+done
+[ -n "$(env_value NEXT_PUBLIC_SUPPORT_EMAIL)" ] || fail "NEXT_PUBLIC_SUPPORT_EMAIL must be set"
+ENV_FILE="$ENV_FILE" "$REPO_DIR/deploy/check-auth-config.sh"
 
 MEMORY_KB=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
 AVAILABLE_KB=$(df -Pk "$REPO_DIR" | awk 'NR == 2 {print $4}')

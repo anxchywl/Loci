@@ -1,6 +1,7 @@
 import asyncio
 import os
 from pathlib import Path
+from http.cookies import SimpleCookie
 
 os.environ["TELEGRAM_BOT_TOKEN"] = "123456:TEST-TOKEN"
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-with-enough-length-for-hs256"
@@ -9,7 +10,15 @@ os.environ["POSTGRES_DB"] = "loci_test"
 # telegram id 999 is the moderation admin in tests; keep notifications from
 # trying to reach a broker/bot during the suite
 os.environ["ADMIN_TELEGRAM_IDS"] = "999"
+# telegram id 999 is bootstrapped to admin on first auth; per-request authz reads
+# users.is_admin, so tests reach the admin surface by authenticating as 999
+os.environ["INITIAL_ADMIN_TELEGRAM_ID"] = "999"
 os.environ["NOTIFICATIONS_ENABLED"] = "false"
+# google oidc test config; the browser redirect base comes from the mini app url
+os.environ["GOOGLE_CLIENT_ID"] = "test-google-client-id.apps.googleusercontent.com"
+os.environ["GOOGLE_CLIENT_SECRET"] = "test-google-client-secret"
+os.environ["GOOGLE_REDIRECT_URI"] = "https://app.example/api/v1/auth/google/callback"
+os.environ["TELEGRAM_MINI_APP_URL"] = "https://app.example"
 
 import pytest
 from alembic import command
@@ -23,6 +32,7 @@ from app.core.config import get_settings
 import app.db.models  # noqa: F401
 
 APP_TABLES = (
+    "media_deletion_jobs",
     "reports",
     "bookmarks",
     "reactions",
@@ -30,6 +40,12 @@ APP_TABLES = (
     "story_photos",
     "stories",
     "refresh_tokens",
+    "email_challenges",
+    "password_credentials",
+    "security_audit_events",
+    "auth_identities",
+    "user_moderation_logs",
+    "audit_logs",
     "users",
 )
 
@@ -101,6 +117,17 @@ async def client(db_session, fake_redis):
 
     app.dependency_overrides[get_db_session] = _override_db
     app.dependency_overrides[get_redis] = _override_redis
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+    async def add_csrf_header(request):
+        cookies = SimpleCookie()
+        cookies.load(request.headers.get("cookie", ""))
+        csrf = cookies.get("csrf_token")
+        if csrf is not None and "x-csrf-token" not in request.headers:
+            request.headers["x-csrf-token"] = csrf.value
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        event_hooks={"request": [add_csrf_header]},
+    ) as c:
         yield c
     app.dependency_overrides.clear()

@@ -34,5 +34,9 @@ celery_app.conf.update(
             "task": "maintenance.cleanup_stale_photos",
             "schedule": 86_400.0,
         },
+        "cleanup-deleted-media": {
+            "task": "maintenance.cleanup_deleted_media",
+            "schedule": 300.0,
+        },
     },
 )

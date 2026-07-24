@@ -58,6 +58,7 @@ $COMPOSE exec -T backup /usr/local/bin/verify-backup.sh /backups
 
 curl --fail --silent --show-error --retry 10 --retry-delay 3 \
   "https://$DOMAIN/health" >/dev/null
+ENV_FILE="$REPO_DIR/.env" BASE_URL="https://$DOMAIN" "$REPO_DIR/deploy/smoke-auth.sh"
 
 docker image prune -f
 

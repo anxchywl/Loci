@@ -17,6 +17,18 @@ REFRESH_URL = "/api/v1/auth/refresh"
 LOGOUT_URL = "/api/v1/auth/logout"
 
 
+async def test_auth_providers_reflect_server_configuration(client, monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "google_client_id", "")
+    monkeypatch.setattr(settings, "google_client_secret", "")
+    monkeypatch.setattr(settings, "google_redirect_uri", "")
+
+    response = await client.get("/api/v1/auth/providers")
+
+    assert response.status_code == 200
+    assert response.json() == {"google": False, "email": True}
+
+
 async def test_telegram_auth_creates_user_and_returns_tokens(client, db_session):
     response = await client.post(AUTH_URL, json={"init_data": build_init_data(telegram_id=7)})
     assert response.status_code == 200
@@ -82,9 +94,10 @@ async def test_refresh_rotates_and_revokes_old_token(client, db_session):
     reused = await client.post(REFRESH_URL)
     assert reused.status_code == 401
 
+    # reuse detection revokes the whole family, so the live token is now dead too
     client.cookies.set("refresh_token", new_cookie)
-    still_valid = await client.post(REFRESH_URL)
-    assert still_valid.status_code == 200
+    after_reuse = await client.post(REFRESH_URL)
+    assert after_reuse.status_code == 401
 
 
 async def test_refresh_without_cookie_rejected(client):
@@ -92,15 +105,32 @@ async def test_refresh_without_cookie_rejected(client):
     assert response.status_code == 401
 
 
+async def test_refresh_rejects_missing_or_mismatched_csrf(client):
+    auth = await client.post(AUTH_URL, json={"init_data": build_init_data()})
+    assert auth.status_code == 200
+
+    client.cookies.delete("csrf_token")
+    missing = await client.post(REFRESH_URL)
+    assert missing.status_code == 403
+
+    client.cookies.set("csrf_token", "cookie-token")
+    mismatched = await client.post(
+        REFRESH_URL, headers={"X-CSRF-Token": "different-token"}
+    )
+    assert mismatched.status_code == 403
+
+
 async def test_logout_revokes_refresh_token(client):
     auth = await client.post(AUTH_URL, json={"init_data": build_init_data()})
     assert auth.status_code == 200
     cookie = client.cookies.get("refresh_token")
+    csrf = client.cookies.get("csrf_token")
 
     logout = await client.post(LOGOUT_URL)
     assert logout.status_code == 204
 
     client.cookies.set("refresh_token", cookie)
+    client.cookies.set("csrf_token", csrf)
     response = await client.post(REFRESH_URL)
     assert response.status_code == 401
 

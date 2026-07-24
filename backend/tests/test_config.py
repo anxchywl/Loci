@@ -49,6 +49,10 @@ def test_production_rejects_short_secrets_and_insecure_origins():
         "redis_password": "r" * 32,
         "s3_secret_key": "s" * 32,
         "location_fuzz_secret": "f" * 32,
+        "email_code_secret": "e" * 32,
+        "email_host": "smtp.example.com",
+        "email_username": "mailer",
+        "email_password": "smtp-secret",
         "telegram_bot_token": "123:test",
         "telegram_init_data_max_age_seconds": 300,
         "s3_secure": True,
@@ -66,3 +70,26 @@ def test_production_rejects_short_secrets_and_insecure_origins():
         _enforce_production_secrets(
             Settings(**(base | {"allowed_origins": ["http://localhost:3000"]}))
         )
+
+    with pytest.raises(RuntimeError, match="EMAIL_CODE_SECRET"):
+        _enforce_production_secrets(Settings(**(base | {"email_code_secret": "change-me-email-code"})))
+
+    with pytest.raises(RuntimeError, match="GOOGLE_CLIENT_ID"):
+        _enforce_production_secrets(
+            Settings(
+                **(
+                    base
+                    | {
+                        "google_client_id": "only-id-set",
+                        "google_client_secret": "",
+                        "google_redirect_uri": "",
+                    }
+                )
+            )
+        )
+
+    with pytest.raises(RuntimeError, match="EMAIL_HOST"):
+        _enforce_production_secrets(Settings(**(base | {"email_host": "console"})))
+
+    with pytest.raises(RuntimeError, match="EMAIL_USERNAME"):
+        _enforce_production_secrets(Settings(**(base | {"email_username": ""})))

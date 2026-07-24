@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db_session
-from app.core.config import Settings, get_settings
 from app.db.models import User
 from app.db.repositories import stories as stories_repo
 from app.modules.auth.schemas import UserResponse
@@ -17,10 +16,9 @@ router = APIRouter(prefix="/profile", tags=["profile"])
 @router.get("/me", response_model=UserResponse)
 async def get_me(
     user: Annotated[User, Depends(get_current_user)],
-    settings: Annotated[Settings, Depends(get_settings)],
 ) -> UserResponse:
     response = UserResponse.model_validate(user)
-    response.is_admin = user.telegram_id in settings.admin_ids
+    response.is_admin = user.is_admin
     return response
 
 

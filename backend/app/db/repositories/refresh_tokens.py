@@ -14,12 +14,14 @@ async def create(
     expires_at: datetime,
     metadata=None,
     session_id: uuid.UUID | None = None,
+    authenticated_at: datetime | None = None,
 ) -> RefreshToken:
     token = RefreshToken(
         user_id=user_id,
         session_id=session_id or uuid.uuid4(),
         token_hash=token_hash,
         expires_at=expires_at,
+        authenticated_at=authenticated_at,
         user_agent_summary=getattr(metadata, "user_agent_summary", None),
         device_type=getattr(metadata, "device_type", None),
         browser=getattr(metadata, "browser", None),
@@ -81,6 +83,45 @@ async def delete_stale(db: AsyncSession, cutoff: datetime) -> int:
     )
     await db.flush()
     return result.rowcount
+
+
+async def get_session_authenticated_at(
+    db: AsyncSession, session_id: uuid.UUID
+) -> datetime | None:
+    stmt = (
+        select(RefreshToken.authenticated_at)
+        .where(RefreshToken.session_id == session_id)
+        .order_by(RefreshToken.created_at.desc())
+        .limit(1)
+    )
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
+async def session_ids_for_user(db: AsyncSession, user_id: int) -> list[uuid.UUID]:
+    stmt = select(RefreshToken.session_id).where(RefreshToken.user_id == user_id).distinct()
+    return list((await db.execute(stmt)).scalars().all())
+
+
+async def session_belongs_to_user(
+    db: AsyncSession, session_id: uuid.UUID, user_id: int
+) -> bool:
+    stmt = select(
+        exists().where(
+            RefreshToken.session_id == session_id, RefreshToken.user_id == user_id
+        )
+    )
+    return bool((await db.execute(stmt)).scalar_one())
+
+
+async def list_sessions(db: AsyncSession, user_id: int, now: datetime) -> list[RefreshToken]:
+    # one row per session (the newest token, which reflects current state)
+    stmt = (
+        select(RefreshToken)
+        .where(RefreshToken.user_id == user_id)
+        .order_by(RefreshToken.session_id, RefreshToken.created_at.desc())
+        .distinct(RefreshToken.session_id)
+    )
+    return list((await db.execute(stmt)).scalars().all())
 
 
 async def has_active_session(db: AsyncSession, session_id: uuid.UUID, now: datetime) -> bool:

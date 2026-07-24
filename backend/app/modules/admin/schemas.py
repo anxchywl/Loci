@@ -14,7 +14,7 @@ class AdminPage(BaseModel):
 
 class AdminUserItem(BaseModel):
     id: int
-    telegram_id: int
+    telegram_id: int | None
     username: str | None
     display_name: str
     photo_url: str | None
@@ -22,6 +22,7 @@ class AdminUserItem(BaseModel):
     last_active_at: datetime | None
     status: Literal["active", "blocked", "deleted"]
     is_admin: bool
+    erased_at: datetime | None
     stories_count: int
     approved_stories: int
     pending_stories: int

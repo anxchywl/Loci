@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     # telegram recommends validating auth_date within minutes, not hours
     telegram_init_data_max_age_seconds: int = 300
 
+    # google oidc; login is enabled only when client id + secret + redirect are set
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = ""
+
     # must be overridden in production — create_app() enforces this at startup
     jwt_secret_key: str = "change-me"
     jwt_algorithm: str = "HS256"
@@ -77,6 +82,26 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = 10
     report_auto_hide_threshold: int = 5
 
+    # email / password auth
+    # keys the hmac over verification codes; must be overridden in production
+    email_code_secret: str = "change-me-email-code"
+    email_code_ttl_minutes: int = 10
+    email_code_max_attempts: int = 5
+    email_resend_cooldown_seconds: int = 60
+    email_requests_per_hour: int = 10
+    login_attempts_per_15min: int = 10
+    # sensitive actions (link/unlink) require the session to have authenticated within
+    # this window; otherwise the client must re-authenticate
+    recent_auth_window_minutes: int = 10
+    # smtp; host "console" logs instead of sending (dev default)
+    email_host: str = "console"
+    email_port: int = 587
+    email_username: str = ""
+    email_password: str = ""
+    email_from: str = "Loci <noreply@loci.app>"
+    # optional privacy-preserving compromised-password screen (haveibeenpwned range api)
+    hibp_enabled: bool = False
+
     auth_requests_per_minute: int = 10
     story_create_per_day: int = 10
     story_mutations_per_minute: int = 30
@@ -88,6 +113,10 @@ class Settings(BaseSettings):
 
     allowed_origins: list[str] = []
     admin_telegram_ids: str = ""
+    # bootstrap/recovery only: on first telegram auth a matching verified id is
+    # granted admin (phase 2). never consulted for per-request authorization —
+    # that reads users.is_admin.
+    initial_admin_telegram_id: int | None = None
     trust_proxy_headers: bool = False
     # when false, status-change notifications are computed but never enqueued
     notifications_enabled: bool = True
@@ -102,6 +131,13 @@ class Settings(BaseSettings):
         return (
             f"postgresql+asyncpg://{user}:{password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+    @computed_field
+    @property
+    def google_login_enabled(self) -> bool:
+        return bool(
+            self.google_client_id and self.google_client_secret and self.google_redirect_uri
         )
 
     @computed_field

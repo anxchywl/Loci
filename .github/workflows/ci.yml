@@ -80,6 +80,7 @@ jobs:
         run: npm run build
         env:
           NEXT_PUBLIC_API_URL: /api/v1
+          NEXT_PUBLIC_SUPPORT_EMAIL: privacy@ci.example
 
       - name: Show dependency logs on failure
         if: failure()
@@ -131,9 +132,14 @@ jobs:
           echo "GRAFANA_ADMIN_PASSWORD=ci-placeholder-not-for-production" >> .env
           COMPOSE_ENV_FILE="$PWD/.env" deploy/check-capacity-model.sh
           docker run --rm -v "$PWD:/mnt:ro" koalaman/shellcheck:v0.11.0 \
-            /mnt/deploy/backup.sh /mnt/deploy/check-capacity-model.sh \
+            /mnt/deploy/backup.sh /mnt/deploy/check-auth-config.sh \
+            /mnt/deploy/check-capacity-model.sh \
             /mnt/deploy/deploy.sh /mnt/deploy/preflight.sh /mnt/deploy/restore.sh \
-            /mnt/deploy/setup-server.sh /mnt/deploy/verify-backup.sh
+            /mnt/deploy/setup-server.sh /mnt/deploy/smoke-auth.sh \
+            /mnt/deploy/tests/test-auth-config.sh /mnt/deploy/tests/test-auth-smoke.sh \
+            /mnt/deploy/verify-backup.sh
+          deploy/tests/test-auth-config.sh
+          deploy/tests/test-auth-smoke.sh
           docker run --rm -v "$PWD/docker/monitoring:/etc/prometheus:ro" \
             --entrypoint promtool prom/prometheus:v3.7.3 \
             check config /etc/prometheus/prometheus.yml
@@ -174,8 +180,14 @@ jobs:
             echo "TELEGRAM_BOT_TOKEN=ci-placeholder" >> .env
             echo "TELEGRAM_BOT_USERNAME=ci-placeholder" >> .env
             echo "CADDY_DOMAIN=ci.example.com" >> .env
+            echo "NEXT_PUBLIC_SUPPORT_EMAIL=privacy@ci.example" >> .env
             echo "ADMIN_TELEGRAM_IDS=[]" >> .env
           fi
+
+      - name: Require public support contact in the web image
+        run: |
+          SUPPORT_EMAIL=$(sed -n 's/^NEXT_PUBLIC_SUPPORT_EMAIL=//p' .env | tail -n 1)
+          [ -n "$SUPPORT_EMAIL" ] || { echo "NEXT_PUBLIC_SUPPORT_EMAIL is missing" >&2; exit 1; }
 
       - name: Log in to GitHub Container Registry
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

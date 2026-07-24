@@ -136,6 +136,7 @@ badges, global stats.
 | Reaction | 30 / min |
 | Report | 20 / day |
 | Request upload URL | 20 / hour |
+| Erase account | 3 / hour |
 
 ### Auth thresholds
 
@@ -143,6 +144,36 @@ badges, global stats.
   `wished` production config enforces).
 - Replayed `initData` hashes rejected via Redis guard.
 - JWT: access **15 min**, refresh **30 days** with rotation.
+
+### Account and identity model (Phase 1 onward)
+
+- The permanent account is the **Loci user** (`users.id`). An **authentication
+  provider is not the account**: Telegram, Google, and email are separate login
+  methods that unlock the same user.
+- `auth_identities` holds one row per linked method. Identity keys, enforced in
+  PostgreSQL: Telegram and email key on the verified subject; Google keys on
+  `(issuer, sub)` — **never on email**, which is verified metadata only. A user
+  holds at most one identity per provider.
+- Phase 1 is additive: every existing user keeps `users.id` and all content, and
+  gains one backfilled Telegram identity. `users.telegram_id` is nullable
+  compatibility data for Telegram notifications and administration, not an
+  account key; deleting an identity never deletes the user.
+- Admin is the provider-independent `users.is_admin` flag (authoritative from
+  Phase 2); the first admin is bootstrapped from `INITIAL_ADMIN_TELEGRAM_ID`.
+
+### Account erasure (approved 2026-07-24)
+
+- Account erasure is self-service from account settings. It is immediate and
+  irreversible, requires a recently authenticated session, and requires the
+  exact confirmation phrase `DELETE MY ACCOUNT`.
+- Erasure removes the user's stories and photos, comments, reactions,
+  bookmarks, reports, authentication identities, password credential, email
+  challenges, sessions, security events, and profile/provider identifiers.
+- PostgreSQL records each photo object in a durable deletion queue in the same
+  transaction that removes its story metadata. Object-storage deletion is
+  retried until successful; an unavailable worker cannot lose the cleanup job.
+- A disabled, non-identifying user tombstone remains only where required by the
+  immutable moderation/audit history. Self-erased accounts cannot be restored.
 
 ### Reactions (decided 2026-07-10)
 
@@ -168,9 +199,57 @@ badges, global stats.
 
 | Route | Behavior |
 |---|---|
+| `GET /api/v1/auth/providers` | Public capability discovery. Returns which optional browser sign-in methods are enabled so unavailable providers are not rendered |
 | `POST /api/v1/auth/telegram` | Body `{init_data}`. HMAC-validates, rejects stale (>300 s), future-dated, and replayed payloads; upserts the user from the Telegram payload; returns access JWT + user, sets httpOnly `refresh_token` cookie scoped to `/api/v1/auth` |
-| `POST /api/v1/auth/refresh` | Rotates the refresh token from the cookie: old one revoked, new one issued. Revoked/expired/unknown tokens → 401 and cookie cleared |
-| `POST /api/v1/auth/logout` | Revokes the cookie's refresh token, clears the cookie, 204 |
+| `POST /api/v1/auth/refresh` | Requires the double-submit CSRF header/cookie pair. Rotates the refresh token from the cookie: old one revoked, new one issued. Revoked/expired/unknown tokens → 401 and cookies cleared. Replay of a rotated token revokes the whole session family |
+| `POST /api/v1/auth/logout` | Requires the double-submit CSRF header/cookie pair. Revokes the cookie's refresh token, clears the auth cookies, 204 |
+| `GET /api/v1/auth/google/start?redirect=<path>` | OIDC login start. Server-generated state + nonce + PKCE (S256) stored in Redis (single-use, 10 min); returns `{authorization_url}`. `redirect` must be an app-relative path (open-redirect safe). 404 when Google is not configured |
+| `GET /api/v1/auth/google/callback?code&state[&error]` | Backend code exchange, id_token verified via Google JWKS (signature, `iss`, `aud`, `azp`, `exp`, `iat`, `nonce`); identity keyed on **(issuer, sub)**, never email; `email_verified` gates stored email. Resolves or creates the Loci user, sets the `refresh_token` cookie, 303-redirects to the app. Cancel/error/invalid state → redirect without a session |
+
+Google login resolves through `auth_identities` to a `users.id`; a new Google user
+is a Telegram-less account. The access token is not carried in the redirect — the
+frontend restores it from the refresh cookie via `/auth/refresh`, the same path as
+a restored Telegram session.
+
+The authorization page opens in the current browser or Telegram WebView context.
+Opening it in a separate system browser would place the httpOnly session cookie in
+a different cookie jar and strand the Mini App. A future external-browser flow
+requires a separate single-use session handoff; no token is placed in a URL as a
+shortcut.
+
+| Route | Behavior |
+|---|---|
+| `POST /api/v1/auth/email/register` | Body `{email, password}`. Argon2id, ≥12 chars, no composition rules; optional HIBP screen (fail-open). Creates a **pending** challenge (no user yet) and emails a keyed-HMAC 6-digit code. Always returns a generic 202 (anti-enumeration); already-registered addresses get no code |
+| `POST /api/v1/auth/email/resend` | Reissues the code (invalidating the prior one) under a cooldown + hourly limit; generic 202 |
+| `POST /api/v1/auth/email/verify` | Body `{email, code}`. Attempt-limited, single-use; on success creates the user + email identity + credential in one transaction and issues a session (refresh cookie + access token). Generic 401 on bad/expired code |
+| `POST /api/v1/auth/email/login` | Body `{email, password}`. Generic 401 for unknown email or wrong password (identical response); rehashes on Argon2 parameter change; rate-limited by IP and normalized email |
+| `POST /api/v1/auth/password/reset/request` | Body `{email}`. Always generic 202; sends a reset code only if an eligible account exists; never reveals which provider an account uses |
+| `POST /api/v1/auth/password/reset/confirm` | Body `{email, code, new_password}`. Single-use code; sets the new password, **revokes all sessions**, emails a change notice, no auto-login (204) |
+
+Email is the login identifier only for the email provider; identities are keyed on
+the normalized (trim + lowercase) address. Codes are stored only as a keyed HMAC,
+never plaintext, and never written to production logs. Abandoned registrations
+create no permanent user.
+
+| Route | Behavior |
+|---|---|
+| `GET /api/v1/auth/identities` | Authenticated. Lists linked sign-in methods (provider + optional email + timestamps); never exposes provider subjects/secrets |
+| `DELETE /api/v1/auth/identities/{provider}` | Authenticated + **recent-auth**. Unlinks a method; refuses to remove the last usable one (400); audited. Email unlink also drops the password credential |
+| `GET /api/v1/auth/google/link/start?redirect=<path>` | Authenticated + recent-auth. Starts a Google link (transaction carries `link_user_id`); the shared callback attaches the identity to the current account and never issues a new session. Rejects a Google identity already owned by another account |
+| `POST /api/v1/auth/identities/email/start` | Authenticated + recent-auth. Body `{email, password}`; sends a `link_email` code. Rejects an address already in use |
+| `POST /api/v1/auth/identities/email/verify` | Authenticated. Body `{email, code}`; attaches the email identity + password credential; audited |
+| `GET /api/v1/auth/sessions` | Authenticated. Lists the account's sessions (current flagged; device metadata; no raw IP) |
+| `DELETE /api/v1/auth/sessions/{session_id}` | Authenticated. Revokes one session (own only; 404 otherwise); evicts its cache; audited |
+| `POST /api/v1/auth/logout-all` | Authenticated. Revokes every session, clears the cookie; audited |
+| `DELETE /api/v1/auth/account` | Authenticated + **recent-auth**, rate-limited. Body `{confirmation: "DELETE MY ACCOUNT"}`. Irreversibly erases account content, interactions, provider/profile data, and sessions; queues photo-object deletion; clears auth cookies; returns 204 |
+
+Linking only ever attaches a provider to the already-authenticated `users.id` — it
+never merges accounts and never links by matching email. Link/unlink and
+logout-everywhere write immutable `security_audit_events`; self-service account
+erasure removes those account-scoped events under the approved erasure policy.
+Sensitive actions require
+a **recent authentication** (the session authenticated within
+`RECENT_AUTH_WINDOW_MINUTES`), distinct from an ordinary token refresh.
 
 Protected endpoints (Phase 4+) authenticate via `Authorization: Bearer <access>`
 resolved by `app/api/deps.py:get_current_user`. Public reads accept an optional

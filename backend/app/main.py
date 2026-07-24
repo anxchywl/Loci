@@ -60,6 +60,24 @@ def _enforce_production_secrets(settings) -> None:
         raise RuntimeError("ALLOWED_ORIGINS must contain only HTTPS origins in production")
     if settings.telegram_init_data_max_age_seconds > 300:
         raise RuntimeError("TELEGRAM_INIT_DATA_MAX_AGE_SECONDS must not exceed 300 in production")
+    # google login is all-or-nothing: partial config would fail confusingly at runtime
+    google_values = (
+        settings.google_client_id,
+        settings.google_client_secret,
+        settings.google_redirect_uri,
+    )
+    if any(google_values) and not all(google_values):
+        raise RuntimeError(
+            "GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI must all be set together"
+        )
+    if settings.google_redirect_uri and not settings.google_redirect_uri.startswith("https://"):
+        raise RuntimeError("GOOGLE_REDIRECT_URI must be https in production")
+    if len(settings.email_code_secret) < 24 or settings.email_code_secret == "change-me-email-code":
+        raise RuntimeError("EMAIL_CODE_SECRET must be at least 24 characters in production")
+    if settings.email_host in ("console", ""):
+        raise RuntimeError("EMAIL_HOST must use a real SMTP provider in production")
+    if not (settings.email_username and settings.email_password):
+        raise RuntimeError("EMAIL_USERNAME and EMAIL_PASSWORD are required in production")
 
 
 def create_app() -> FastAPI:

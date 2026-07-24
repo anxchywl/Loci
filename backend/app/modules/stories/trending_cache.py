@@ -61,3 +61,12 @@ async def write(redis: Redis, limit: int, stories: list[StoryResponse]) -> None:
             await pipe.execute()
     except RedisError:
         logger.debug("trending cache write skipped", exc_info=True)
+
+
+async def invalidate(redis: Redis) -> None:
+    try:
+        keys = [key async for key in redis.scan_iter(match="trending:v1:*")]
+        if keys:
+            await redis.delete(*keys)
+    except RedisError:
+        logger.debug("trending cache invalidation skipped", exc_info=True)

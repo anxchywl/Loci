@@ -13,11 +13,18 @@
 | Backups | — | daily pg_dump cron container, 03:00, 14-day retention |
 | Map tiles | OpenFreeMap (no API key, no usage cap) | same; fallback option: MapTiler free tier |
 
-The `worker` service runs Celery for photo optimization:
+The `worker` service runs Celery for photo optimization and durable media
+erasure cleanup:
 `celery -A app.workers.celery_app worker`. The `bot` service runs the aiogram
 Mini App launcher. Production application containers run as unprivileged users
 with read-only root filesystems, dropped capabilities, process/memory limits,
 and only private Compose networks. Only Caddy publishes host ports.
+
+Account-erasure media jobs are stored in PostgreSQL before story metadata is
+removed. A maintenance task polls every five minutes and retries object-storage
+deletion without a fixed attempt limit. Database backup retention remains
+governed by the documented backup schedule; deleted records can persist inside
+encrypted backups until those backups expire.
 
 ## Initial production topology
 
@@ -54,6 +61,11 @@ injects everything; the backend reads them via `pydantic-settings`
 | `APP_ENV` | `development` / `production`; production enforces secure values at startup |
 | `TELEGRAM_BOT_TOKEN` | bot token; also the HMAC key for initData validation |
 | `TELEGRAM_INIT_DATA_MAX_AGE_SECONDS` | staleness bound, keep ≤300 in prod |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` | Google OIDC login; set all three to enable, leave empty to disable. Redirect URI must be HTTPS in production. Startup rejects partial configuration |
+| `EMAIL_CODE_SECRET` | keys the HMAC over 6-digit email codes; ≥24 chars enforced in production. Leaking it does not reveal codes without the stored hashes, but rotate on suspicion |
+| `EMAIL_CODE_TTL_MINUTES` / `EMAIL_CODE_MAX_ATTEMPTS` / `EMAIL_RESEND_COOLDOWN_SECONDS` | verification/reset code lifetime, attempt cap, and resend cooldown |
+| `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USERNAME` / `EMAIL_PASSWORD` / `EMAIL_FROM` | SMTP delivery; `EMAIL_HOST=console` is development-only. A real host and credentials are required in production |
+| `HIBP_ENABLED` | optional k-anonymity compromised-password screening; fails open (allows) on API error |
 | `LOCATION_FUZZ_SECRET` | keys the deterministic location-fuzz offset; leaking it makes approximate locations reversible |
 | `JWT_SECRET_KEY` / `JWT_ALGORITHM` | token signing |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` / `REFRESH_TOKEN_EXPIRE_DAYS` | token lifetimes |
@@ -65,12 +77,14 @@ injects everything; the backend reads them via `pydantic-settings`
 | `S3_*` | object storage — MinIO in dev, R2 in prod (endpoint + keys differ, code identical) |
 | `ALLOWED_ORIGINS` | JSON list for CORS |
 | `NEXT_PUBLIC_API_URL` | frontend → API base URL |
+| `NEXT_PUBLIC_SUPPORT_EMAIL` | public privacy/contact address embedded in the frontend build; required for production |
 | `CADDY_DOMAIN` | prod domain for TLS + routing |
 | `BACKUP_RETENTION_DAYS` / `BACKUP_DIR` | backup policy |
 | `BACKUP_MAX_AGE_HOURS` | maximum acceptable age for backup health, 26 hours by default |
 | `BACKUP_S3_*` | separate private R2 backup bucket and bucket-scoped credentials |
 | `BACKUP_AGE_RECIPIENT` | public age recipient used to encrypt every offsite database dump |
-| `ADMIN_TELEGRAM_IDS` | comma-separated Telegram IDs granted access to the admin panel |
+| `ADMIN_TELEGRAM_IDS` | comma-separated Telegram IDs granted admin access. Transitional: from Phase 2 the authoritative admin flag is `users.is_admin`, and this variable is retired from the per-request authorization path |
+| `INITIAL_ADMIN_TELEGRAM_ID` | bootstrap/recovery only: the first Telegram authentication matching this ID is granted `users.is_admin` (Phase 2). Never consulted for per-request authorization |
 | `WEB_CONCURRENCY` | production Uvicorn worker count |
 | `METRICS_TOKEN` | optional bearer token for direct `/metrics` access; Caddy does not expose this route |
 | `GRAFANA_ADMIN_PASSWORD` | required before enabling the optional monitoring profile |
@@ -117,6 +131,16 @@ environment, backup, and recovery details.
    - `TELEGRAM_MINI_APP_URL=https://<CADDY_DOMAIN>`
    - `ALLOWED_ORIGINS=["https://<CADDY_DOMAIN>"]`
    - `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME` to the bot username without `@`
+   - `NEXT_PUBLIC_SUPPORT_EMAIL` to a monitored address used for privacy and
+     account-deletion requests; example-domain addresses are rejected
+   - `EMAIL_CODE_SECRET` to a new independent secret of at least 24 characters
+   - `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USERNAME`, `EMAIL_PASSWORD`, and
+     `EMAIL_FROM` to a verified SMTP sender; production rejects the `console`
+     transport because verification and reset codes must reach users
+   - optionally set all three `GOOGLE_*` values and register the exact HTTPS
+     callback URI in Google Cloud; leave all three empty to disable Google login
+   - decide whether to enable `HIBP_ENABLED` after confirming outbound access to
+     the k-anonymity range API; a lookup outage deliberately fails open
    - Cloudflare R2 values for every `S3_*` variable, with HTTPS enabled
    - a separate private `loci-db-backups` R2 bucket with credentials restricted
      to that bucket in `BACKUP_S3_*`
@@ -132,11 +156,17 @@ environment, backup, and recovery details.
    in BotFather.
 
 6. Validate the host, connection budget, secrets, offsite backup configuration,
-   disk, and Compose model before creating containers:
+   disk, public-domain/auth consistency, and Compose model before creating
+   containers:
 
    ```sh
    deploy/preflight.sh
    ```
+
+   Auth readiness requires `TELEGRAM_MINI_APP_URL` and `ALLOWED_ORIGINS` to
+   contain the exact `https://$CADDY_DOMAIN` origin. When Google is enabled, its
+   client ID must be a Google OAuth client and its callback must be exactly
+   `https://$CADDY_DOMAIN/api/v1/auth/google/callback`.
 
 ### Deploy
 
@@ -151,14 +181,18 @@ validates Compose, builds images,
 starts PostgreSQL and Redis, creates and validates a pre-migration backup, runs
 Alembic in a one-off API container, starts the full stack with health waiting,
 verifies the mounted backup again, checks the public HTTPS health endpoint, and
-then prunes dangling images. A failed migration or health check stops the deploy
-with a non-zero exit code.
+runs a non-destructive public auth smoke test. The smoke verifies provider
+capabilities, the privacy and terms contact, the unauthenticated refresh boundary,
+and the enabled/disabled Google start contract. It does not create an account,
+send email, or complete Google authorization. A failed migration, health check,
+or auth smoke stops the deploy with a non-zero exit code.
 
 Inspect the result:
 
 ```sh
 docker compose --env-file .env -f docker/docker-compose.prod.yml ps
 curl --fail --show-error "https://$CADDY_DOMAIN/health"
+deploy/smoke-auth.sh
 docker compose --env-file .env -f docker/docker-compose.prod.yml logs --tail=100 caddy api worker bot
 ```
 
@@ -217,6 +251,10 @@ deploy/restore.sh /opt/loci/backups/loci-YYYYMMDD-HHMMSS.dump
   forward-compatible, and start that Compose definition. Do not downgrade the
   database automatically; restore the pre-deploy dump when a schema rollback is
   actually required.
+- Auth schema rollback: after the first Google- or email-only account exists,
+  do not downgrade past `e3f4a5b6c7d8`. Those accounts cannot satisfy the old
+  non-null Telegram ID constraint. Fix forward or restore the validated
+  pre-migration dump together with the last compatible application version.
 - Failed migration: application services have not yet been replaced. Inspect
   the one-off container output, fix forward, and rerun `deploy/deploy.sh`.
 - Failed post-start health check: inspect `docker compose ... logs`; the

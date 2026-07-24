@@ -1,5 +1,6 @@
+import uuid
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -69,12 +70,46 @@ async def get_current_user(
     return user
 
 
-async def get_current_admin(
+async def get_current_session_id(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> uuid.UUID | None:
+    if credentials is None:
+        return None
+    try:
+        _user_id, session_id = decode_access_token(credentials.credentials, settings)
+    except TokenError:
+        return None
+    return session_id
+
+
+async def require_recent_auth(
     user: Annotated[User, Depends(get_current_user)],
+    session_id: Annotated[uuid.UUID | None, Depends(get_current_session_id)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> User:
-    # admins are identified by telegram id from config, re-checked on every request
-    if user.telegram_id not in settings.admin_ids:
+    # sensitive actions (linking/unlinking) require a recent real authentication,
+    # not merely a refreshed session
+    if session_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Re-authentication required"
+        )
+    authenticated_at = await refresh_tokens_repo.get_session_authenticated_at(db, session_id)
+    window = timedelta(minutes=settings.recent_auth_window_minutes)
+    if authenticated_at is None or datetime.now(UTC) - authenticated_at > window:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Re-authentication required for this action",
+        )
+    return user
+
+
+async def get_current_admin(
+    user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    # provider-independent authorization: re-checked server-side on every request
+    if not user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
         )

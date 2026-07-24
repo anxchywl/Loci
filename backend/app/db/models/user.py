@@ -10,7 +10,9 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
+    # nullable since google/email-only accounts have no telegram; unique still holds
+    # (postgres allows multiple nulls). resolution goes through auth_identities
+    telegram_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     username: Mapped[str | None] = mapped_column(Text)
     first_name: Mapped[str | None] = mapped_column(Text)
     last_name: Mapped[str | None] = mapped_column(Text)
@@ -21,11 +23,15 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    # provider-independent admin role; authoritative from phase 2 onward, bootstrapped
+    # from initial_admin_telegram_id on first telegram auth
+    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     is_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     blocked_reason: Mapped[str | None] = mapped_column(Text)
     blocked_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="RESTRICT"))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
     __table_args__ = (
         Index("ix_users_username_lower", func.lower(username)),

@@ -1,4 +1,4 @@
-from sqlalchemy import func, select
+from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as postgres_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,9 +36,35 @@ async def upsert_from_telegram(db: AsyncSession, data: TelegramUserData) -> User
     return user
 
 
-async def get_by_telegram_id(db: AsyncSession, telegram_id: int) -> User | None:
-    result = await db.execute(select(User).where(User.telegram_id == telegram_id))
-    return result.scalar_one_or_none()
+async def create_for_google(db: AsyncSession, claims: dict) -> User:
+    """create a telegram-less account from verified google profile claims"""
+    user = User(
+        telegram_id=None,
+        first_name=claims.get("given_name"),
+        last_name=claims.get("family_name"),
+        photo_url=claims.get("picture"),
+        language_code=claims.get("locale"),
+    )
+    db.add(user)
+    await db.flush()
+    return user
+
+
+async def create_for_email(db: AsyncSession) -> User:
+    """create a telegram-less account for an email/password registration"""
+    user = User(telegram_id=None)
+    db.add(user)
+    await db.flush()
+    return user
+
+
+def apply_telegram_profile(user: User, data: TelegramUserData) -> None:
+    """refresh the mutable profile fields telegram supplies on every login"""
+    user.username = data.username
+    user.first_name = data.first_name
+    user.last_name = data.last_name
+    user.language_code = data.language_code
+    user.photo_url = data.photo_url
 
 
 async def get_by_id(db: AsyncSession, user_id: int) -> User | None:

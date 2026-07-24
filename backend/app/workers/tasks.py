@@ -14,6 +14,7 @@ from app.core.observability import counter, observe
 from app.core.operational_metrics import record_worker_task
 from app.db.models import PhotoStatus
 from app.db.repositories import photos as photos_repo
+from app.db.repositories import media_deletion_jobs as media_deletion_jobs_repo
 from app.db.repositories import refresh_tokens as refresh_tokens_repo
 from app.integrations import storage
 from app.modules.stories.image_validation import InvalidImageError, decode_image
@@ -279,6 +280,56 @@ def cleanup_stale_photos() -> int:
     except Exception:
         record_worker_task(
             "maintenance.cleanup_stale_photos",
+            "failed",
+            time.perf_counter() - started,
+        )
+        raise
+
+
+async def _cleanup_deleted_media() -> int:
+    settings = get_settings()
+    engine = create_async_engine(settings.sqlalchemy_database_url)
+    deleted = 0
+    try:
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        for _ in range(CLEANUP_BATCH_SIZE):
+            async with maker() as db:
+                job = await media_deletion_jobs_repo.claim_due(db)
+                if job is None:
+                    await db.rollback()
+                    break
+                try:
+                    storage.delete_object(job.object_key)
+                    await storage.invalidate_presigned_get_url(job.object_key)
+                    await media_deletion_jobs_repo.complete(db, job)
+                    await db.commit()
+                    deleted += 1
+                except Exception as error:
+                    media_deletion_jobs_repo.retry(job, error)
+                    await db.commit()
+        return deleted
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(
+    name="maintenance.cleanup_deleted_media",
+    soft_time_limit=120,
+    time_limit=180,
+)
+def cleanup_deleted_media() -> int:
+    started = time.perf_counter()
+    try:
+        result = asyncio.run(_cleanup_deleted_media())
+        record_worker_task(
+            "maintenance.cleanup_deleted_media",
+            "success",
+            time.perf_counter() - started,
+        )
+        return result
+    except Exception:
+        record_worker_task(
+            "maintenance.cleanup_deleted_media",
             "failed",
             time.perf_counter() - started,
         )

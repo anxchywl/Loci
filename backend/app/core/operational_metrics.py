@@ -17,6 +17,7 @@ _TASKS = frozenset(
         "notifications.telegram",
         "maintenance.cleanup_refresh_tokens",
         "maintenance.cleanup_stale_photos",
+        "maintenance.cleanup_deleted_media",
     }
 )
 _OUTCOMES = frozenset({"success", "invalid", "failed"})

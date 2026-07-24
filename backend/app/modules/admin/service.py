@@ -28,7 +28,8 @@ def _item(user: User, settings: Settings, counts: dict[str, int], saved: int, re
         created_at=user.created_at,
         last_active_at=user.last_active_at,
         status=admin_repo._status(user),
-        is_admin=user.telegram_id in settings.admin_ids,
+        is_admin=user.is_admin,
+        erased_at=user.erased_at,
         stories_count=counts.get("all", 0),
         approved_stories=counts.get("approved", 0),
         pending_stories=counts.get("pending", 0),
@@ -112,6 +113,11 @@ async def set_deleted(db: AsyncSession, admin_id: int, user_id: int, reason: str
     target = await admin_repo.get_user(db, user_id)
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if not deleted and target.erased_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Self-erased accounts cannot be restored",
+        )
     target.deleted_at = None if not deleted else datetime.now(UTC)
     if deleted:
         await refresh_repo.revoke_all_for_user(db, user_id, datetime.now(UTC))

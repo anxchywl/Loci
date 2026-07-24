@@ -114,6 +114,22 @@ No illustrations, no emoji, no multi-line apologetic copy.
   only the tiles remain light. A future dark basemap change starts here and
   requires the full light/dark marker-legibility check.
 
+## Transactional email (auth: verification, reset, change notice)
+
+Loci restyle of the reference mailer — plain, typography-led, and legible in any
+mail client including forced dark mode.
+
+- No emoji, no gradient headers, no decorative imagery. A small uppercase "LOCI"
+  wordmark, a bold title, body copy, then the code.
+- Neutral surfaces only: white card / light-gray code block (`#f4f4f5`), zinc text
+  ramp; no brand-color fills behind large areas. Background is transparent so the
+  client's own surface shows through.
+- The 6-digit code is a single monospace, letter-spaced block — selectable, never
+  an image.
+- Always ships an HTML part **and** a plain-text alternative.
+- Localized in en/kk/ru (`app/integrations/email.py`); codes never appear in
+  production logs.
+
 ## Definition of done (every UI task)
 
 1. Screenshot in Telegram **light** and **dark** theme params.
