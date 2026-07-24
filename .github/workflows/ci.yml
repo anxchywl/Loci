@@ -130,6 +130,12 @@ jobs:
         run: |
           echo "CADDY_DOMAIN=ci.example.com" >> .env
           echo "GRAFANA_ADMIN_PASSWORD=ci-placeholder-not-for-production" >> .env
+          echo "EMAIL_CODE_SECRET=ci-placeholder-email-code-secret" >> .env
+          echo "EMAIL_HOST=smtp.ci.example.com" >> .env
+          echo "EMAIL_USERNAME=ci-placeholder" >> .env
+          echo "EMAIL_PASSWORD=ci-placeholder" >> .env
+          echo "EMAIL_FROM=Loci <noreply@ci.example.com>" >> .env
+          echo "NEXT_PUBLIC_SUPPORT_EMAIL=privacy@ci.example" >> .env
           COMPOSE_ENV_FILE="$PWD/.env" deploy/check-capacity-model.sh
           docker run --rm -v "$PWD:/mnt:ro" koalaman/shellcheck:v0.11.0 \
             /mnt/deploy/backup.sh /mnt/deploy/check-auth-config.sh \
