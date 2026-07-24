@@ -1,7 +1,20 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+
+class ProfileUpdate(BaseModel):
+    # the name the user wants shown; trimmed, and cannot be blank once given
+    display_name: str = Field(min_length=1, max_length=50)
+
+    @field_validator("display_name")
+    @classmethod
+    def _clean(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("display name cannot be blank")
+        return cleaned
 
 
 class TelegramAuthRequest(BaseModel):
@@ -76,8 +89,13 @@ class SessionSummary(BaseModel):
     created_at: datetime
     last_used_at: datetime
     device_type: str | None
+    device_model: str | None = None
     browser: str | None
+    browser_version: str | None = None
     operating_system: str | None
+    os_version: str | None = None
+    # the app was opened inside a native client's webview rather than a browser
+    in_app: bool = False
 
 
 class UserResponse(BaseModel):
@@ -87,6 +105,7 @@ class UserResponse(BaseModel):
     username: str | None
     first_name: str | None
     last_name: str | None
+    display_name: str | None
     photo_url: str | None
     language_code: str | None
     is_admin: bool = False

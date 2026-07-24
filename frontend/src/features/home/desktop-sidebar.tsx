@@ -9,7 +9,6 @@ import {
   Flame,
   Flag,
   Github,
-  Globe,
   Info,
   MapPin,
   Menu,
@@ -27,8 +26,10 @@ import {
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { AccountSettings } from "@/features/auth/account-settings";
+import { SettingsSection } from "@/components/settings-section";
+import { AccountSettings, type SettingsSheet } from "@/features/auth/account-settings";
 import { AuthPanel } from "@/features/auth/auth-panel";
+import { EditableName } from "@/features/auth/editable-name";
 import { useTelegramAuth } from "@/features/auth/hooks";
 import { authorLabel } from "@/features/stories/api";
 import { ReactionButton } from "@/features/stories/components/reaction-button";
@@ -295,8 +296,25 @@ function StoryPanel({
   );
 }
 
-export function SettingsPanel() {
+/**
+ * Language and appearance, plus (on mobile, where it is reached through the
+ * profile card's gear) the account settings themselves — sign-in methods,
+ * sessions, and the danger zone belong behind a deliberate tap rather than in
+ * the menu the user opens to browse.
+ */
+export function SettingsPanel({
+  includeAccount = false,
+  sheet,
+  stepActive = false,
+}: {
+  includeAccount?: boolean;
+  /** lends the host sheet's header to the account steps (mobile) */
+  sheet?: SettingsSheet;
+  /** an account step is open and owns the sheet: preferences step aside */
+  stepActive?: boolean;
+}) {
   const t = useDict();
+  const { user } = useTelegramAuth();
   const locale = useUiStore((s) => s.locale);
   const setLocale = useUiStore((s) => s.setLocale);
   const theme = useUiStore((s) => s.theme);
@@ -332,45 +350,47 @@ export function SettingsPanel() {
     { value: "dark", label: t.themeDark, icon: <Moon size={14} /> },
   ];
 
-  return (
-    <div className="space-y-4 px-4 py-2">
-      <div>
-        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
-          <Globe size={12} /> {t.languageLabel}
-        </div>
-        <div className="flex gap-1.5">
-          {localeOrder.map((l) => (
-            <button key={l} onClick={() => handleLocale(l)}
-              className={[
-                "min-w-0 flex-1 rounded-lg px-1 py-1.5 text-center text-[12px] font-medium leading-tight transition-colors",
-                locale === l
-                  ? "bg-accent text-accent-text"
-                  : "bg-surface text-text hover:bg-border",
-              ].join(" ")}>
-              {localeLabels[l]}
-            </button>
-          ))}
-        </div>
-      </div>
+  // an iOS/Telegram-style segmented control: pills inside one filled track, the
+  // same shape and fill as the cards in the account groups below
+  const track = "flex gap-1 rounded-2xl bg-surface p-1";
+  const segment = (selected: boolean) =>
+    [
+      "flex min-w-0 flex-1 items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-center text-[13px] font-medium leading-tight transition-colors",
+      selected ? "bg-accent text-accent-text" : "text-muted hover:text-text",
+    ].join(" ");
 
-      <div>
-        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
-          <Settings size={12} /> {t.themeLabel}
+  return (
+    <div className="flex flex-col gap-4 px-4 py-2">
+      {!stepActive && (
+        <>
+          <SettingsSection title={t.languageLabel} framed={false}>
+            <div className={track}>
+              {localeOrder.map((l) => (
+                <button key={l} onClick={() => handleLocale(l)} className={segment(locale === l)}>
+                  {localeLabels[l]}
+                </button>
+              ))}
+            </div>
+          </SettingsSection>
+
+          <SettingsSection title={t.themeLabel} framed={false}>
+            <div className={track}>
+              {themes.map(({ value, label, icon }) => (
+                <button key={value} onClick={() => handleTheme(value)} className={segment(theme === value)}>
+                  {icon} <span className="truncate">{label}</span>
+                </button>
+              ))}
+            </div>
+          </SettingsSection>
+        </>
+      )}
+
+      {/* the account groups continue the same section rhythm below a divider */}
+      {includeAccount && user && (
+        <div className={stepActive ? "" : "border-t border-border pt-4"}>
+          <AccountSettings sheet={sheet} />
         </div>
-        <div className="flex gap-1.5">
-          {themes.map(({ value, label, icon }) => (
-            <button key={value} onClick={() => handleTheme(value)}
-              className={[
-                "flex min-w-0 flex-1 items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-center text-[12px] font-medium leading-tight transition-colors",
-                theme === value
-                  ? "bg-accent text-accent-text"
-                  : "bg-surface text-text hover:bg-border",
-              ].join(" ")}>
-              {icon} <span className="truncate">{label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -383,16 +403,9 @@ export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void
     <div className="flex h-full flex-col gap-5 px-4 py-2">
       {user ? (
         <div className="flex items-center gap-3 rounded-2xl bg-surface p-3">
-          {user.photo_url ? (
-            <img src={user.photo_url} alt="" className="h-11 w-11 rounded-full object-cover" />
-          ) : (
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-accent text-[17px] font-semibold text-accent-text">
-              {user.first_name?.[0]?.toUpperCase() ?? "U"}
-            </div>
-          )}
-          <div>
-            <div className="text-[15px] font-bold text-text">{user.first_name} {user.last_name}</div>
-            <div className="text-[13px] text-muted">{user.username ? `@${user.username}` : t.profile}</div>
+          <div className="min-w-0 flex-1">
+            <EditableName user={user} />
+            {user.username && <div className="truncate text-[13px] text-muted">@{user.username}</div>}
           </div>
           {user.is_admin && (
             <Link
@@ -409,7 +422,7 @@ export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void
           {onSettingsClick && (
             <button
               onClick={onSettingsClick}
-              aria-label={t.themeLabel}
+              aria-label={t.settings}
               className="ml-auto flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:text-accent focus-visible:text-accent"
             >
               <Settings size={18} />
@@ -430,7 +443,8 @@ export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void
         </div>
       )}
 
-      {user && (
+      {/* with a gear in the card (mobile), the account settings live behind it */}
+      {user && !onSettingsClick && (
         <div className="overflow-y-auto">
           <AccountSettings />
         </div>
@@ -581,7 +595,7 @@ export function DesktopSidebar({
     story: "",
     trending: t.trending,
     nearby: t.nearby,
-    settings: t.themeLabel,
+    settings: t.settings,
   };
 
   return (
@@ -701,7 +715,8 @@ export function DesktopSidebar({
                   onOpen={(story) => handleStoryOpen(story.id, story.lat, story.lon, "my-stories")}
                 />
               )}
-              {activePanel === "profile" && <ProfilePanel />}
+              {activePanel === "profile" && <ProfilePanel onSettingsClick={() => onSetActivePanel("settings")} />}
+              {activePanel === "settings" && <SettingsPanel includeAccount />}
               {activePanel === "about" && (
                 <div key={openDoc ?? "about"} className="animate-fade-in">
                   {openDoc ? (

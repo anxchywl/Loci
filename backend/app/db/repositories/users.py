@@ -67,5 +67,10 @@ def apply_telegram_profile(user: User, data: TelegramUserData) -> None:
     user.photo_url = data.photo_url
 
 
+async def set_display_name(db: AsyncSession, user: User, display_name: str) -> None:
+    user.display_name = display_name
+    await db.flush()
+
+
 async def get_by_id(db: AsyncSession, user_id: int) -> User | None:
     return await db.get(User, user_id)

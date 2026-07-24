@@ -13,12 +13,14 @@ export interface StoryAuthor {
   id: number;
   username: string | null;
   first_name: string | null;
+  display_name: string | null;
   photo_url: string | null;
 }
 
 export function authorLabel(author: StoryAuthor | null): string | null {
   if (!author) return null;
-  return author.username ? `@${author.username}` : author.first_name;
+  // the author's chosen name wins over their handle, mirroring the backend label
+  return author.display_name || (author.username ? `@${author.username}` : author.first_name);
 }
 
 export interface StoryPhoto {

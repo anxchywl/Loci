@@ -16,6 +16,9 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(Text)
     first_name: Mapped[str | None] = mapped_column(Text)
     last_name: Mapped[str | None] = mapped_column(Text)
+    # user-chosen name; when set it takes precedence over the provider's
+    # first/last name, which telegram overwrites on every login
+    display_name: Mapped[str | None] = mapped_column(Text)
     language_code: Mapped[str | None] = mapped_column(Text)
     photo_url: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

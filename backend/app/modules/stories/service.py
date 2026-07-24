@@ -35,6 +35,8 @@ def _author_label(user, *, anonymous: bool = False) -> str:
         return "an anonymous author"
     if user is None:
         return "a user"
+    if user.display_name:
+        return user.display_name
     if user.username:
         return f"@{user.username}"
     return user.first_name or f"user #{user.id}"
@@ -48,6 +50,7 @@ def _author_from_row(row) -> AuthorResponse | None:
         id=row["author_id"],
         username=row["author_username"],
         first_name=row["author_first_name"],
+        display_name=row["author_display_name"],
         photo_url=row["author_photo_url"],
     )
 

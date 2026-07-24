@@ -23,9 +23,13 @@ async def approve_story(db_session, story_id: str) -> None:
     await db_session.commit()
 
 
-async def authenticate(client, telegram_id: int = 500) -> str:
+async def authenticate(client, telegram_id: int = 500, user_agent: str | None = None) -> str:
+    # a distinct user agent stands in for a distinct device: signing in again
+    # from the same one continues that device's session instead of opening a new one
     response = await client.post(
-        "/api/v1/auth/telegram", json={"init_data": build_init_data(telegram_id=telegram_id)}
+        "/api/v1/auth/telegram",
+        json={"init_data": build_init_data(telegram_id=telegram_id)},
+        headers={"user-agent": user_agent} if user_agent is not None else None,
     )
     assert response.status_code == 200
     token = response.json()["access_token"]

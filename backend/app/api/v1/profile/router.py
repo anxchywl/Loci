@@ -6,20 +6,36 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db_session
 from app.db.models import User
 from app.db.repositories import stories as stories_repo
-from app.modules.auth.schemas import UserResponse
+from app.db.repositories import users as users_repo
+from app.modules.auth.schemas import ProfileUpdate, UserResponse
 from app.modules.stories import service
 from app.modules.stories.schemas import StoryResponse
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
 
+def _me(user: User) -> UserResponse:
+    response = UserResponse.model_validate(user)
+    response.is_admin = user.is_admin
+    return response
+
+
 @router.get("/me", response_model=UserResponse)
 async def get_me(
     user: Annotated[User, Depends(get_current_user)],
 ) -> UserResponse:
-    response = UserResponse.model_validate(user)
-    response.is_admin = user.is_admin
-    return response
+    return _me(user)
+
+
+@router.patch("/me", response_model=UserResponse)
+async def update_me(
+    payload: ProfileUpdate,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> UserResponse:
+    await users_repo.set_display_name(db, user, payload.display_name)
+    await db.commit()
+    return _me(user)
 
 
 @router.get("/me/stories", response_model=list[StoryResponse])

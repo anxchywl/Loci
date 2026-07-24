@@ -114,6 +114,7 @@ async def erase_user(db: AsyncSession, user_id: int, now: datetime) -> list[uuid
     user.username = None
     user.first_name = None
     user.last_name = None
+    user.display_name = None
     user.language_code = None
     user.photo_url = None
     user.last_active_at = None

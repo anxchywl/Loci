@@ -11,6 +11,8 @@ interface AuthState {
   inTelegram: boolean;
   returnNotice: AuthReturnNotice;
   setSession: (user: AuthUser | null, status: AuthStatus) => void;
+  /** patch fields on the signed-in user (e.g. after a profile edit); no-op when signed out */
+  updateUser: (patch: Partial<AuthUser>) => void;
   setInTelegram: (value: boolean) => void;
   setReturnNotice: (notice: AuthReturnNotice) => void;
 }
@@ -21,6 +23,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   inTelegram: false,
   returnNotice: null,
   setSession: (user, status) => set({ user, status }),
+  updateUser: (patch) => set((state) => (state.user ? { user: { ...state.user, ...patch } } : {})),
   setInTelegram: (value) => set({ inTelegram: value }),
   setReturnNotice: (returnNotice) => set({ returnNotice }),
 }));

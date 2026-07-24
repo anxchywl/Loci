@@ -142,6 +142,9 @@ interface Dict {
   pendingHint: string;
   resubmit: string;
   edit: string;
+  editName: string;
+  namePlaceholder: string;
+  nameSaveError: string;
   moderation: string;
   approve: string;
   reject: string;
@@ -243,7 +246,7 @@ interface Dict {
   categories: Record<CategorySlug, string>;
 }
 
-interface AuthStrings {
+export interface AuthStrings {
   signIn: string;
   subtitle: string;
   continueGoogle: string;
@@ -283,9 +286,22 @@ interface AuthStrings {
   add: string;
   remove: string;
   thisDevice: string;
+  devicePhone: string;
+  deviceTablet: string;
+  deviceComputer: string;
+  unknownDevice: string;
+  inAppBrowser: string;
+  lastActive: string;
+  signedIn: string;
   logOut: string;
-  logOutEverywhere: string;
+  logOutConfirm: string;
+  removeDeviceTitle: string;
+  removeDeviceConfirm: string;
+  removeMethodTitle: string;
+  removeMethodConfirm: string;
+  addGoogleBody: string;
   lastMethod: string;
+  continueInBrowser: string;
   reauthNeeded: string;
   reauthAction: string;
   telegram: string;
@@ -418,9 +434,22 @@ export const dict: Record<Locale, Dict> = {
       add: "Add",
       remove: "Remove",
       thisDevice: "This device",
+      devicePhone: "Phone",
+      deviceTablet: "Tablet",
+      deviceComputer: "Computer",
+      unknownDevice: "Unrecognised device",
+      inAppBrowser: "In-app browser",
+      lastActive: "Last active",
+      signedIn: "signed in",
       logOut: "Log out",
-      logOutEverywhere: "Log out everywhere",
+      logOutConfirm: "You will need to sign in again on this device.",
+      removeDeviceTitle: "Remove device",
+      removeDeviceConfirm: "This device will be signed out immediately.",
+      removeMethodTitle: "Remove sign-in method",
+      removeMethodConfirm: "You will no longer be able to sign in this way.",
+      addGoogleBody: "Google will ask you to pick an account and confirm.",
       lastMethod: "You can't remove your only sign-in method.",
+      continueInBrowser: "Continue in the browser that just opened, then come back here.",
       reauthNeeded: "Please sign in again to make this change.",
       reauthAction: "Sign in again",
       telegram: "Telegram",
@@ -515,6 +544,9 @@ export const dict: Record<Locale, Dict> = {
     pendingHint: "In review — visible only to you until approved.",
     resubmit: "Resubmit",
     edit: "Edit",
+    editName: "Edit name",
+    namePlaceholder: "Your name",
+    nameSaveError: "Your name could not be saved.",
     moderation: "Moderation",
     approve: "Approve",
     reject: "Reject",
@@ -737,9 +769,22 @@ export const dict: Record<Locale, Dict> = {
       add: "Қосу",
       remove: "Жою",
       thisDevice: "Осы құрылғы",
+      devicePhone: "Телефон",
+      deviceTablet: "Планшет",
+      deviceComputer: "Компьютер",
+      unknownDevice: "Танылмаған құрылғы",
+      inAppBrowser: "Қолданба ішіндегі браузер",
+      lastActive: "Соңғы белсенділік:",
+      signedIn: "кірген:",
       logOut: "Шығу",
-      logOutEverywhere: "Барлық жерден шығу",
+      logOutConfirm: "Бұл құрылғыда қайта кіру қажет болады.",
+      removeDeviceTitle: "Құрылғыны алып тастау",
+      removeDeviceConfirm: "Бұл құрылғы бірден шығарылады.",
+      removeMethodTitle: "Кіру әдісін алып тастау",
+      removeMethodConfirm: "Бұдан кейін осы әдіспен кіру мүмкін болмайды.",
+      addGoogleBody: "Google аккаунт таңдап, растауды сұрайды.",
       lastMethod: "Жалғыз кіру әдісін жоя алмайсыз.",
+      continueInBrowser: "Ашылған браузерде жалғастырып, осында қайтыңыз.",
       reauthNeeded: "Бұл өзгерісті енгізу үшін қайта кіріңіз.",
       reauthAction: "Қайта кіру",
       telegram: "Telegram",
@@ -834,6 +879,9 @@ export const dict: Record<Locale, Dict> = {
     pendingHint: "Тексерілуде — мақұлданғанша тек сізге көрінеді.",
     resubmit: "Қайта жіберу",
     edit: "Өңдеу",
+    editName: "Атын өзгерту",
+    namePlaceholder: "Атыңыз",
+    nameSaveError: "Атыңызды сақтау мүмкін болмады.",
     moderation: "Модерация",
     approve: "Мақұлдау",
     reject: "Қабылдамау",
@@ -1056,9 +1104,22 @@ export const dict: Record<Locale, Dict> = {
       add: "Добавить",
       remove: "Удалить",
       thisDevice: "Это устройство",
+      devicePhone: "Телефон",
+      deviceTablet: "Планшет",
+      deviceComputer: "Компьютер",
+      unknownDevice: "Неизвестное устройство",
+      inAppBrowser: "Встроенный браузер",
+      lastActive: "Последняя активность:",
+      signedIn: "вход:",
       logOut: "Выйти",
-      logOutEverywhere: "Выйти везде",
+      logOutConfirm: "На этом устройстве потребуется войти снова.",
+      removeDeviceTitle: "Удалить устройство",
+      removeDeviceConfirm: "Это устройство выйдет из аккаунта сразу же.",
+      removeMethodTitle: "Удалить способ входа",
+      removeMethodConfirm: "Войти этим способом больше не получится.",
+      addGoogleBody: "Google попросит выбрать аккаунт и подтвердить.",
       lastMethod: "Нельзя удалить единственный способ входа.",
+      continueInBrowser: "Продолжите в открывшемся браузере и вернитесь сюда.",
       reauthNeeded: "Войдите снова, чтобы выполнить это действие.",
       reauthAction: "Войти снова",
       telegram: "Telegram",
@@ -1153,6 +1214,9 @@ export const dict: Record<Locale, Dict> = {
     pendingHint: "На проверке — видно только вам до одобрения.",
     resubmit: "Отправить снова",
     edit: "Изменить",
+    editName: "Изменить имя",
+    namePlaceholder: "Ваше имя",
+    nameSaveError: "Не удалось сохранить имя.",
     moderation: "Модерация",
     approve: "Одобрить",
     reject: "Отклонить",

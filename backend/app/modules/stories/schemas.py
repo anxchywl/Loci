@@ -30,6 +30,7 @@ class AuthorResponse(BaseModel):
     id: int
     username: str | None
     first_name: str | None
+    display_name: str | None = None
     photo_url: str | None
 
 

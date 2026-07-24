@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { AccountSettings } from "@/features/auth/account-settings";
 import { AuthPanel } from "@/features/auth/auth-panel";
+import { EditableName } from "@/features/auth/editable-name";
 import { useTelegramAuth } from "@/features/auth/hooks";
 import { useMyBookmarks, useMyStories } from "@/features/profile/hooks";
 import { StoryListItem } from "@/features/stories/components/story-list-item";
@@ -56,21 +57,11 @@ export function ProfileManager() {
         {authenticated && user && (
           <>
             <div className="mt-4 flex items-center gap-3">
-              {user.photo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={user.photo_url} alt="" className="h-12 w-12 rounded-full" />
-              ) : (
-                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-surface text-[17px] font-semibold">
-                  {(user.first_name ?? user.username ?? "?").slice(0, 1)}
-                </span>
-              )}
-              <div>
-                <div className="text-[17px] font-semibold">
-                  {user.first_name ?? user.username}
-                </div>
-                {user.username && <div className="text-[13px] text-muted">@{user.username}</div>}
+              <div className="min-w-0 flex-1">
+                <EditableName user={user} />
+                {user.username && <div className="truncate text-[13px] text-muted">@{user.username}</div>}
               </div>
-              <div className="ml-auto text-right">
+              <div className="text-right">
                 <div className="text-[20px] font-semibold">{myStories?.length ?? 0}</div>
                 <div className="text-[13px] text-muted">{t.storiesCount}</div>
               </div>

@@ -1,13 +1,22 @@
 import { apiFetch } from "@/lib/api";
+import { isTelegramWebApp, openExternalLink } from "@/lib/telegram/init";
 
 export interface AuthUser {
   id: number;
   username: string | null;
   first_name: string | null;
   last_name: string | null;
+  /** user-chosen name; overrides the provider's first/last name when set */
+  display_name: string | null;
   photo_url: string | null;
   language_code: string | null;
   is_admin?: boolean;
+}
+
+/** The name to show for a user: their chosen name, else the provider's, else a handle. */
+export function resolveUserName(user: AuthUser): string {
+  const provided = [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
+  return user.display_name || provided || (user.username ? `@${user.username}` : "");
 }
 
 export interface TokenResponse {
@@ -31,8 +40,13 @@ export interface SessionSummary {
   created_at: string;
   last_used_at: string;
   device_type: string | null;
+  device_model?: string | null;
   browser: string | null;
+  browser_version?: string | null;
   operating_system: string | null;
+  os_version?: string | null;
+  /** opened inside a native client's webview (e.g. Telegram) rather than a browser */
+  in_app?: boolean;
 }
 
 export interface AuthProviders {
@@ -53,6 +67,13 @@ export function postTelegramAuth(initData: string): Promise<TokenResponse> {
 
 export function fetchCurrentUser(): Promise<AuthUser> {
   return apiFetch<AuthUser>("/profile/me");
+}
+
+export function updateDisplayName(displayName: string): Promise<AuthUser> {
+  return apiFetch<AuthUser>("/profile/me", {
+    method: "PATCH",
+    body: JSON.stringify({ display_name: displayName }),
+  });
 }
 
 export function registerEmail(email: string, password: string): Promise<{ detail: string }> {
@@ -98,18 +119,34 @@ export function confirmPasswordReset(
   });
 }
 
-export async function startGoogleLogin(redirect: string): Promise<void> {
+/** where the provider's page was opened, which decides what the UI says next */
+export type ProviderHandoff = "external" | "same-tab";
+
+function openProvider(authorizationUrl: string): ProviderHandoff {
+  // Google refuses OAuth inside embedded webviews (disallowed_useragent) and the
+  // mini app is one, so in Telegram the URL goes to openLink — which hands it to
+  // a real browser. The flow finishes there and the app picks the result up when
+  // it regains focus.
+  if (isTelegramWebApp()) {
+    openExternalLink(authorizationUrl);
+    return "external";
+  }
+  window.location.assign(authorizationUrl);
+  return "same-tab";
+}
+
+export async function startGoogleLogin(redirect: string): Promise<ProviderHandoff> {
   const { authorization_url } = await apiFetch<{ authorization_url: string }>(
     `/auth/google/start?redirect=${encodeURIComponent(redirect)}`,
   );
-  window.location.assign(authorization_url);
+  return openProvider(authorization_url);
 }
 
-export async function startGoogleLink(redirect: string): Promise<void> {
+export async function startGoogleLink(redirect: string): Promise<ProviderHandoff> {
   const { authorization_url } = await apiFetch<{ authorization_url: string }>(
     `/auth/google/link/start?redirect=${encodeURIComponent(redirect)}`,
   );
-  window.location.assign(authorization_url);
+  return openProvider(authorization_url);
 }
 
 export function listIdentities(): Promise<IdentitySummary[]> {
@@ -140,10 +177,6 @@ export function listSessions(): Promise<SessionSummary[]> {
 
 export function revokeSession(id: string): Promise<void> {
   return apiFetch(`/auth/sessions/${id}`, { method: "DELETE" });
-}
-
-export function logoutEverywhere(): Promise<void> {
-  return apiFetch("/auth/logout-all", { method: "POST" });
 }
 
 export function logout(): Promise<void> {

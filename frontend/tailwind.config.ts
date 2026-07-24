@@ -33,11 +33,16 @@ const config: Config = {
           from: { opacity: "0", transform: "translateY(4px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
+        "dialog-in": {
+          from: { opacity: "0", transform: "translateY(8px) scale(0.98)" },
+          to: { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
       },
       animation: {
         "sheet-up": "sheet-up 240ms cubic-bezier(0.2, 0, 0, 1)",
         "fade-in": "fade-in 150ms cubic-bezier(0.2, 0, 0, 1)",
         "story-state": "story-state 240ms cubic-bezier(0.2, 0, 0, 1)",
+        "dialog-in": "dialog-in 200ms cubic-bezier(0.2, 0, 0, 1)",
       },
     },
   },

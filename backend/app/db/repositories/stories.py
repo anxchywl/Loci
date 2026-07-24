@@ -28,6 +28,7 @@ STORY_READ_COLUMNS = (
     func.ST_X(Story.location_public).label("lon"),
     User.username.label("author_username"),
     User.first_name.label("author_first_name"),
+    User.display_name.label("author_display_name"),
     User.photo_url.label("author_photo_url"),
 )
 
@@ -417,6 +418,7 @@ _QUEUE_COLUMNS = (
     func.ST_X(Story.location_public).label("lon"),
     User.username.label("author_username"),
     User.first_name.label("author_first_name"),
+    User.display_name.label("author_display_name"),
     User.photo_url.label("author_photo_url"),
 )
 
