@@ -59,7 +59,6 @@ export function ProfileManager() {
             <div className="mt-4 flex items-center gap-3">
               <div className="min-w-0 flex-1">
                 <EditableName user={user} />
-                {user.username && <div className="truncate text-[13px] text-muted">@{user.username}</div>}
               </div>
               <div className="text-right">
                 <div className="text-[20px] font-semibold">{myStories?.length ?? 0}</div>

@@ -143,6 +143,7 @@ interface Dict {
   resubmit: string;
   edit: string;
   editName: string;
+  changeName: string;
   namePlaceholder: string;
   nameSaveError: string;
   moderation: string;
@@ -545,6 +546,7 @@ export const dict: Record<Locale, Dict> = {
     resubmit: "Resubmit",
     edit: "Edit",
     editName: "Edit name",
+    changeName: "Change name",
     namePlaceholder: "Your name",
     nameSaveError: "Your name could not be saved.",
     moderation: "Moderation",
@@ -880,6 +882,7 @@ export const dict: Record<Locale, Dict> = {
     resubmit: "Қайта жіберу",
     edit: "Өңдеу",
     editName: "Атын өзгерту",
+    changeName: "Атын өзгерту",
     namePlaceholder: "Атыңыз",
     nameSaveError: "Атыңызды сақтау мүмкін болмады.",
     moderation: "Модерация",
@@ -1215,6 +1218,7 @@ export const dict: Record<Locale, Dict> = {
     resubmit: "Отправить снова",
     edit: "Изменить",
     editName: "Изменить имя",
+    changeName: "Изменить имя",
     namePlaceholder: "Ваше имя",
     nameSaveError: "Не удалось сохранить имя.",
     moderation: "Модерация",

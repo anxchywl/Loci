@@ -37,9 +37,7 @@ def _author_label(user, *, anonymous: bool = False) -> str:
         return "a user"
     if user.display_name:
         return user.display_name
-    if user.username:
-        return f"@{user.username}"
-    return user.first_name or f"user #{user.id}"
+    return " ".join(part for part in (user.first_name, user.last_name) if part) or "a user"
 
 
 def _author_from_row(row) -> AuthorResponse | None:

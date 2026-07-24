@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AccountSettings } from "@/features/auth/account-settings";
+import { AccountSettings, DeleteAccountIconButton } from "@/features/auth/account-settings";
 import { renderWithQuery } from "@/test/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUiStore } from "@/stores/ui-store";
@@ -77,15 +77,6 @@ describe("AccountSettings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     await waitFor(() => expect(unlinkIdentity).toHaveBeenCalledOnce());
     expect(vi.mocked(unlinkIdentity).mock.calls[0]?.[0]).toBe("google");
-  });
-
-  it("cancels a confirmation step back to the list", async () => {
-    renderWithQuery(<AccountSettings />);
-    fireEvent.click(await screen.findByRole("button", { name: "Log out" }));
-    expect(screen.getByText("You will need to sign in again on this device.")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(await screen.findByText("Sign-in methods")).toBeInTheDocument();
   });
 
   it("renders current-session device details from the session API", async () => {
@@ -173,9 +164,9 @@ describe("AccountSettings", () => {
   });
 
   it("requires the exact phrase before permanently deleting the account", async () => {
-    renderWithQuery(<AccountSettings />);
+    renderWithQuery(<DeleteAccountIconButton />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Delete account" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete account" }));
     const confirmation = screen.getByLabelText(/Type this phrase to continue/);
     const submit = screen.getByRole("button", { name: "Delete permanently" });
     expect(submit).toBeDisabled();

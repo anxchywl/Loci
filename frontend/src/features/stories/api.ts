@@ -19,8 +19,8 @@ export interface StoryAuthor {
 
 export function authorLabel(author: StoryAuthor | null): string | null {
   if (!author) return null;
-  // the author's chosen name wins over their handle, mirroring the backend label
-  return author.display_name || (author.username ? `@${author.username}` : author.first_name);
+  // the author's chosen name wins over their provider name, mirroring the backend label
+  return author.display_name || author.first_name || "a user";
 }
 
 export interface StoryPhoto {

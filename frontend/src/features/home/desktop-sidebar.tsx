@@ -27,7 +27,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { SettingsSection } from "@/components/settings-section";
-import { AccountSettings, LogoutIconButton, type SettingsSheet } from "@/features/auth/account-settings";
+import { AccountSettings, DeleteAccountIconButton, LogoutIconButton, type SettingsSheet } from "@/features/auth/account-settings";
 import { AuthPanel } from "@/features/auth/auth-panel";
 import { EditableName } from "@/features/auth/editable-name";
 import { useTelegramAuth } from "@/features/auth/hooks";
@@ -388,7 +388,7 @@ export function SettingsPanel({
       {/* the account groups continue the same section rhythm below a divider */}
       {includeAccount && user && (
         <div className={stepActive ? "" : "border-t border-border pt-4"}>
-          <AccountSettings sheet={sheet} showLogout={false} compactDanger />
+          <AccountSettings sheet={sheet} />
         </div>
       )}
     </div>
@@ -405,7 +405,6 @@ export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void
         <div className="flex items-center gap-3 rounded-2xl bg-surface p-3">
           <div className="min-w-0 flex-1">
             <EditableName user={user} />
-            {user.username && <div className="truncate text-[13px] text-muted">@{user.username}</div>}
           </div>
           {user.is_admin && (
             <Link
@@ -428,7 +427,10 @@ export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void
               <Settings size={18} />
             </button>
           )}
-          <LogoutIconButton />
+          <div className="flex shrink-0 items-center gap-1">
+            <DeleteAccountIconButton />
+            <LogoutIconButton />
+          </div>
         </div>
       ) : (
         <div className="flex flex-1 flex-col justify-center px-1 py-6">
@@ -447,7 +449,7 @@ export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void
       {/* with a gear in the card (mobile), the account settings live behind it */}
       {user && !onSettingsClick && (
         <div className="overflow-y-auto">
-          <AccountSettings showLogout={false} compactDanger />
+          <AccountSettings />
         </div>
       )}
 

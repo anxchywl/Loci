@@ -13,10 +13,10 @@ export interface AuthUser {
   is_admin?: boolean;
 }
 
-/** The name to show for a user: their chosen name, else the provider's, else a handle. */
+/** The name to show for a user: their chosen name, else the provider's name. */
 export function resolveUserName(user: AuthUser): string {
   const provided = [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
-  return user.display_name || provided || (user.username ? `@${user.username}` : "");
+  return user.display_name || provided;
 }
 
 export interface TokenResponse {

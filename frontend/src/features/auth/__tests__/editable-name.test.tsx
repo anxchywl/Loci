@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resolveUserName, type AuthUser } from "@/features/auth/api";
-import { EditableName } from "@/features/auth/editable-name";
+import { ChangeNameButton, EditableName } from "@/features/auth/editable-name";
 import { renderWithQuery } from "@/test/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUiStore } from "@/stores/ui-store";
@@ -25,12 +25,12 @@ const baseUser: AuthUser = {
 };
 
 describe("resolveUserName", () => {
-  it("prefers the chosen display name, then provider name, then handle", () => {
+  it("prefers the chosen display name, then provider name", () => {
     expect(resolveUserName({ ...baseUser, display_name: "Chosen" })).toBe("Chosen");
     expect(resolveUserName(baseUser)).toBe("Aru M");
     expect(
       resolveUserName({ ...baseUser, first_name: null, last_name: null }),
-    ).toBe("@loci_mapper");
+    ).toBe("");
   });
 });
 
@@ -43,9 +43,9 @@ describe("EditableName", () => {
 
   it("saves an edited name and reflects it in the session", async () => {
     vi.mocked(updateDisplayName).mockResolvedValue({ ...baseUser, display_name: "New Name" });
-    renderWithQuery(<EditableName user={baseUser} />);
+    renderWithQuery(<ChangeNameButton user={baseUser} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit name" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change name" }));
     const input = screen.getByPlaceholderText("Your name");
     fireEvent.change(input, { target: { value: "  New   Name  " } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -56,11 +56,11 @@ describe("EditableName", () => {
   });
 
   it("does not call the API when the name is unchanged", async () => {
-    renderWithQuery(<EditableName user={baseUser} />);
-    fireEvent.click(screen.getByRole("button", { name: "Edit name" }));
+    renderWithQuery(<ChangeNameButton user={baseUser} />);
+    fireEvent.click(screen.getByRole("button", { name: "Change name" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(updateDisplayName).not.toHaveBeenCalled();
     // returns to the read view
-    expect(screen.getByRole("button", { name: "Edit name" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change name" })).toBeInTheDocument();
   });
 });

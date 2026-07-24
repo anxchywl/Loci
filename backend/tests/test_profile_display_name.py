@@ -1,5 +1,7 @@
 """The user-chosen display name: settable, provider-proof, and shown on stories."""
 
+import pytest
+
 from tests.factories import build_init_data
 from tests.test_stories_api import authenticate, story_payload
 
@@ -19,6 +21,27 @@ async def test_blank_display_name_is_rejected(client):
     await authenticate(client, telegram_id=1)
     assert (await client.patch(PROFILE, json={"display_name": "   "})).status_code == 422
     assert (await client.patch(PROFILE, json={"display_name": ""})).status_code == 422
+
+
+async def test_display_name_removes_hidden_controls_but_keeps_literal_punctuation(client):
+    await authenticate(client, telegram_id=1)
+    resp = await client.patch(
+        PROFILE,
+        json={"display_name": "  Robert\u200b'); DROP TABLE users;--  "},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["display_name"] == "Robert'); DROP TABLE users;--"
+
+
+async def test_account_erasure_confirmation_rejects_whitespace_and_injection():
+    from pydantic import ValidationError
+
+    from app.modules.auth.schemas import AccountErasureRequest
+
+    with pytest.raises(ValidationError):
+        AccountErasureRequest(confirmation=" DELETE MY ACCOUNT ")
+    with pytest.raises(ValidationError):
+        AccountErasureRequest(confirmation="DELETE MY ACCOUNT'; DROP TABLE users;--")
 
 
 async def test_display_name_survives_telegram_relogin(client):

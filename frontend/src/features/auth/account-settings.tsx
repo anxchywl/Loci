@@ -1,7 +1,8 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, LogOut, Monitor, Smartphone, Tablet, Trash2 } from "lucide-react";
+import { Loader2, LogOut, Monitor, Smartphone, Tablet, Trash2, X } from "lucide-react";
+import { createPortal } from "react-dom";
 import { useId, useState } from "react";
 
 import {
@@ -19,6 +20,7 @@ import {
   type SessionSummary,
 } from "@/features/auth/api";
 import { SettingsRow, SettingsSection } from "@/components/settings-section";
+import { ChangeNameButton } from "@/features/auth/editable-name";
 import { signOutState } from "@/features/auth/hooks";
 import { currentAuthRedirectTarget } from "@/features/auth/redirect";
 import { ApiError } from "@/lib/api";
@@ -29,6 +31,7 @@ import { useUiStore } from "@/stores/ui-store";
 
 const PROVIDERS: IdentitySummary["provider"][] = ["telegram", "google", "email"];
 const ACCOUNT_ERASURE_PHRASE = "DELETE MY ACCOUNT";
+const UNSAFE_CONFIRMATION_RE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g;
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -113,8 +116,7 @@ type Confirm =
   | { kind: "log-out" }
   | { kind: "remove-device"; session: SessionSummary }
   | { kind: "remove-method"; provider: IdentitySummary["provider"] }
-  | { kind: "add-method"; provider: "google" | "email" }
-  | { kind: "delete-account" };
+  | { kind: "add-method"; provider: "google" | "email" };
 
 /** how a host sheet lends its header to one of those steps */
 export interface SettingsSheet {
@@ -153,6 +155,39 @@ export function LogoutIconButton() {
   );
 }
 
+export function DeleteAccountIconButton() {
+  const t = useDict().auth;
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={t.deleteAccount}
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[var(--lm-danger,#dc2626)] transition-colors hover:bg-surface focus-visible:bg-surface"
+      >
+        <Trash2 size={17} />
+      </button>
+      {open && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="delete-account-title">
+          <button type="button" aria-label={t.cancel} onClick={() => setOpen(false)} className="absolute inset-0 bg-black/30 motion-safe:animate-fade-in" />
+          <div className="relative w-full max-w-sm rounded-sheet border border-border bg-bg p-4 shadow-[0_12px_40px_rgba(0,0,0,0.18)] motion-safe:animate-dialog-in">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 id="delete-account-title" className="text-[17px] font-semibold">{t.deleteAccount}</h2>
+              <button type="button" aria-label={t.cancel} onClick={() => setOpen(false)} className="rounded-lg p-1.5 text-muted transition-colors hover:bg-surface hover:text-text">
+                <X size={17} />
+              </button>
+            </div>
+            <DeleteAccountForm onCancel={() => setOpen(false)} />
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
 /**
  * `sheet` is passed by surfaces that can give a step its own header and back
  * button (the mobile bottom sheet). Without it — the desktop panel — the step
@@ -160,14 +195,11 @@ export function LogoutIconButton() {
  */
 export function AccountSettings({
   sheet,
-  showLogout = true,
-  compactDanger = false,
 }: {
   sheet?: SettingsSheet;
-  showLogout?: boolean;
-  compactDanger?: boolean;
 } = {}) {
-  const t = useDict().auth;
+  const dict = useDict();
+  const t = dict.auth;
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -175,6 +207,7 @@ export function AccountSettings({
   const [accountActionPending, setAccountActionPending] = useState(false);
   const returnNotice = useAuthStore((state) => state.returnNotice);
   const setReturnNotice = useAuthStore((state) => state.setReturnNotice);
+  const user = useAuthStore((state) => state.user);
 
   const identities = useQuery({ queryKey: ["identities"], queryFn: listIdentities });
   const sessions = useQuery({ queryKey: ["sessions"], queryFn: listSessions });
@@ -339,6 +372,17 @@ export function AccountSettings({
       {!error && returnNotice === "error" && <p role="alert" className="text-[13px] text-[var(--lm-danger,#dc2626)]">{t.genericError}</p>}
       {!error && returnNotice === "cancelled" && <p role="status" className="text-[13px] text-muted">{t.cancelled}</p>}
 
+      {user && (
+        <SettingsSection title={dict.profile}>
+          <SettingsRow>
+            <div className="min-w-0 flex-1 truncate text-[15px] font-medium">
+              {user.display_name || [user.first_name, user.last_name].filter(Boolean).join(" ").trim() || dict.profile}
+            </div>
+            <ChangeNameButton user={user} />
+          </SettingsRow>
+        </SettingsSection>
+      )}
+
       <SettingsSection title={t.methods}>
         <>
           {identities.isPending && (
@@ -418,32 +462,6 @@ export function AccountSettings({
         </>
       </SettingsSection>
 
-      {showLogout && (
-        <button
-          onClick={() => openConfirm({ kind: "log-out" }, t.logOut)}
-          className="flex w-full items-center gap-3 rounded-2xl bg-surface px-3.5 py-2.5 text-left text-[15px] font-medium transition-colors hover:text-accent"
-        >
-          <LogOut size={17} /> {t.logOut}
-        </button>
-      )}
-
-      <SettingsSection title={t.dangerZone} framed={compactDanger}>
-        <div className={compactDanger ? "flex items-start gap-3 px-3.5 py-2.5" : "rounded-2xl bg-surface p-3"}>
-          <div className="min-w-0 flex-1">
-            <div className="text-[15px] font-medium">{t.deleteAccount}</div>
-            <p className="mt-0.5 text-[13px] leading-snug text-muted">{t.deleteAccountDescription}</p>
-          </div>
-          <button
-            onClick={() => openConfirm({ kind: "delete-account" }, t.deleteAccount)}
-            aria-label={t.deleteAccount}
-            className={compactDanger
-              ? "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--lm-danger,#dc2626)] transition-colors hover:bg-bg"
-              : "mt-2.5 flex items-center gap-2 text-[13px] font-semibold text-[var(--lm-danger,#dc2626)]"}
-          >
-            <Trash2 size={15} /> {!compactDanger && t.deleteAccount}
-          </button>
-        </div>
-      </SettingsSection>
     </div>
   );
 }
@@ -474,15 +492,6 @@ function ConfirmStep({
   onEmailLinked: () => void;
 }) {
   const t = useDict().auth;
-
-  if (confirm.kind === "delete-account") {
-    return (
-      <div className="flex flex-col gap-3">
-        {banner}
-        <DeleteAccountForm onCancel={onCancel} />
-      </div>
-    );
-  }
 
   if (confirm.kind === "add-method" && confirm.provider === "email") {
     return (
@@ -582,7 +591,8 @@ export function DeleteAccountForm({ onCancel }: { onCancel?: () => void }) {
         <input
           id="account-erasure-confirmation"
           value={confirmation}
-          onChange={(event) => setConfirmation(event.target.value)}
+          maxLength={ACCOUNT_ERASURE_PHRASE.length}
+          onChange={(event) => setConfirmation(event.target.value.normalize("NFC").replace(UNSAFE_CONFIRMATION_RE, ""))}
           autoComplete="off"
           spellCheck={false}
           className="mt-1.5 w-full rounded-xl border border-border bg-bg px-3 py-2.5 text-[15px] outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-[var(--lm-focus)]"

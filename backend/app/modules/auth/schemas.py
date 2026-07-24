@@ -3,15 +3,17 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from app.core.security.text import clean_line
+
 
 class ProfileUpdate(BaseModel):
-    # the name the user wants shown; trimmed, and cannot be blank once given
+    # the name the user wants shown; canonicalized before persistence
     display_name: str = Field(min_length=1, max_length=50)
 
     @field_validator("display_name")
     @classmethod
     def _clean(cls, value: str) -> str:
-        cleaned = " ".join(value.split())
+        cleaned = clean_line(value)
         if not cleaned:
             raise ValueError("display name cannot be blank")
         return cleaned
