@@ -418,6 +418,7 @@ export function AccountSettings({
       {!error && returnNotice === "error" && <p role="alert" className="text-[13px] text-[var(--lm-danger,#dc2626)]">{t.genericError}</p>}
       {!error && returnNotice === "cancelled" && <p role="status" className="text-[13px] text-muted">{t.cancelled}</p>}
 
+      {!confirm && <>
       {showProfile && user && (
         <SettingsSection title={dict.profile}>
           <SettingsRow>
@@ -516,6 +517,7 @@ export function AccountSettings({
           </SettingsRow>
         </SettingsSection>
       )}
+      </>}
 
       {confirm && !sheet && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true">
@@ -664,16 +666,22 @@ function HoldToDeleteButton({
   const [progress, setProgress] = useState(0);
   const startRef = useRef(0);
   const rafRef = useRef(0);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const completedRef = useRef(false);
 
   const stop = useCallback(() => {
     setHolding(false);
     setProgress(0);
     cancelAnimationFrame(rafRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
     completedRef.current = false;
   }, []);
 
-  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
+  useEffect(() => () => {
+    cancelAnimationFrame(rafRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+  }, []);
 
   const tick = useCallback(() => {
     const elapsed = Date.now() - startRef.current;
@@ -693,6 +701,12 @@ function HoldToDeleteButton({
     completedRef.current = false;
     setHolding(true);
     rafRef.current = requestAnimationFrame(tick);
+    timeoutRef.current = setTimeout(() => {
+      if (completedRef.current) return;
+      completedRef.current = true;
+      setProgress(1);
+      onComplete();
+    }, HOLD_DURATION);
   };
 
   const opacity = holding ? 1 - progress * 0.6 : 1;
