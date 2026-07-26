@@ -23,7 +23,7 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
 }
 
 function PanelLoader() {
-  return <div className="flex justify-center py-12" aria-hidden="true"><Loader2 size={18} className="animate-spin text-muted" /></div>;
+  return <div className="py-12" aria-hidden="true" />;
 }
 
 /** Author's own stories with moderation status. */

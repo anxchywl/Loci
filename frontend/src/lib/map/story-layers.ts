@@ -1,12 +1,36 @@
-import type { ExpressionSpecification, GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
+import type {
+  ExpressionSpecification,
+  GeoJSONSource,
+  Map as MapLibreMap,
+  MapLayerMouseEvent,
+} from "maplibre-gl";
 
 export const STORIES_SOURCE = "stories";
 export const SERVER_CLUSTERS_SOURCE = "server-clusters";
 const CLUSTER_LAYER = "story-clusters";
 const CLUSTER_COUNT_LAYER = "story-cluster-counts";
 const POINT_LAYER = "story-points";
+const POINT_HIT_LAYER = "story-point-hit-targets";
 const SERVER_CLUSTER_LAYER = "server-cluster-circles";
 const SERVER_CLUSTER_COUNT_LAYER = "server-cluster-counts";
+
+interface StoryLayerHandlers {
+  serverClusterClick: (event: MapLayerMouseEvent) => void;
+  clusterClick: (event: MapLayerMouseEvent) => void;
+  pointClick: (event: MapLayerMouseEvent) => void;
+  pointerEnter: () => void;
+  pointerLeave: () => void;
+}
+
+const STORY_LAYER_HANDLERS = new WeakMap<MapLibreMap, StoryLayerHandlers>();
+
+function cameraDuration(duration: number): number {
+  return typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ? 0
+    : duration;
+}
 
 // visual constants shared by client clusters and server-aggregated clusters so
 // the two render identically and switching zoom bands is seamless
@@ -69,6 +93,7 @@ export function addStoryLayers(
   onStoryClick: (storyId: string, lat?: number, lon?: number) => void,
   cluster = true,
 ): void {
+  removeStoryLayerHandlers(map);
   map.addSource(STORIES_SOURCE, {
     type: "geojson",
     data: { type: "FeatureCollection", features: [] },
@@ -102,6 +127,18 @@ export function addStoryLayers(
   });
 
   map.addLayer({
+    id: POINT_HIT_LAYER,
+    type: "circle",
+    source: STORIES_SOURCE,
+    filter: ["!", ["has", "point_count"]],
+    paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 14, 8, 18, 15, 22],
+      "circle-color": "#000000",
+      "circle-opacity": 0.001,
+    },
+  });
+
+  map.addLayer({
     id: POINT_LAYER,
     type: "symbol",
     source: STORIES_SOURCE,
@@ -111,6 +148,8 @@ export function addStoryLayers(
       "icon-size": POINT_ICON_SIZE,
       // anchor at the tip so the pin points at the exact coordinate
       "icon-anchor": "bottom",
+      "icon-pitch-alignment": "viewport",
+      "icon-rotation-alignment": "viewport",
       "icon-allow-overlap": true,
     },
   });
@@ -144,65 +183,92 @@ export function addStoryLayers(
     paint: { "text-color": "#ffffff" },
   });
 
-  map.on("click", SERVER_CLUSTER_LAYER, (event) => {
-    const feature = event.features?.[0];
-    if (!feature) return;
-    map.easeTo({
-      center: (feature.geometry as GeoJSON.Point).coordinates as [number, number],
-      zoom: map.getZoom() + 2,
-      duration: 250,
-    });
-  });
+  const handlers: StoryLayerHandlers = {
+    serverClusterClick: (event) => {
+      const feature = event.features?.[0];
+      if (!feature) return;
+      map.easeTo({
+        center: (feature.geometry as GeoJSON.Point).coordinates as [number, number],
+        zoom: map.getZoom() + 2,
+        duration: cameraDuration(250),
+      });
+    },
 
-  map.on("click", CLUSTER_LAYER, (event) => {
-    const feature = event.features?.[0];
-    if (!feature) return;
-    const clusterId = feature.properties?.cluster_id as number;
-    const source = map.getSource(STORIES_SOURCE);
-    if (source && "getClusterExpansionZoom" in source) {
-      (source as GeoJSONSource)
-        .getClusterExpansionZoom(clusterId)
-        .then((zoom) => {
-          map.easeTo({
-            center: (feature.geometry as GeoJSON.Point).coordinates as [number, number],
-            zoom,
-            duration: 250,
-          });
-        });
-    }
-  });
+    clusterClick: (event) => {
+      const feature = event.features?.[0];
+      if (!feature) return;
+      const clusterId = feature.properties?.cluster_id as number;
+      const source = map.getSource(STORIES_SOURCE);
+      if (source && "getClusterExpansionZoom" in source) {
+        (source as GeoJSONSource)
+          .getClusterExpansionZoom(clusterId)
+          .then((zoom) => {
+            if (map.getSource(STORIES_SOURCE) !== source || !map.getLayer(CLUSTER_LAYER)) return;
+            map.easeTo({
+              center: (feature.geometry as GeoJSON.Point).coordinates as [number, number],
+              zoom,
+              duration: cameraDuration(250),
+            });
+          })
+          .catch(() => {});
+      }
+    },
 
-  map.on("click", POINT_LAYER, (event) => {
-    const feature = event.features?.[0];
-    const storyId = feature?.properties?.id as string | undefined;
-    const coordinates = (feature?.geometry as GeoJSON.Point)?.coordinates;
-    if (storyId) onStoryClick(storyId, coordinates?.[1], coordinates?.[0]);
-  });
+    pointClick: (event) => {
+      const feature = event.features?.[0];
+      const storyId = feature?.properties?.id as string | undefined;
+      const coordinates = (feature?.geometry as GeoJSON.Point)?.coordinates;
+      if (storyId) onStoryClick(storyId, coordinates?.[1], coordinates?.[0]);
+    },
 
-  for (const layer of [CLUSTER_LAYER, POINT_LAYER, SERVER_CLUSTER_LAYER]) {
-    map.on("mouseenter", layer, () => {
+    pointerEnter: () => {
       map.getCanvas().style.cursor = "pointer";
-    });
-    map.on("mouseleave", layer, () => {
+    },
+
+    pointerLeave: () => {
       map.getCanvas().style.cursor = "";
-    });
+    },
+  };
+
+  map.on("click", SERVER_CLUSTER_LAYER, handlers.serverClusterClick);
+  map.on("click", CLUSTER_LAYER, handlers.clusterClick);
+  map.on("click", POINT_HIT_LAYER, handlers.pointClick);
+
+  for (const layer of [CLUSTER_LAYER, POINT_HIT_LAYER, SERVER_CLUSTER_LAYER]) {
+    map.on("mouseenter", layer, handlers.pointerEnter);
+    map.on("mouseleave", layer, handlers.pointerLeave);
   }
+  STORY_LAYER_HANDLERS.set(map, handlers);
 }
 
 export function setSelectedStory(map: MapLibreMap, storyId: string | null): void {
   if (!map.getLayer(POINT_LAYER)) return;
-    map.setLayoutProperty(POINT_LAYER, "icon-size", pointIconSizeExpression(storyId));
+  map.setLayoutProperty(POINT_LAYER, "icon-size", pointIconSizeExpression(storyId));
   map.setLayoutProperty(POINT_LAYER, "symbol-sort-key", storyId
     ? ["case", ["==", ["get", "id"], storyId], 1, 0]
     : 0);
+}
+
+function removeStoryLayerHandlers(map: MapLibreMap): void {
+  const handlers = STORY_LAYER_HANDLERS.get(map);
+  if (!handlers) return;
+  map.off("click", SERVER_CLUSTER_LAYER, handlers.serverClusterClick);
+  map.off("click", CLUSTER_LAYER, handlers.clusterClick);
+  map.off("click", POINT_HIT_LAYER, handlers.pointClick);
+  for (const layer of [CLUSTER_LAYER, POINT_HIT_LAYER, SERVER_CLUSTER_LAYER]) {
+    map.off("mouseenter", layer, handlers.pointerEnter);
+    map.off("mouseleave", layer, handlers.pointerLeave);
+  }
+  STORY_LAYER_HANDLERS.delete(map);
 }
 
 // Remove the story source and its layers so they can be re-added with a
 // different clustering mode (the geojson source's `cluster` flag is fixed at
 // creation, so switching modes means rebuilding).
 export function removeStoryLayers(map: MapLibreMap): void {
+  removeStoryLayerHandlers(map);
   for (const layer of [
-    CLUSTER_LAYER, CLUSTER_COUNT_LAYER, POINT_LAYER,
+    CLUSTER_LAYER, CLUSTER_COUNT_LAYER, POINT_LAYER, POINT_HIT_LAYER,
     SERVER_CLUSTER_LAYER, SERVER_CLUSTER_COUNT_LAYER,
   ]) {
     if (map.getLayer(layer)) map.removeLayer(layer);

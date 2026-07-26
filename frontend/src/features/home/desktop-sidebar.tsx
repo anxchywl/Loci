@@ -395,9 +395,16 @@ export function SettingsPanel({
   );
 }
 
-export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void }) {
+export function ProfilePanel({
+  onSettingsClick,
+  authSheet,
+}: {
+  onSettingsClick?: () => void;
+  authSheet?: SettingsSheet;
+}) {
   const t = useDict();
   const { user } = useTelegramAuth();
+  const [authActive, setAuthActive] = useState(false);
 
   return (
     <div className="flex h-full flex-col gap-5 px-4 py-2">
@@ -435,14 +442,19 @@ export function ProfilePanel({ onSettingsClick }: { onSettingsClick?: () => void
         </div>
       ) : (
         <div className="flex flex-1 flex-col justify-center px-1 py-6">
-          <AuthPanel />
-          {onSettingsClick && (
-            <button
-              onClick={onSettingsClick}
-              className="mt-6 inline-flex items-center justify-center gap-2 self-center rounded-full border border-border px-4 py-2 text-[13px] font-medium text-muted transition-colors hover:border-accent hover:text-accent focus-visible:border-accent focus-visible:text-accent"
-            >
-              <Settings size={16} /> {t.settings}
-            </button>
+          <AuthPanel useDialogForEmail sheet={authSheet} onViewChange={setAuthActive} />
+          {onSettingsClick && !authActive && (
+            <div className="mt-5 border-t border-border pt-2">
+              <button
+                onClick={onSettingsClick}
+                className="group flex w-full items-center gap-3 rounded-lg px-1 py-2.5 text-left text-[14px] font-medium text-text transition-colors duration-150 active:scale-[0.99]"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center text-muted transition-colors group-hover:text-[var(--lm-accent-soft)]">
+                  <Settings size={18} />
+                </span>
+                <span className="transition-colors group-hover:text-[var(--lm-accent-soft)]">{t.settings}</span>
+              </button>
+            </div>
           )}
         </div>
       )}

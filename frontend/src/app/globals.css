@@ -50,6 +50,32 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
+.lm-map-space {
+  overflow: hidden;
+  pointer-events: none;
+  background: #030507 url("/map-space-realistic.webp") center / cover no-repeat;
+  transform: scale(1.06);
+  transform-origin: center;
+  will-change: transform;
+}
+
+.lm-map-space::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: transparent url("/map-space.svg") center / cover no-repeat;
+  opacity: 0.14;
+  animation: lm-star-twinkle 14s ease-in-out infinite alternate;
+}
+
+@keyframes lm-star-twinkle {
+  to { opacity: 0.34; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lm-map-space::after { animation: none; opacity: 0.22; }
+}
+
 .keyboard-sheet-editing {
   max-height: min(80dvh, 660px);
   padding-bottom: calc(4px + min(env(safe-area-inset-bottom), 20px));

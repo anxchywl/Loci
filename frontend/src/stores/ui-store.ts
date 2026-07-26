@@ -6,7 +6,7 @@ type HomeMode = "browse" | "pick-location" | "compose";
 
 export type Theme = "auto" | "light" | "dark";
 export type MapLabelDensity = "none" | "countries" | "all";
-export type MapStyle = "clean" | "bright" | "dark";
+export type MapStyle = "clean" | "bright";
 
 export interface AdjacentPin {
   id: string;
@@ -111,6 +111,7 @@ export const useUiStore = create<UiState>((set) => ({
     set({
       locale: loadPref("loci_locale", defaultLocale) as Locale,
       theme: loadPref("loci_theme", "auto") as Theme,
+      mapStyle: loadPref<MapStyle>("loci_map_style", "clean") === "bright" ? "bright" : "clean",
     }),
   startPickLocation: () =>
     set({ mode: "pick-location", openStoryId: null, trendingOpen: false, storyHistory: [], navAnchor: null, adjacentPins: [] }),
@@ -165,7 +166,10 @@ export const useUiStore = create<UiState>((set) => ({
     }),
   setShowAllPins: (showAllPins) => set({ showAllPins }),
   setMapLabelDensity: (mapLabelDensity) => set({ mapLabelDensity }),
-  setMapStyle: (mapStyle) => set({ mapStyle }),
+  setMapStyle: (mapStyle) => {
+    try { localStorage.setItem("loci_map_style", mapStyle); } catch { /* ignore */ }
+    set({ mapStyle });
+  },
   setMapViewOpen: (mapViewOpen) => set({ mapViewOpen }),
   showToast: (message) => set({ toast: message }),
   clearToast: () => set({ toast: null }),

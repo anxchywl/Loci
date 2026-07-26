@@ -200,7 +200,11 @@ describe("AccountSettings", () => {
     expect(submit).toBeDisabled();
     fireEvent.change(confirmation, { target: { value: "DELETE MY ACCOUNT" } });
     expect(submit).toBeEnabled();
-    fireEvent.click(submit);
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    fireEvent.mouseDown(submit);
+    vi.advanceTimersByTime(5000);
+    vi.useRealTimers();
 
     await waitFor(() => expect(eraseAccount).toHaveBeenCalledWith("DELETE MY ACCOUNT"));
   });

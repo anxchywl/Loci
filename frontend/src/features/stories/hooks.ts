@@ -65,15 +65,30 @@ function snap(value: number, step: number, up: boolean): number {
   return Number(snapped.toFixed(5));
 }
 
+function normalizeLongitude(longitude: number): number {
+  return ((longitude + 180) % 360 + 360) % 360 - 180;
+}
+
+export function canonicalizeBounds<T extends BboxParams>(params: T): T {
+  const rawSpan = params.maxLon - params.minLon;
+  if (Math.abs(rawSpan) >= 360) {
+    return { ...params, minLon: -180, maxLon: 180 };
+  }
+  const span = rawSpan >= 0 ? rawSpan : ((rawSpan % 360) + 360) % 360;
+  const minLon = normalizeLongitude(params.minLon);
+  return { ...params, minLon, maxLon: minLon + span };
+}
+
 export function quantizeBounds<T extends BboxParams>(params: T): T {
-  const latStep = gridStep(params.maxLat - params.minLat);
-  const lonStep = gridStep(params.maxLon - params.minLon);
+  const canonical = canonicalizeBounds(params);
+  const latStep = gridStep(canonical.maxLat - canonical.minLat);
+  const lonStep = gridStep(canonical.maxLon - canonical.minLon);
   return {
-    ...params,
-    minLat: Math.max(-90, snap(params.minLat, latStep, false)),
-    maxLat: Math.min(90, snap(params.maxLat, latStep, true)),
-    minLon: Math.max(-540, snap(params.minLon, lonStep, false)),
-    maxLon: Math.min(540, snap(params.maxLon, lonStep, true)),
+    ...canonical,
+    minLat: Math.max(-90, snap(canonical.minLat, latStep, false)),
+    maxLat: Math.min(90, snap(canonical.maxLat, latStep, true)),
+    minLon: Math.max(-540, snap(canonical.minLon, lonStep, false)),
+    maxLon: Math.min(540, snap(canonical.maxLon, lonStep, true)),
   };
 }
 

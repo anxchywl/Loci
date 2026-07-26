@@ -49,7 +49,7 @@ export function NearbyPanel({ location, onOpen, className = "px-2 py-2" }: Nearb
   }, [isLastRing, isFetching, stories]);
 
   if (!location) {
-    return <div className="flex justify-center py-8" aria-hidden="true"><Loader2 size={18} className="animate-spin text-muted" /></div>;
+    return <div className="py-8" aria-hidden="true" />;
   }
 
   const withDistance = (stories ?? [])

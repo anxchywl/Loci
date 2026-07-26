@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AuthPanel } from "@/features/auth/auth-panel";
@@ -56,6 +56,66 @@ describe("AuthPanel", () => {
 
     expect(loginEmail).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Continue with email" })).toBeInTheDocument();
+  });
+
+  it("normalizes authentication fields without blocking password symbols", async () => {
+    vi.mocked(loginEmail).mockRejectedValue(new Error("stop after request"));
+    renderWithQuery(<AuthPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue with email" }));
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "  person @example.com " },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: " \u200bvalid ' OR 1=1 password" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    await waitFor(() => expect(loginEmail).toHaveBeenCalledWith(
+      "person@example.com",
+      "valid ' OR 1=1 password",
+    ));
+  });
+
+  it("moves the email flow into a host sheet instead of opening a dialog", () => {
+    const sheet = {
+      setView: vi.fn(),
+      transition: vi.fn((apply: () => void) => apply()),
+    };
+    const onViewChange = vi.fn();
+    renderWithQuery(
+      <AuthPanel useDialogForEmail sheet={sheet} onViewChange={onViewChange} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue with email" }));
+
+    expect(screen.getByLabelText("Email")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(sheet.transition).toHaveBeenCalledOnce();
+    expect(sheet.setView).toHaveBeenCalledWith(expect.objectContaining({ title: "Sign in" }));
+    expect(onViewChange).toHaveBeenCalledWith(true);
+
+    const loginSheetView = sheet.setView.mock.calls.at(-1)?.[0];
+    act(() => loginSheetView?.onBack());
+
+    expect(screen.getByRole("button", { name: "Continue with email" })).toBeInTheDocument();
+    expect(sheet.setView).toHaveBeenLastCalledWith(null);
+    expect(onViewChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("moves Google into the host sheet before starting its handoff", async () => {
+    const sheet = {
+      setView: vi.fn(),
+      transition: vi.fn((apply: () => void) => apply()),
+    };
+    renderWithQuery(<AuthPanel useDialogForEmail sheet={sheet} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Continue with Google" }));
+
+    expect(sheet.setView).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Continue with Google",
+    }));
+    await waitFor(() => expect(startGoogleLogin).toHaveBeenCalledOnce());
   });
 
   it("preserves query and open-story intent for Google, without the hash", async () => {

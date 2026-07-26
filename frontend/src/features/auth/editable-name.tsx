@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil, X } from "lucide-react";
+import { Loader2, Pencil } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 
@@ -59,17 +59,9 @@ export function NameEditor({ user, onClose, inline = false }: { user: AuthUser; 
         onSubmit={(event) => { event.preventDefault(); commit(); }}
         className={inline
           ? "flex flex-col gap-3"
-          : "relative w-full max-w-sm rounded-sheet border border-border bg-bg p-4 shadow-[0_12px_40px_rgba(0,0,0,0.18)] motion-safe:animate-dialog-in"}
+          : "relative w-full max-w-sm rounded-sheet border border-border bg-bg p-5 shadow-[0_12px_40px_rgba(0,0,0,0.18)] motion-safe:animate-dialog-in"}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 id="edit-name-title" className="text-[17px] font-semibold">{t.editName}</h2>
-            <p className="mt-1 text-[13px] text-muted">{t.namePlaceholder}</p>
-          </div>
-          <button type="button" onClick={onClose} disabled={save.isPending} aria-label={t.cancel} className="rounded-lg p-1.5 text-muted transition-colors hover:bg-surface hover:text-text disabled:opacity-60">
-            <X size={18} />
-          </button>
-        </div>
+        <h2 id="edit-name-title" className="text-[17px] font-semibold">{t.editName}</h2>
         <input
           ref={inputRef}
           value={value}
@@ -77,16 +69,16 @@ export function NameEditor({ user, onClose, inline = false }: { user: AuthUser; 
           autoComplete="off"
           spellCheck={false}
           placeholder={t.namePlaceholder}
-          onChange={(event) => setValue(cleanNameInput(event.target.value))}
+          onChange={(event) => setValue(cleanNameInput(event.target.value).replace(/^\s+/, ""))}
           disabled={save.isPending}
-          className="mt-4 w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-[15px] outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-[var(--lm-focus)] disabled:opacity-60"
+          className="mt-3 w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-[15px] outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-[var(--lm-focus)] disabled:opacity-60"
         />
         {error && <p role="alert" className="mt-2 text-[12px] text-[var(--lm-danger,#dc2626)]">{t.nameSaveError}</p>}
         <div className="mt-4 flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={save.isPending} className="rounded-lg border border-border px-3 py-2 text-[13px] font-medium text-muted transition-colors hover:bg-surface disabled:opacity-60">
+          <button type="button" onClick={onClose} disabled={save.isPending} className="rounded-xl border border-border px-4 py-2 text-[13px] font-medium text-muted transition-colors hover:bg-surface disabled:opacity-60">
             {t.cancel}
           </button>
-          <button type="submit" disabled={save.isPending} className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-[13px] font-semibold text-accent-text transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-60">
+          <button type="submit" disabled={save.isPending} className="flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2 text-[13px] font-semibold text-accent-text transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-60">
             {save.isPending && <Loader2 size={15} className="animate-spin" />}
             {t.save}
           </button>

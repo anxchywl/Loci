@@ -1,4 +1,4 @@
-import maplibregl, { Map as MapLibreMap } from "maplibre-gl";
+import maplibregl, { type FillLayerSpecification, Map as MapLibreMap } from "maplibre-gl";
 
 import { categoryPinSvg } from "@/lib/icons/category-glyphs";
 import type { CategorySlug, Locale } from "@/lib/i18n/dict";
@@ -10,8 +10,9 @@ export const MAP_STYLE_BRIGHT_URL = "https://tiles.openfreemap.org/styles/positr
 
 // open on a human-scale regional view so europe fits without feeling planetary
 export const DEFAULT_CENTER: [number, number] = [28, 52];
-export const DEFAULT_ZOOM = 4.5;
-export const MIN_ZOOM = 3.0;
+export const DEFAULT_ZOOM = 3;
+export const MIN_ZOOM = 2;
+const MOBILE_MIN_ZOOM = 1;
 const RANDOM_START_CENTERS: [number, number][] = [
   [-5, 48], [18, 52], [52, 48], [88, 50], [125, 42],
 ];
@@ -24,17 +25,76 @@ export interface CategoryStyle {
 
 export type MapLabelDensity = "none" | "countries" | "all";
 
-export function applyMapAppearance(map: MapLibreMap, detailed: boolean): void {
-  if (!detailed) return;
+const COLORED_LANDCOVER_LAYERS: FillLayerSpecification[] = [
+  {
+    id: "loci-colored-wood",
+    type: "fill",
+    source: "openmaptiles",
+    "source-layer": "landcover",
+    filter: ["==", ["get", "class"], "wood"],
+    paint: { "fill-color": "#b8d9b4", "fill-opacity": 0.8 },
+  },
+  {
+    id: "loci-colored-grass",
+    type: "fill",
+    source: "openmaptiles",
+    "source-layer": "landcover",
+    filter: ["==", ["get", "class"], "grass"],
+    paint: { "fill-color": "#d8e8c8", "fill-opacity": 0.8 },
+  },
+  {
+    id: "loci-colored-sand",
+    type: "fill",
+    source: "openmaptiles",
+    "source-layer": "landcover",
+    filter: ["==", ["get", "class"], "sand"],
+    paint: { "fill-color": "#eadfbd", "fill-opacity": 0.85 },
+  },
+];
+
+function setColoredLandcoverLayers(map: MapLibreMap, colored: boolean): void {
+  if (!colored) {
+    for (const layer of COLORED_LANDCOVER_LAYERS) {
+      if (map.getLayer(layer.id)) map.removeLayer(layer.id);
+    }
+    return;
+  }
+  if (!map.getSource("openmaptiles")) return;
+  const beforeId = map.getStyle().layers?.find((layer) => layer.type === "symbol")?.id;
+  for (const layer of COLORED_LANDCOVER_LAYERS) {
+    if (!map.getLayer(layer.id)) map.addLayer(layer, beforeId);
+  }
+}
+
+export function applyMapAppearance(map: MapLibreMap, colored: boolean, animate = true): void {
+  setColoredLandcoverLayers(map, colored);
+  if (!colored) return;
   const paints: Array<[string, string, string]> = [
-    ["water", "fill-color", "#82c9e8"],
-    ["park", "fill-color", "#bfe3bd"],
-    ["landcover_wood", "fill-color", "#a8d49b"],
-    ["landuse_residential", "fill-color", "#f3efe6"],
-    ["boundary_2", "line-color", "#9aa6af"],
+    ["background", "background-color", "#d9e7d1"],
+    ["water", "fill-color", "#67c4da"],
+    ["park", "fill-color", "#b7ddb0"],
+    ["landcover_wood", "fill-color", "#acd5a8"],
+    ["loci-colored-wood", "fill-color", "#b8d9b4"],
+    ["loci-colored-grass", "fill-color", "#d8e8c8"],
+    ["loci-colored-sand", "fill-color", "#eadfbd"],
+    ["landcover_ice_shelf", "fill-color", "#edf7f8"],
+    ["landcover_glacier", "fill-color", "#edf7f8"],
+    ["landuse_residential", "fill-color", "#eeeade"],
+    ["building", "fill-color", "#e7e0d3"],
+    ["waterway", "line-color", "#55abc4"],
+    ["boundary_3", "line-color", "#abb2ac"],
+    ["boundary_2", "line-color", "#858e88"],
+    ["highway_path", "line-color", "#d2cabd"],
+    ["highway_minor", "line-color", "#fffaf0"],
+    ["highway_major_casing", "line-color", "#d8d0c2"],
+    ["highway_major_inner", "line-color", "#fffaf0"],
+    ["highway_motorway_casing", "line-color", "#d5ad68"],
+    ["highway_motorway_inner", "line-color", "#f5ce86"],
   ];
   for (const [layer, property, value] of paints) {
-    if (map.getLayer(layer)) map.setPaintProperty(layer, property, value);
+    if (!map.getLayer(layer)) continue;
+    map.setPaintProperty(layer, `${property}-transition`, animate ? THEME_TRANSITION : { duration: 0, delay: 0 });
+    map.setPaintProperty(layer, property, value);
   }
 }
 
@@ -90,7 +150,7 @@ export function applyDarkMapAppearance(map: MapLibreMap, setProp?: PaintSetter):
 // Snapshot of the untouched (light) paints, captured once per map before any dark
 // override so we can restore the exact light appearance without reloading tiles.
 const BASE_APPEARANCE = new WeakMap<MapLibreMap, Record<string, Array<[string, unknown]>>>();
-const THEME_TRANSITION = { duration: 420, delay: 0 };
+const THEME_TRANSITION = { duration: 200, delay: 0 };
 
 // Properties we may override per layer type — the set we must snapshot to restore.
 function themedProps(layerType: string): string[] {
@@ -161,6 +221,8 @@ export function setMapLabelDensity(map: MapLibreMap, density: MapLabelDensity): 
 }
 
 const CAMERA_STORAGE_KEY = "loci_camera";
+const MAX_SAVED_ZOOM = 22;
+const MAX_SAVED_PITCH = 60;
 
 export interface SavedCamera {
   center: [number, number];
@@ -169,12 +231,16 @@ export interface SavedCamera {
   pitch: number;
 }
 
+function normalizeLongitude(longitude: number): number {
+  return ((longitude + 180) % 360 + 360) % 360 - 180;
+}
+
 // Persist where the user is looking so a reload restores the same view.
 export function saveCamera(map: MapLibreMap): void {
   try {
     const c = map.getCenter();
     const camera: SavedCamera = {
-      center: [c.lng, c.lat],
+      center: [normalizeLongitude(c.lng), c.lat],
       zoom: map.getZoom(),
       bearing: map.getBearing(),
       pitch: map.getPitch(),
@@ -183,49 +249,101 @@ export function saveCamera(map: MapLibreMap): void {
   } catch { /* ignore */ }
 }
 
-export function loadCamera(): SavedCamera | null {
-  if (typeof window === "undefined") return null;
+export function parseSavedCamera(raw: string): SavedCamera | null {
   try {
-    const raw = localStorage.getItem(CAMERA_STORAGE_KEY);
-    if (!raw) return null;
-    const c = JSON.parse(raw) as SavedCamera;
+    const c = JSON.parse(raw) as unknown;
     if (
-      Array.isArray(c.center) && c.center.length === 2 &&
-      Number.isFinite(c.center[0]) && Number.isFinite(c.center[1]) &&
-      Number.isFinite(c.zoom)
+      typeof c === "object" && c !== null &&
+      "center" in c && Array.isArray(c.center) && c.center.length === 2 &&
+      typeof c.center[0] === "number" && Number.isFinite(c.center[0]) &&
+      typeof c.center[1] === "number" && Number.isFinite(c.center[1]) &&
+      c.center[1] >= -90 && c.center[1] <= 90 &&
+      "zoom" in c && typeof c.zoom === "number" && Number.isFinite(c.zoom) &&
+      c.zoom >= 0 && c.zoom <= MAX_SAVED_ZOOM &&
+      "bearing" in c && typeof c.bearing === "number" && Number.isFinite(c.bearing) &&
+      "pitch" in c && typeof c.pitch === "number" && Number.isFinite(c.pitch) &&
+      c.pitch >= 0 && c.pitch <= MAX_SAVED_PITCH
     ) {
-      return c;
+      return {
+        center: [normalizeLongitude(c.center[0]), c.center[1]],
+        zoom: c.zoom,
+        bearing: normalizeLongitude(c.bearing),
+        pitch: c.pitch,
+      };
     }
   } catch { /* ignore */ }
   return null;
 }
 
+export function loadCamera(): SavedCamera | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(CAMERA_STORAGE_KEY);
+    return raw ? parseSavedCamera(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function createMap(container: HTMLElement, style = MAP_STYLE_URL): MapLibreMap {
   const saved = loadCamera();
-  const minZoom = container.clientWidth < 1024 ? 2 : MIN_ZOOM;
+  const minZoom = container.clientWidth < 640 ? MOBILE_MIN_ZOOM : MIN_ZOOM;
   const center = saved?.center ?? RANDOM_START_CENTERS[Math.floor(Math.random() * RANDOM_START_CENTERS.length)];
-  return new maplibregl.Map({
+  const map = new maplibregl.Map({
     container,
     style,
     center,
-    zoom: saved?.zoom ?? MIN_ZOOM,
+    zoom: saved ? Math.max(saved.zoom, minZoom) : DEFAULT_ZOOM,
     bearing: saved?.bearing ?? 0,
     pitch: saved?.pitch ?? 0,
     minZoom,
+    fadeDuration: 0,
     attributionControl: false,
   });
+  map.on("style.load", () => {
+    try {
+      map.setProjection({ type: "globe" });
+    } catch {
+      // unsupported renderers keep the provider's mercator projection
+    }
+  });
+  return map;
 }
 
-function rasterizeSvg(svg: string, width: number, height: number): Promise<HTMLImageElement> {
+function rasterizeSvg(
+  svg: string,
+  width: number,
+  height: number,
+  signal?: AbortSignal,
+): Promise<HTMLImageElement> {
   const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   return new Promise((resolve, reject) => {
     const image = new Image(width, height);
-    image.onload = () => {
+    const cleanup = () => {
       URL.revokeObjectURL(url);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const onAbort = () => {
+      image.src = "";
+      cleanup();
+      const error = new Error("map marker setup cancelled");
+      error.name = "AbortError";
+      reject(error);
+    };
+    image.onload = () => {
+      cleanup();
       resolve(image);
     };
-    image.onerror = reject;
+    image.onerror = (error) => {
+      cleanup();
+      reject(error);
+    };
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
     image.src = url;
   });
 }
@@ -233,13 +351,15 @@ function rasterizeSvg(svg: string, width: number, height: number): Promise<HTMLI
 export async function addCategoryGlyphImages(
   map: MapLibreMap,
   categories: CategoryStyle[],
+  signal?: AbortSignal,
 ): Promise<void> {
   await Promise.all(
     categories.map(async (category) => {
       const imageId = `pin-${category.id}`;
       if (map.hasImage(imageId)) return;
       // pin is 30x44; rasterize at 2x for crisp edges (pixelRatio 2 → logical 30x44)
-      const bitmap = await rasterizeSvg(categoryPinSvg(category.slug, category.color), 60, 88);
+      const bitmap = await rasterizeSvg(categoryPinSvg(category.slug, category.color), 60, 88, signal);
+      if (signal?.aborted) return;
       if (!map.hasImage(imageId)) {
         map.addImage(imageId, bitmap, { pixelRatio: 2 });
       }
@@ -249,11 +369,7 @@ export async function addCategoryGlyphImages(
 
 const LABEL_FADE = 200;
 
-export function setMapLanguage(map: MapLibreMap, locale: Locale, animate = false): void {
-  if (!map.isStyleLoaded()) {
-    map.once("idle", () => setMapLanguage(map, locale, animate));
-    return;
-  }
+export function setMapLanguage(map: MapLibreMap, locale: Locale, animate = false): number | null {
   // openfreemap exposes the translated fields as name_en/name and keeps the
   // latin and non-latin variants separate; its default style concatenates both
   const nameExpression = locale === "en"
@@ -279,7 +395,7 @@ export function setMapLanguage(map: MapLibreMap, locale: Locale, animate = false
 
   if (!animate) {
     swapText();
-    return;
+    return null;
   }
 
   // preserve each layer's original text-opacity (may be a zoom expression) so we
@@ -292,7 +408,7 @@ export function setMapLanguage(map: MapLibreMap, locale: Locale, animate = false
       map.setPaintProperty(layer.id, "text-opacity", 0);
     } catch { /* provider-owned layers can reject overrides */ }
   }
-  window.setTimeout(() => {
+  return window.setTimeout(() => {
     swapText();
     for (const layer of labelLayers) {
       try {

@@ -82,6 +82,8 @@ export function HomeManager() {
   const setShowAllPins = useUiStore((state) => state.setShowAllPins);
   const mapLabelDensity = useUiStore((state) => state.mapLabelDensity);
   const setMapLabelDensity = useUiStore((state) => state.setMapLabelDensity);
+  const mapStyle = useUiStore((state) => state.mapStyle);
+  const setMapStyle = useUiStore((state) => state.setMapStyle);
   const hydrateShowAllPins = useUiStore((state) => state.hydrateShowAllPins);
   // apply the persisted pin-display preference after mount (kept out of the
   // initial render so SSR and first client render match)
@@ -424,7 +426,11 @@ export function HomeManager() {
       )}
 
       {mode === "pick-location" && (
-        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-bg p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className={[
+          "absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-bg p-4 pb-[max(1rem,env(safe-area-inset-bottom))]",
+          "transition-[padding-left] duration-[230ms] ease-lm",
+          sidebarOpen ? "lg:pl-[332px]" : "lg:pl-14",
+        ].join(" ")}>
           <span className="text-[15px] font-medium">{t.tapMapToPlace}</span>
           <button onClick={cancelCompose} className="rounded-full border border-border px-4 py-2 text-[13px] font-medium text-muted">
             {t.cancel}
@@ -511,7 +517,19 @@ export function HomeManager() {
             </button>
             {mapViewOpen && (
               <div className="absolute bottom-12 right-0 w-56 rounded-xl border border-border bg-bg p-2 shadow-lg motion-safe:animate-story-state">
-                <div className="px-2 pb-1 text-[12px] font-semibold text-muted">{t.mapView}</div>
+                <div className="px-2 pb-1 text-[12px] font-semibold text-muted">{t.mapAppearance}</div>
+                {([["clean", t.mapClean], ["bright", t.mapBright]] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={mapStyle === value}
+                    onClick={() => setMapStyle(value)}
+                    className={["w-full rounded-lg px-2 py-2 text-left text-[13px] transition-colors duration-150", mapStyle === value ? "font-semibold text-accent" : "font-medium text-muted hover:text-[var(--lm-accent-soft)]"].join(" ")}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <div className="mt-2 border-t border-border px-2 pt-2 text-[12px] font-semibold text-muted">{t.mapView}</div>
                 <div className="space-y-1">
                   <button onClick={() => setShowAllPins(true)} className={["w-full rounded-lg px-2 py-2 text-left text-[13px] transition-colors duration-150", showAllPins ? "font-semibold text-accent" : "font-medium text-muted hover:text-[var(--lm-accent-soft)]"].join(" ")}>
                     {t.showAllPins}
@@ -569,7 +587,10 @@ export function HomeManager() {
           {!mobilePanel && (
             <div className="space-y-0.5 px-1 pb-1 animate-fade-in">
               <div className="-mx-3 -mt-2 mb-2">
-                <ProfilePanel onSettingsClick={() => setMobilePanel("settings")} />
+                <ProfilePanel
+                  onSettingsClick={() => setMobilePanel("settings")}
+                  authSheet={settingsSheet}
+                />
               </div>
               {mobileMenuItems.length > 0 && <div className="mx-2 mb-2 h-px bg-border" />}
               {mobileMenuItems.map((item) => (

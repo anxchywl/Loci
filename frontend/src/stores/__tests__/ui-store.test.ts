@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useUiStore } from "@/stores/ui-store";
 
@@ -11,11 +11,13 @@ function reset() {
     storyCoords: {},
     panRequest: null,
     trendingOpen: false,
+    mapStyle: "clean",
   });
 }
 
 describe("ui-store story navigation", () => {
   beforeEach(reset);
+  afterEach(() => vi.unstubAllGlobals());
 
   it("pushes the previous story onto browsing history when opening another", () => {
     const { openStory } = useUiStore.getState();
@@ -143,5 +145,15 @@ describe("ui-store story navigation", () => {
     useUiStore.getState().hydratePreferences();
 
     expect(useUiStore.getState().openStoryId).toBe("deep-linked-story");
+  });
+
+  it("persists the selected map appearance", () => {
+    const setItem = vi.fn();
+    vi.stubGlobal("localStorage", { setItem });
+
+    useUiStore.getState().setMapStyle("bright");
+
+    expect(useUiStore.getState().mapStyle).toBe("bright");
+    expect(setItem).toHaveBeenCalledWith("loci_map_style", "bright");
   });
 });

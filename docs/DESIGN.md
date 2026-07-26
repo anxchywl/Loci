@@ -113,6 +113,10 @@ No illustrations, no emoji, no multi-line apologetic copy.
   silently introduce one. All chrome, sheets, and markers are theme-correct;
   only the tiles remain light. A future dark basemap change starts here and
   requires the full light/dark marker-legibility check.
+- Map view offers **Neutral** and **Colored** appearances over the same
+  OpenFreeMap source. Colored changes the loaded style in place and adds only
+  wood, grass, and sand fills from that source; it does not use Google tiles,
+  reload the style, or change story and cluster layers.
 
 ## Transactional email (auth: verification, reset, change notice)
 

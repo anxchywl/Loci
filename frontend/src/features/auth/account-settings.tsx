@@ -1,9 +1,9 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, LogOut, Monitor, Smartphone, Tablet, Trash2, X } from "lucide-react";
+import { Loader2, LogOut, Monitor, Smartphone, Tablet, Trash2 } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import {
   listIdentities,
@@ -22,6 +22,7 @@ import {
 import { SettingsRow, SettingsSection } from "@/components/settings-section";
 import { ChangeNameButton, NameEditor } from "@/features/auth/editable-name";
 import { signOutState } from "@/features/auth/hooks";
+import { cleanEmailInput, cleanPasswordInput } from "@/features/auth/input";
 import { currentAuthRedirectTarget } from "@/features/auth/redirect";
 import { ApiError } from "@/lib/api";
 import type { AuthStrings } from "@/lib/i18n/dict";
@@ -196,13 +197,8 @@ export function DeleteAccountIconButton({
       {!controlled && open && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="delete-account-title">
           <button type="button" aria-label={t.cancel} onClick={close} className="absolute inset-0 bg-black/30 motion-safe:animate-fade-in" />
-          <div className="relative w-full max-w-sm rounded-sheet border border-border bg-bg p-4 shadow-[0_12px_40px_rgba(0,0,0,0.18)] motion-safe:animate-dialog-in">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 id="delete-account-title" className="text-[17px] font-semibold">{t.deleteAccount}</h2>
-              <button type="button" aria-label={t.cancel} onClick={close} className="rounded-lg p-1.5 text-muted transition-colors hover:bg-surface hover:text-text">
-                <X size={17} />
-              </button>
-            </div>
+          <div className="relative w-full max-w-sm rounded-sheet border border-border bg-bg p-5 shadow-[0_12px_40px_rgba(0,0,0,0.18)] motion-safe:animate-dialog-in">
+            <h2 id="delete-account-title" className="mb-4 text-[17px] font-semibold">{t.deleteAccount}</h2>
             <DeleteAccountForm onCancel={close} />
           </div>
         </div>,
@@ -231,7 +227,7 @@ export function AccountSettings({
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const [confirm, setConfirm] = useState<{ step: Confirm; title: string } | null>(null);
   const [nameEditing, setNameEditing] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [accountActionPending, setAccountActionPending] = useState(false);
@@ -262,7 +258,7 @@ export function AccountSettings({
 
   const openConfirm = (next: Confirm, title: string) =>
     apply(() => {
-      setConfirm(next);
+      setConfirm({ step: next, title });
       setError(null);
       setNotice(null);
       sheet?.setView({ title, onBack: closeConfirm });
@@ -357,30 +353,31 @@ export function AccountSettings({
     </div>
   ) : null;
 
-  if (confirm) {
-    return (
-      <ConfirmStep
-        confirm={confirm}
-        providerName={providerName}
-        pending={accountActionPending || unlink.isPending || revoke.isPending}
-        banner={errorBanner}
-        notice={notice}
-        // a back button in the host's header replaces the cancel control
-        onCancel={sheet ? undefined : closeConfirm}
-        onConfirm={() => {
-          setError(null);
-          if (confirm.kind === "log-out") void runAccountAction(logout);
-          else if (confirm.kind === "remove-device") revoke.mutate(confirm.session.id);
-          else if (confirm.kind === "remove-method") unlink.mutate(confirm.provider);
-          else if (confirm.kind === "add-method" && confirm.provider === "telegram") openTelegramLink("https://t.me/loci_app_bot");
-          else if (confirm.kind === "add-method") void addGoogle();
-        }}
-        onEmailLinked={() => {
-          void qc.invalidateQueries({ queryKey: ["identities"] });
-          closeConfirm();
-        }}
-      />
-    );
+  const confirmStepEl = confirm ? (
+    <ConfirmStep
+      confirm={confirm.step}
+      providerName={providerName}
+      pending={accountActionPending || unlink.isPending || revoke.isPending}
+      banner={errorBanner}
+      notice={notice}
+      onCancel={sheet ? undefined : closeConfirm}
+      onConfirm={() => {
+        setError(null);
+        if (confirm.step.kind === "log-out") void runAccountAction(logout);
+        else if (confirm.step.kind === "remove-device") revoke.mutate(confirm.step.session.id);
+        else if (confirm.step.kind === "remove-method") unlink.mutate(confirm.step.provider);
+        else if (confirm.step.kind === "add-method" && confirm.step.provider === "telegram") openTelegramLink("https://t.me/loci_app_bot");
+        else if (confirm.step.kind === "add-method") void addGoogle();
+      }}
+      onEmailLinked={() => {
+        void qc.invalidateQueries({ queryKey: ["identities"] });
+        closeConfirm();
+      }}
+    />
+  ) : null;
+
+  if (confirm && sheet) {
+    return confirmStepEl;
   }
 
   const closeNameEditor = () => apply(() => {
@@ -520,6 +517,16 @@ export function AccountSettings({
         </SettingsSection>
       )}
 
+      {confirm && !sheet && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <button type="button" aria-label={t.cancel} onClick={closeConfirm} className="absolute inset-0 bg-black/30 motion-safe:animate-fade-in" />
+          <div className="relative w-full max-w-sm rounded-sheet border border-border bg-bg p-5 shadow-[0_12px_40px_rgba(0,0,0,0.18)] motion-safe:animate-dialog-in">
+            <h2 className="mb-4 text-[17px] font-semibold">{confirm.title}</h2>
+            {confirmStepEl}
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
@@ -642,6 +649,83 @@ function ConfirmStep({
  * view with a title and a back button while the desktop panel expands it inline.
  * `onCancel` renders a cancel control; surfaces with a back button omit it.
  */
+const HOLD_DURATION = 5000;
+
+function HoldToDeleteButton({
+  disabled,
+  onComplete,
+  children,
+}: {
+  disabled: boolean;
+  onComplete: () => void;
+  children: React.ReactNode;
+}) {
+  const [holding, setHolding] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const startRef = useRef(0);
+  const rafRef = useRef(0);
+  const completedRef = useRef(false);
+
+  const stop = useCallback(() => {
+    setHolding(false);
+    setProgress(0);
+    cancelAnimationFrame(rafRef.current);
+    completedRef.current = false;
+  }, []);
+
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
+
+  const tick = useCallback(() => {
+    const elapsed = Date.now() - startRef.current;
+    const p = Math.min(elapsed / HOLD_DURATION, 1);
+    setProgress(p);
+    if (p >= 1 && !completedRef.current) {
+      completedRef.current = true;
+      onComplete();
+      return;
+    }
+    rafRef.current = requestAnimationFrame(tick);
+  }, [onComplete]);
+
+  const start = () => {
+    if (disabled) return;
+    startRef.current = Date.now();
+    completedRef.current = false;
+    setHolding(true);
+    rafRef.current = requestAnimationFrame(tick);
+  };
+
+  const opacity = holding ? 1 - progress * 0.6 : 1;
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onMouseDown={start}
+      onMouseUp={stop}
+      onMouseLeave={stop}
+      onTouchStart={start}
+      onTouchEnd={stop}
+      onTouchCancel={stop}
+      className="relative w-full overflow-hidden rounded-xl px-3 py-2.5 text-[14px] font-semibold text-white disabled:opacity-40"
+      style={{
+        backgroundColor: `rgba(220, 38, 38, ${opacity})`,
+        transition: holding ? "none" : "background-color 0.3s ease",
+      }}
+    >
+      {holding && (
+        <span
+          className="absolute inset-0 origin-left bg-white/20"
+          style={{ transform: `scaleX(${progress})`, transition: "none" }}
+        />
+      )}
+      <span className="relative flex items-center justify-center gap-2">
+        {children}
+      </span>
+    </button>
+  );
+}
+
 export function DeleteAccountForm({ onCancel }: { onCancel?: () => void }) {
   const t = useDict().auth;
   const [confirmation, setConfirmation] = useState("");
@@ -663,7 +747,7 @@ export function DeleteAccountForm({ onCancel }: { onCancel?: () => void }) {
   }
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-3">
       <p className="text-[13px] font-medium leading-snug text-[var(--lm-danger,#dc2626)]">
         {t.deleteAccountWarning}
       </p>
@@ -675,7 +759,7 @@ export function DeleteAccountForm({ onCancel }: { onCancel?: () => void }) {
           id="account-erasure-confirmation"
           value={confirmation}
           maxLength={ACCOUNT_ERASURE_PHRASE.length}
-          onChange={(event) => setConfirmation(event.target.value.normalize("NFC").replace(UNSAFE_CONFIRMATION_RE, ""))}
+          onChange={(event) => setConfirmation(event.target.value.normalize("NFC").replace(UNSAFE_CONFIRMATION_RE, "").replace(/^\s+/, ""))}
           autoComplete="off"
           spellCheck={false}
           className="mt-1.5 w-full rounded-xl border border-border bg-bg px-3 py-2.5 text-[15px] outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-[var(--lm-focus)]"
@@ -684,25 +768,13 @@ export function DeleteAccountForm({ onCancel }: { onCancel?: () => void }) {
       {error && (
         <p role="alert" className="text-[13px] text-[var(--lm-danger,#dc2626)]">{error}</p>
       )}
-      <div className="flex gap-2">
-        {onCancel && (
-          <button
-            disabled={pending}
-            onClick={() => { setConfirmation(""); onCancel(); }}
-            className="flex-1 rounded-xl border border-border px-3 py-2.5 text-[14px]"
-          >
-            {t.cancel}
-          </button>
-        )}
-        <button
-          disabled={confirmation !== ACCOUNT_ERASURE_PHRASE || pending}
-          onClick={() => void submit()}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--lm-danger,#dc2626)] px-3 py-2.5 text-[14px] font-semibold text-white disabled:opacity-40"
-        >
-          {pending && <Loader2 size={15} className="animate-spin" />}
-          {t.deleteAccountAction}
-        </button>
-      </div>
+      <HoldToDeleteButton
+        disabled={confirmation.trim() !== ACCOUNT_ERASURE_PHRASE || pending}
+        onComplete={() => void submit()}
+      >
+        {pending && <Loader2 size={15} className="animate-spin" />}
+        {t.deleteAccountAction}
+      </HoldToDeleteButton>
     </div>
   );
 }
@@ -720,14 +792,17 @@ function AddEmail({ onDone, onCancel }: { onDone: () => void; onCancel?: () => v
   const input = "w-full rounded-xl border border-border bg-bg px-3 py-2.5 text-[15px] outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-[var(--lm-focus)]";
 
   async function submit() {
+    const trimmedEmail = email.trim();
+    if (step === "form" && !trimmedEmail) return;
     setPending(true);
     setError(null);
     try {
       if (step === "form") {
-        await startEmailLink(email, password);
+        await startEmailLink(trimmedEmail, password);
+        setEmail(trimmedEmail);
         setStep("code");
       } else {
-        await verifyEmailLink(email, code);
+        await verifyEmailLink(trimmedEmail, code.trim());
         onDone();
       }
     } catch (err) {
@@ -741,22 +816,25 @@ function AddEmail({ onDone, onCancel }: { onDone: () => void; onCancel?: () => v
   }
 
   return (
-    <form className="flex flex-col gap-2" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-      {/* the host sheet's header already names the step; the desktop panel has none */}
-      {onCancel && <div className="text-[13px] font-semibold">{t.addEmailTitle}</div>}
+    <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+      {onCancel && <div className="text-[15px] font-semibold">{t.addEmailTitle}</div>}
       {step === "form" ? (
         <>
-          <label htmlFor={`${fieldId}-email`} className="sr-only">{t.email}</label>
-          <input id={`${fieldId}-email`} type="email" required autoComplete="email" placeholder={t.email} value={email} onChange={(e) => setEmail(e.target.value)} className={input} />
-          <label htmlFor={`${fieldId}-password`} className="sr-only">{t.password}</label>
-          <input id={`${fieldId}-password`} type="password" required minLength={12} autoComplete="new-password" placeholder={t.password} value={password} onChange={(e) => setPassword(e.target.value)} className={input} />
+          <div>
+            <label htmlFor={`${fieldId}-email`} className="mb-1 block text-[13px] text-muted">{t.email}</label>
+            <input id={`${fieldId}-email`} type="email" required autoComplete="email" autoCapitalize="none" spellCheck={false} maxLength={254} placeholder={t.email} value={email} onChange={(e) => setEmail(cleanEmailInput(e.target.value))} className={input} />
+          </div>
+          <div>
+            <label htmlFor={`${fieldId}-password`} className="mb-1 block text-[13px] text-muted">{t.password}</label>
+            <input id={`${fieldId}-password`} type="password" required minLength={12} maxLength={256} autoComplete="new-password" placeholder={t.password} value={password} onChange={(e) => setPassword(cleanPasswordInput(e.target.value))} className={input} />
+          </div>
         </>
       ) : (
-        <>
-          <label htmlFor={`${fieldId}-code`} className="sr-only">{t.code}</label>
+        <div>
+          <label htmlFor={`${fieldId}-code`} className="mb-1 block text-[13px] text-muted">{t.code}</label>
           <input id={`${fieldId}-code`} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" minLength={6} maxLength={6} required placeholder={t.code}
-            value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} className={`${input} text-center tracking-[0.3em]`} />
-        </>
+            value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").trim())} className={`${input} text-center tracking-[0.3em]`} />
+        </div>
       )}
       {error && <p role="alert" className="text-[13px] text-[var(--lm-danger,#dc2626)]">{error}</p>}
       <div className="flex gap-2">

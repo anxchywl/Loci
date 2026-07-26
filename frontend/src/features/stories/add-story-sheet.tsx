@@ -172,7 +172,8 @@ export function AddStorySheet() {
     <BottomSheet
       open={mode === "compose"}
       onClose={close}
-      title={calendarOpen ? undefined : editingPhotoIndex !== null ? t.editPhoto : t.newStory}
+      title={calendarOpen ? t.dateLabel : editingPhotoIndex !== null ? t.editPhoto : t.newStory}
+      onBack={calendarOpen ? () => setCalendarOpen(false) : editingPhotoIndex !== null ? () => setEditingPhotoIndex(null) : undefined}
       desktopModal
       isEditing={focusMode.isFocusMode}
     >

@@ -32,6 +32,7 @@ interface Dict {
   appName: string;
   loading: string;
   errorGeneric: string;
+  mapUnavailable: string;
   errorLocationDenied: string;
   retry: string;
   searchPlaceholder: string;
@@ -102,6 +103,7 @@ interface Dict {
   showAllPins: string;
   showClusters: string;
   mapView: string;
+  mapAppearance: string;
   mapLabels: string;
   mapLight: string;
   mapDark: string;
@@ -268,7 +270,6 @@ export interface AuthStrings {
   resendIn: string;
   resent: string;
   forgotTitle: string;
-  forgotSubtitle: string;
   sendCode: string;
   resetTitle: string;
   newPassword: string;
@@ -332,6 +333,7 @@ export const dict: Record<Locale, Dict> = {
     appName: "Loci",
     loading: "Loading…",
     errorGeneric: "Something went wrong",
+    mapUnavailable: "Map unavailable",
     errorLocationDenied: "Location permission denied. Please allow location access in your device/app settings.",
     retry: "Retry",
     searchPlaceholder: "Search stories",
@@ -418,7 +420,6 @@ export const dict: Record<Locale, Dict> = {
       resendIn: "Resend in {seconds}s",
       resent: "A new code has been sent.",
       forgotTitle: "Reset your password",
-      forgotSubtitle: "Enter your email and we'll send a reset code.",
       sendCode: "Send code",
       resetTitle: "Set a new password",
       newPassword: "New password",
@@ -480,14 +481,15 @@ export const dict: Record<Locale, Dict> = {
     showAllPins: "Show every pin",
     showClusters: "Group pins into clusters",
     mapView: "Map view",
+    mapAppearance: "Map appearance",
     mapLabels: "Labels",
     mapLight: "Light map",
     mapDark: "Dark map",
     mapNone: "No labels",
     mapCountries: "Countries only",
     mapAllDetails: "All places",
-    mapClean: "Clean map",
-    mapBright: "Detailed map",
+    mapClean: "Neutral",
+    mapBright: "Colored",
     nearby: "Nearby",
     noNearby: "No stories found nearby",
     previousStory: "Previous nearby story",
@@ -670,6 +672,7 @@ export const dict: Record<Locale, Dict> = {
     appName: "Loci",
     loading: "Жүктелуде…",
     errorGeneric: "Бірдеңе дұрыс болмады",
+    mapUnavailable: "Карта қолжетімсіз",
     errorLocationDenied: "Орналасуды анықтауға рұқсат берілмеді. Құрылғы немесе қолданба параметрлерінде рұқсат беріңіз.",
     retry: "Қайталау",
     searchPlaceholder: "Оқиғаларды іздеу",
@@ -756,7 +759,6 @@ export const dict: Record<Locale, Dict> = {
       resendIn: "{seconds} с кейін қайта жіберу",
       resent: "Жаңа код жіберілді.",
       forgotTitle: "Құпиясөзді қалпына келтіру",
-      forgotSubtitle: "Поштаңызды енгізіңіз, біз қалпына келтіру кодын жібереміз.",
       sendCode: "Код жіберу",
       resetTitle: "Жаңа құпиясөз орнату",
       newPassword: "Жаңа құпиясөз",
@@ -818,14 +820,15 @@ export const dict: Record<Locale, Dict> = {
     showAllPins: "Барлық белгіні көрсету",
     showClusters: "Белгілерді топтау",
     mapView: "Карта көрінісі",
+    mapAppearance: "Карта безендірілуі",
     mapLabels: "Жазулар",
     mapLight: "Жарық карта",
     mapDark: "Қараңғы карта",
     mapNone: "Жазуларсыз",
     mapCountries: "Тек елдер",
     mapAllDetails: "Барлық орындар",
-    mapClean: "Таза карта",
-    mapBright: "Егжей-тегжейлі карта",
+    mapClean: "Бейтарап",
+    mapBright: "Түрлі түсті",
     nearby: "Жақын маңда",
     noNearby: "Жақын маңда оқиғалар табылмады",
     previousStory: "Алдыңғы жақын оқиға",
@@ -1008,6 +1011,7 @@ export const dict: Record<Locale, Dict> = {
     appName: "Loci",
     loading: "Загрузка…",
     errorGeneric: "Что-то пошло не так",
+    mapUnavailable: "Карта недоступна",
     errorLocationDenied: "Доступ к геопозиции запрещен. Пожалуйста, разрешите доступ в настройках устройства или приложения.",
     retry: "Повторить",
     searchPlaceholder: "Поиск историй",
@@ -1094,7 +1098,6 @@ export const dict: Record<Locale, Dict> = {
       resendIn: "Отправить снова через {seconds} с",
       resent: "Новый код отправлен.",
       forgotTitle: "Сброс пароля",
-      forgotSubtitle: "Введите email, и мы отправим код для сброса.",
       sendCode: "Отправить код",
       resetTitle: "Задать новый пароль",
       newPassword: "Новый пароль",
@@ -1156,14 +1159,15 @@ export const dict: Record<Locale, Dict> = {
     showAllPins: "Показать все метки",
     showClusters: "Сгруппировать метки",
     mapView: "Вид карты",
+    mapAppearance: "Оформление карты",
     mapLabels: "Подписи",
     mapLight: "Светлая карта",
     mapDark: "Тёмная карта",
     mapNone: "Без подписей",
     mapCountries: "Только страны",
     mapAllDetails: "Все места",
-    mapClean: "Чистая карта",
-    mapBright: "Детальная карта",
+    mapClean: "Нейтральная",
+    mapBright: "Цветная",
     nearby: "Рядом",
     noNearby: "Рядом историй не найдено",
     previousStory: "Предыдущая история рядом",
