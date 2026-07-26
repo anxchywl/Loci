@@ -253,6 +253,7 @@ export interface AuthStrings {
   signIn: string;
   subtitle: string;
   continueGoogle: string;
+  continueTelegram: string;
   continueEmail: string;
   email: string;
   password: string;
@@ -403,6 +404,7 @@ export const dict: Record<Locale, Dict> = {
       signIn: "Sign in",
       subtitle: "Sign in to add stories, save places, and manage your profile.",
       continueGoogle: "Continue with Google",
+      continueTelegram: "Continue with Telegram",
       continueEmail: "Continue with email",
       email: "Email",
       password: "Password",
@@ -742,6 +744,7 @@ export const dict: Record<Locale, Dict> = {
       signIn: "Кіру",
       subtitle: "Оқиға қосу, орындарды сақтау және профильді басқару үшін кіріңіз.",
       continueGoogle: "Google арқылы жалғастыру",
+      continueTelegram: "Telegram арқылы жалғастыру",
       continueEmail: "Email арқылы жалғастыру",
       email: "Email",
       password: "Құпиясөз",
@@ -1081,6 +1084,7 @@ export const dict: Record<Locale, Dict> = {
       signIn: "Вход",
       subtitle: "Войдите, чтобы добавлять истории, сохранять места и управлять профилем.",
       continueGoogle: "Продолжить с Google",
+      continueTelegram: "Продолжить с Telegram",
       continueEmail: "Продолжить с email",
       email: "Email",
       password: "Пароль",

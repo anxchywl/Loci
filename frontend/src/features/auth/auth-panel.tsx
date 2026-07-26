@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Loader2, Mail } from "lucide-react";
+import { ArrowLeft, Loader2, Mail, Send } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
@@ -21,9 +21,25 @@ import { cleanEmailInput, cleanPasswordInput } from "@/features/auth/input";
 import { currentAuthRedirectTarget } from "@/features/auth/redirect";
 import { ApiError } from "@/lib/api";
 import { useDict } from "@/lib/i18n/use-dict";
+import { openExternalLink, openTelegramLink } from "@/lib/telegram/init";
 import { useAuthStore } from "@/stores/auth-store";
 
 type View = "choose" | "google" | "login" | "register" | "verify" | "forgot" | "reset";
+
+function GoogleIcon({ size = 18, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" />
+    </svg>
+  );
+}
 
 export function AuthPanel({
   useDialogForEmail = false,
@@ -115,6 +131,12 @@ export function AuthPanel({
     });
   };
 
+  const onTelegram = () => {
+    if (!openTelegramLink("https://t.me/loci_app_bot")) {
+      openExternalLink("https://t.me/loci_app_bot");
+    }
+  };
+
   const onLogin = () =>
     run(async () => {
       const res = await loginEmail(email, password);
@@ -170,7 +192,7 @@ export function AuthPanel({
   const primary =
     "flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2.5 text-[15px] font-semibold text-accent-text transition-[transform,opacity] duration-150 ease-lm active:scale-[0.99] disabled:opacity-60";
   const secondary =
-    "flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-bg px-3 py-2.5 text-[15px] font-medium transition-colors hover:border-accent";
+    "flex w-full items-center justify-center gap-2.5 rounded-lg border border-border bg-bg px-3.5 py-2.5 text-[15px] font-medium text-text transition-[colors,transform] duration-150 ease-lm hover:border-accent active:scale-[0.99] disabled:opacity-60";
 
   const Back = ({ to }: { to: View }) => (
     <button type="button" onClick={() => navigate(to)} className="flex items-center gap-1.5 text-[13px] text-muted transition-colors hover:text-text">
@@ -318,12 +340,18 @@ export function AuthPanel({
             <p className="mt-1 text-[14px] text-muted">{t.subtitle}</p>
           </div>
           {providers.data?.google && (
-            <button onClick={onGoogle} disabled={pending} className={secondary}>
-              {t.continueGoogle}
+            <button type="button" onClick={onGoogle} disabled={pending} className={secondary}>
+              <GoogleIcon size={18} />
+              <span>{t.continueGoogle}</span>
             </button>
           )}
-          <button onClick={() => navigate("login")} className={secondary}>
-            <Mail size={18} /> {t.continueEmail}
+          <button type="button" onClick={onTelegram} disabled={pending} className={secondary}>
+            <Send size={18} />
+            <span>{t.continueTelegram}</span>
+          </button>
+          <button type="button" onClick={() => navigate("login")} className={secondary}>
+            <Mail size={18} />
+            <span>{t.continueEmail}</span>
           </button>
           <Feedback />
         </div>

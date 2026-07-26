@@ -17,6 +17,11 @@ vi.mock("@/features/auth/api", () => ({
   verifyEmail: vi.fn(),
 }));
 
+vi.mock("@/lib/telegram/init", () => ({
+  openTelegramLink: vi.fn(),
+  openExternalLink: vi.fn(),
+}));
+
 import {
   fetchAuthProviders,
   loginEmail,
@@ -24,6 +29,7 @@ import {
   requestPasswordReset,
   startGoogleLogin,
 } from "@/features/auth/api";
+import { openExternalLink, openTelegramLink } from "@/lib/telegram/init";
 
 describe("AuthPanel", () => {
   beforeEach(() => {
@@ -176,5 +182,17 @@ describe("AuthPanel", () => {
 
     expect(await screen.findByRole("button", { name: "Continue with email" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Continue with Google" })).not.toBeInTheDocument();
+  });
+
+  it("opens Telegram @loci_app_bot when clicking Continue with Telegram", async () => {
+    vi.mocked(openTelegramLink).mockReturnValue(false);
+    renderWithQuery(<AuthPanel />);
+
+    const button = await screen.findByRole("button", { name: "Continue with Telegram" });
+    expect(button).toBeInTheDocument();
+    fireEvent.click(button);
+
+    expect(openTelegramLink).toHaveBeenCalledWith("https://t.me/loci_app_bot");
+    expect(openExternalLink).toHaveBeenCalledWith("https://t.me/loci_app_bot");
   });
 });
