@@ -30,6 +30,7 @@ import {
 } from "@/features/home/desktop-sidebar";
 import { DocView, docTitlesFrom } from "@/features/home/doc-view";
 import { legalDocsFrom, type LegalDocId } from "@/features/home/legal-content";
+import { MapErrorBoundary } from "@/features/map/map-error-boundary";
 import { MapView, type MapBounds, type MapViewHandle } from "@/features/map/map-view";
 import { AddStorySheet } from "@/features/stories/add-story-sheet";
 import { BottomSheet } from "@/features/stories/components/bottom-sheet";
@@ -301,14 +302,16 @@ export function HomeManager() {
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-bg">
-      <MapView
-        ref={mapViewRef}
-        categories={categories}
-        stories={clusterMode ? [] : pins}
-        clusters={clusterMode ? clusters : []}
-        desktopLeftInset={sidebarOpen ? 320 : 48}
-        onBoundsChange={setBounds}
-      />
+      <MapErrorBoundary>
+        <MapView
+          ref={mapViewRef}
+          categories={categories}
+          stories={clusterMode ? [] : pins}
+          clusters={clusterMode ? clusters : []}
+          desktopLeftInset={sidebarOpen ? 320 : 48}
+          onBoundsChange={setBounds}
+        />
+      </MapErrorBoundary>
 
       <DesktopSidebar
         open={sidebarOpen}
@@ -516,7 +519,7 @@ export function HomeManager() {
               <Layers size={18} />
             </button>
             {mapViewOpen && (
-              <div className="absolute bottom-12 right-0 w-56 rounded-xl border border-border bg-bg p-2 shadow-lg motion-safe:animate-story-state">
+              <div className="absolute bottom-12 right-0 max-h-[min(70vh,520px)] w-56 overflow-y-auto rounded-xl border border-border bg-bg p-2 shadow-lg motion-safe:animate-story-state">
                 <div className="px-2 pb-1 text-[12px] font-semibold text-muted">{t.mapAppearance}</div>
                 {([["clean", t.mapClean], ["bright", t.mapBright]] as const).map(([value, label]) => (
                   <button

@@ -1,7 +1,12 @@
-import maplibregl, { type FillLayerSpecification, Map as MapLibreMap } from "maplibre-gl";
+import maplibregl, {
+  type FillLayerSpecification,
+  Map as MapLibreMap,
+} from "maplibre-gl";
 
 import { categoryPinSvg } from "@/lib/icons/category-glyphs";
 import type { CategorySlug, Locale } from "@/lib/i18n/dict";
+import { resolveMapTuning } from "@/lib/map/map-tuning";
+import { detectSpaceCapabilities, SPACE_QUALITY_CONFIG, type SpaceQualityLevel } from "@/lib/map/space-quality";
 
 export const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
 // both themes share the same label and feature rules; dark mode changes paints
@@ -103,26 +108,28 @@ export function applyMapAppearance(map: MapLibreMap, colored: boolean, animate =
 type PaintSetter = (layerId: string, prop: string, value: unknown) => void;
 
 function darkPaintFor(layer: { id: string; type: string }): Array<[string, unknown]> {
-  if (layer.type === "background") return [["background-color", "#121416"]];
+  // Lifted off pure black so the globe reads as a distinct dark-slate sphere
+  // against deep space instead of blending into it.
+  if (layer.type === "background") return [["background-color", "#1b232b"]];
   const id = layer.id.toLowerCase();
   if (layer.type === "fill") {
     const isBuilding = id.includes("building") || id.includes("residential");
     const color = id.includes("water")
-      ? "#26343b"
+      ? "#2f434e"
       : id.includes("park") || id.includes("wood") || id.includes("forest")
-        ? "#1c2824"
+        ? "#28352f"
         : isBuilding
-          ? "#171a1d"
-          : "#1b1e21";
+          ? "#242a31"
+          : "#2b333c";
     // positron gives buildings a light fill-outline-color (rgb(219,219,218));
     // left untouched it glows near-white on dark, so tint it just above the fill
     // for a subtle edge instead of a bright outline
     return isBuilding
-      ? [["fill-color", color], ["fill-outline-color", "#242a30"]]
+      ? [["fill-color", color], ["fill-outline-color", "#333b43"]]
       : [["fill-color", color]];
   }
   if (layer.type === "line") {
-    const color = id.includes("boundary") ? "#3b424a" : id.includes("water") ? "#334b57" : "#30363d";
+    const color = id.includes("boundary") ? "#4a525b" : id.includes("water") ? "#3d5765" : "#3a414a";
     return [["line-color", color], ["line-opacity", 0.8]];
   }
   if (layer.type === "symbol") {
@@ -151,6 +158,31 @@ export function applyDarkMapAppearance(map: MapLibreMap, setProp?: PaintSetter):
 // override so we can restore the exact light appearance without reloading tiles.
 const BASE_APPEARANCE = new WeakMap<MapLibreMap, Record<string, Array<[string, unknown]>>>();
 const THEME_TRANSITION = { duration: 200, delay: 0 };
+
+// Decide light vs dark from the map background's perceived luminance, so it stays
+// correct no matter which exact dark slate the palette uses.
+function isDarkColor(color: string): boolean {
+  let r = 255;
+  let g = 255;
+  let b = 255;
+  if (color.startsWith("#")) {
+    const hex = color.slice(1);
+    const full = hex.length === 3 ? hex.split("").map((c) => c + c).join("") : hex;
+    if (full.length >= 6) {
+      r = parseInt(full.slice(0, 2), 16);
+      g = parseInt(full.slice(2, 4), 16);
+      b = parseInt(full.slice(4, 6), 16);
+    }
+  } else {
+    const parts = color.match(/[\d.]+/g);
+    if (parts && parts.length >= 3) {
+      r = Number(parts[0]);
+      g = Number(parts[1]);
+      b = Number(parts[2]);
+    }
+  }
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.45;
+}
 
 // Properties we may override per layer type — the set we must snapshot to restore.
 function themedProps(layerType: string): string[] {
@@ -199,7 +231,7 @@ export function applyMapTheme(map: MapLibreMap, isDark: boolean, animate = true)
 }
 
 export function setMapLabelDensity(map: MapLibreMap, density: MapLabelDensity): void {
-  for (const layer of map.getStyle().layers ?? []) {
+  for (const layer of map.getStyle()?.layers ?? []) {
     if (layer.type !== "symbol" || layer.source === "stories" || layer.source === "server-clusters") continue;
     const id = layer.id;
     const isCountry = id.startsWith("label_country_") || id.startsWith("place_country");
@@ -208,7 +240,7 @@ export function setMapLabelDensity(map: MapLibreMap, density: MapLabelDensity): 
       map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
       if (visible) {
         const background = String(map.getPaintProperty("background", "background-color") ?? "");
-        const isDark = background.includes("12,12,12") || background.includes("#0c0c0c") || background.includes("#121416");
+        const isDark = isDarkColor(background);
         map.setPaintProperty(id, "text-color", isDark ? "#ffffff" : "#18181b");
         map.setPaintProperty(id, "text-halo-color", isDark ? "#121416" : "#ffffff");
         map.setPaintProperty(id, "text-halo-width", isDark ? 0.75 : 1.5);
@@ -289,6 +321,10 @@ export function createMap(container: HTMLElement, style = MAP_STYLE_URL): MapLib
   const saved = loadCamera();
   const minZoom = container.clientWidth < 640 ? MOBILE_MIN_ZOOM : MIN_ZOOM;
   const center = saved?.center ?? RANDOM_START_CENTERS[Math.floor(Math.random() * RANDOM_START_CENTERS.length)];
+  // Device-adaptive rendering budget: cap the backing-store DPR on phones, size
+  // the tile cache so fast spins re-use tiles instead of re-downloading them, and
+  // cross-fade LOD changes so tiles blend in over their parent instead of popping.
+  const tuning = resolveMapTuning(detectSpaceCapabilities(), window.devicePixelRatio || 1);
   const map = new maplibregl.Map({
     container,
     style,
@@ -297,7 +333,18 @@ export function createMap(container: HTMLElement, style = MAP_STYLE_URL): MapLib
     bearing: saved?.bearing ?? 0,
     pitch: saved?.pitch ?? 0,
     minZoom,
-    fadeDuration: 0,
+    pixelRatio: tuning.pixelRatio,
+    maxTileCacheZoomLevels: tuning.maxTileCacheZoomLevels,
+    fadeDuration: tuning.fadeDuration,
+    // Fetch fresh tiles when the host's cache headers expire, but rely on the
+    // browser HTTP cache + the tile cache above to avoid duplicate downloads.
+    refreshExpiredTiles: true,
+    canvasContextAttributes: {
+      // MSAA smooths the globe's silhouette against space so its rim doesn't crawl
+      // while rotating; powerPreference keeps us on the discrete GPU where present.
+      antialias: tuning.antialias,
+      powerPreference: "high-performance",
+    },
     attributionControl: false,
   });
   map.on("style.load", () => {
@@ -308,6 +355,32 @@ export function createMap(container: HTMLElement, style = MAP_STYLE_URL): MapLib
     }
   });
   return map;
+}
+
+export function applyGlobeAtmosphere(map: MapLibreMap, level: SpaceQualityLevel): void {
+  const atmosphereBlend = level === "fallback" ? 0 : SPACE_QUALITY_CONFIG[level].atmosphereBlend;
+  try {
+    // Light comes almost straight from the camera (small polar angle) so the
+    // atmosphere rim glows evenly around the whole disc instead of lighting one
+    // half and leaving a hard dark terminator on the other.
+    map.setLight({
+      anchor: "viewport",
+      position: [1.5, 0, 8],
+      color: "#eef6ff",
+      intensity: level === "ultra" ? 0.42 : level === "high" ? 0.36 : 0.28,
+    });
+    map.setSky({
+      "sky-color": "transparent",
+      "horizon-color": "transparent",
+      "fog-color": "transparent",
+      "fog-ground-blend": 0,
+      "horizon-fog-blend": 0,
+      "sky-horizon-blend": 0,
+      "atmosphere-blend": atmosphereBlend,
+    });
+  } catch {
+    // unsupported renderers keep the transparent static fallback
+  }
 }
 
 function rasterizeSvg(

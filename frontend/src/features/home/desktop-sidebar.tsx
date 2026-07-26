@@ -153,7 +153,11 @@ function StoryPanel({
 
   const { prev: prevPin, next: nextPin } = circularNeighbors(adjacentPins, storyId);
 
-  const goTo = (pin: { id: string; lat: number; lon: number }) => {
+  const goTo = (direction: "prev" | "next") => {
+    const state = useUiStore.getState();
+    const { prev, next } = circularNeighbors(state.adjacentPins, state.openStoryId);
+    const pin = direction === "prev" ? prev : next;
+    if (!pin) return;
     openAdjacentStory(pin.id, { lat: pin.lat, lon: pin.lon });
     requestPanTo(pin.lat, pin.lon);
   };
@@ -198,14 +202,14 @@ function StoryPanel({
     >
       {/* title row: prev / next flank the story title, mirroring the mobile sheet */}
       <div className="flex items-center gap-1">
-        <button aria-label={t.previousStory} onClick={prevPin && !confirming ? () => goTo(prevPin) : undefined} disabled={!prevPin || !!confirming} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-accent focus-visible:text-accent disabled:opacity-0">
+        <button aria-label={t.previousStory} onClick={prevPin && !confirming ? () => goTo("prev") : undefined} disabled={!prevPin || !!confirming} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-accent focus-visible:text-accent disabled:opacity-0">
           <ChevronLeft size={22} />
         </button>
         <div key={storyId} className="min-w-0 flex-1 text-center motion-safe:animate-fade-in">
           <div className="break-words text-[16px] font-semibold leading-tight" style={category ? { color: category.color } : undefined}>{story.title}</div>
           {authorLabel(story.author) && <div className="mt-0.5 break-words text-[12px] leading-tight text-muted">{authorLabel(story.author)}</div>}
         </div>
-        <button aria-label={t.nextStory} onClick={nextPin && !confirming ? () => goTo(nextPin) : undefined} disabled={!nextPin || !!confirming} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-accent focus-visible:text-accent disabled:opacity-0">
+        <button aria-label={t.nextStory} onClick={nextPin && !confirming ? () => goTo("next") : undefined} disabled={!nextPin || !!confirming} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-accent focus-visible:text-accent disabled:opacity-0">
           <ChevronRight size={22} />
         </button>
       </div>

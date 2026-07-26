@@ -1,6 +1,7 @@
 import type {
   ExpressionSpecification,
   GeoJSONSource,
+  LngLat,
   Map as MapLibreMap,
   MapLayerMouseEvent,
 } from "maplibre-gl";
@@ -13,6 +14,7 @@ const POINT_LAYER = "story-points";
 const POINT_HIT_LAYER = "story-point-hit-targets";
 const SERVER_CLUSTER_LAYER = "server-cluster-circles";
 const SERVER_CLUSTER_COUNT_LAYER = "server-cluster-counts";
+const GLOBE_MAX_ZOOM = 5.5;
 
 interface StoryLayerHandlers {
   serverClusterClick: (event: MapLayerMouseEvent) => void;
@@ -20,9 +22,24 @@ interface StoryLayerHandlers {
   pointClick: (event: MapLayerMouseEvent) => void;
   pointerEnter: () => void;
   pointerLeave: () => void;
+  render: () => void;
 }
 
 const STORY_LAYER_HANDLERS = new WeakMap<MapLibreMap, StoryLayerHandlers>();
+const STORY_HORIZON_STATE = new WeakMap<
+  MapLibreMap,
+  {
+    cameraKey: string;
+    points: StoryHorizonPoint[];
+    visibility: Map<string, boolean>;
+  }
+>();
+
+interface StoryHorizonPoint {
+  id: string;
+  lat: number;
+  lon: number;
+}
 
 function cameraDuration(duration: number): number {
   return typeof window !== "undefined" &&
@@ -64,9 +81,6 @@ export function storiesToGeoJson(
   };
 }
 
-// zoom-scaled pin size so every pin can stay visible ("all pins" mode) without
-// the map turning into a wall of overlapping full-size markers — small when the
-// whole world is in view, full size at street level.
 const POINT_ICON_SIZE = [
   "interpolate", ["linear"], ["zoom"],
   1, 0.46,
@@ -76,7 +90,49 @@ const POINT_ICON_SIZE = [
   15, 1.0,
 ] as unknown as ExpressionSpecification;
 
-export function pointIconSizeExpression(storyId: string | null): ExpressionSpecification {
+export function isStoryPointVisibleOnGlobe(
+  map: MapLibreMap,
+  point: StoryHorizonPoint,
+): boolean {
+  if (map.getZoom() > GLOBE_MAX_ZOOM) return true;
+  const location = { lng: point.lon, lat: point.lat } as LngLat;
+  return !map.transform.isLocationOccluded(location);
+}
+
+function horizonCameraKey(map: MapLibreMap): string {
+  const center = map.getCenter();
+  return [
+    center.lng.toFixed(5),
+    center.lat.toFixed(5),
+    map.getZoom().toFixed(4),
+    map.getBearing().toFixed(3),
+    map.getPitch().toFixed(3),
+    map.getCanvas().width,
+    map.getCanvas().height,
+  ].join(":");
+}
+
+function updateStoryHorizonVisibility(map: MapLibreMap): void {
+  const state = STORY_HORIZON_STATE.get(map);
+  if (!state || !map.getSource(STORIES_SOURCE)) return;
+  const cameraKey = horizonCameraKey(map);
+  if (state.cameraKey === cameraKey) return;
+  state.cameraKey = cameraKey;
+
+  for (const point of state.points) {
+    const visible = isStoryPointVisibleOnGlobe(map, point);
+    if (state.visibility.get(point.id) === visible) continue;
+    map.setFeatureState(
+      { source: STORIES_SOURCE, id: point.id },
+      { horizonVisible: visible },
+    );
+    state.visibility.set(point.id, visible);
+  }
+}
+
+export function pointIconSizeExpression(
+  storyId: string | null,
+): ExpressionSpecification {
   if (!storyId) return POINT_ICON_SIZE;
   return [
     "interpolate", ["linear"], ["zoom"],
@@ -97,6 +153,7 @@ export function addStoryLayers(
   map.addSource(STORIES_SOURCE, {
     type: "geojson",
     data: { type: "FeatureCollection", features: [] },
+    promoteId: "id",
     cluster,
     clusterRadius: 56,
     clusterMaxZoom: 15,
@@ -122,6 +179,8 @@ export function addStoryLayers(
       "text-field": ["get", "point_count_abbreviated"],
       "text-font": ["Noto Sans Regular"],
       "text-size": 13,
+      "text-pitch-alignment": "map",
+      "text-rotation-alignment": "viewport",
     },
     paint: { "text-color": "#ffffff" },
   });
@@ -132,7 +191,17 @@ export function addStoryLayers(
     source: STORIES_SOURCE,
     filter: ["!", ["has", "point_count"]],
     paint: {
-      "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 14, 8, 18, 15, 22],
+      "circle-radius": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        1,
+        ["case", ["boolean", ["feature-state", "horizonVisible"], false], 14, 0],
+        8,
+        ["case", ["boolean", ["feature-state", "horizonVisible"], false], 18, 0],
+        15,
+        ["case", ["boolean", ["feature-state", "horizonVisible"], false], 22, 0],
+      ],
       "circle-color": "#000000",
       "circle-opacity": 0.001,
     },
@@ -151,6 +220,15 @@ export function addStoryLayers(
       "icon-pitch-alignment": "viewport",
       "icon-rotation-alignment": "viewport",
       "icon-allow-overlap": true,
+    },
+    paint: {
+      "icon-opacity": [
+        "case",
+        ["boolean", ["feature-state", "horizonVisible"], false],
+        1,
+        0,
+      ],
+      "icon-opacity-transition": { duration: 0, delay: 0 },
     },
   });
 
@@ -179,6 +257,8 @@ export function addStoryLayers(
       "text-field": ["get", "count_label"],
       "text-font": ["Noto Sans Regular"],
       "text-size": 13,
+      "text-pitch-alignment": "map",
+      "text-rotation-alignment": "viewport",
     },
     paint: { "text-color": "#ffffff" },
   });
@@ -228,6 +308,10 @@ export function addStoryLayers(
     pointerLeave: () => {
       map.getCanvas().style.cursor = "";
     },
+
+    render: () => {
+      updateStoryHorizonVisibility(map);
+    },
   };
 
   map.on("click", SERVER_CLUSTER_LAYER, handlers.serverClusterClick);
@@ -238,6 +322,12 @@ export function addStoryLayers(
     map.on("mouseenter", layer, handlers.pointerEnter);
     map.on("mouseleave", layer, handlers.pointerLeave);
   }
+  STORY_HORIZON_STATE.set(map, {
+    cameraKey: "",
+    points: [],
+    visibility: new Map(),
+  });
+  map.on("render", handlers.render);
   STORY_LAYER_HANDLERS.set(map, handlers);
 }
 
@@ -259,6 +349,8 @@ function removeStoryLayerHandlers(map: MapLibreMap): void {
     map.off("mouseenter", layer, handlers.pointerEnter);
     map.off("mouseleave", layer, handlers.pointerLeave);
   }
+  map.off("render", handlers.render);
+  STORY_HORIZON_STATE.delete(map);
   STORY_LAYER_HANDLERS.delete(map);
 }
 
@@ -282,6 +374,21 @@ export function updateStoryData(map: MapLibreMap, data: GeoJSON.FeatureCollectio
   if (source && "setData" in source) {
     (source as GeoJSONSource).setData(data);
   }
+  const state = STORY_HORIZON_STATE.get(map);
+  if (!state) return;
+  state.cameraKey = "";
+  state.visibility.clear();
+  state.points = data.features.flatMap((feature) => {
+    if (
+      feature.geometry.type !== "Point" ||
+      typeof feature.properties?.id !== "string"
+    ) {
+      return [];
+    }
+    const [lon, lat] = feature.geometry.coordinates;
+    return [{ id: feature.properties.id, lat, lon }];
+  });
+  updateStoryHorizonVisibility(map);
 }
 
 export function clustersToGeoJson(

@@ -82,7 +82,11 @@ export function StorySheet({ authenticated, onBackToSource }: StorySheetProps) {
   // ~60% of viewport height — keeps the pin above the bottom sheet on mobile
   const mobilePadding = sheetHeight || (typeof window !== "undefined" ? Math.round(window.innerHeight * 0.6) : 400);
 
-  const goTo = (pin: { id: string; lat: number; lon: number }) => {
+  const goTo = (direction: "prev" | "next") => {
+    const state = useUiStore.getState();
+    const { prev, next } = circularNeighbors(state.adjacentPins, state.openStoryId);
+    const pin = direction === "prev" ? prev : next;
+    if (!pin) return;
     openAdjacentStory(pin.id, { lat: pin.lat, lon: pin.lon });
     requestPanTo(pin.lat, pin.lon, undefined, mobilePadding);
   };
@@ -147,8 +151,8 @@ export function StorySheet({ authenticated, onBackToSource }: StorySheetProps) {
       title={confirming === "delete" ? undefined : story?.title}
       subtitle={story ? authorLabel(story.author) ?? undefined : undefined}
       titleColor={category?.color}
-      onPrev={prevPin && !confirming ? () => goTo(prevPin) : undefined}
-      onNext={nextPin && !confirming ? () => goTo(nextPin) : undefined}
+      onPrev={prevPin && !confirming ? () => goTo("prev") : undefined}
+      onNext={nextPin && !confirming ? () => goTo("next") : undefined}
       prevLabel={t.previousStory}
       nextLabel={t.nextStory}
       onHeightChange={setSheetHeight}

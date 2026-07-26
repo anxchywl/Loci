@@ -13,6 +13,15 @@
 | Backups | — | daily pg_dump cron container, 03:00, 14-day retention |
 | Map tiles | OpenFreeMap (no API key, no usage cap) | same; fallback option: MapTiler free tier |
 
+The globe's space background is fully procedural — there is no image asset to
+serve. The Milky Way band is generated in a fragment shader from seamless 3D
+value-noise, and the stars come from a deterministic GPU buffer. Both are
+rendered entirely on the client and never involve the API, PostgreSQL, Redis,
+Celery, or a realtime connection. Because it is vector-quality rather than a
+raster panorama, it is resolution-independent (crisp at any DPR), adds zero
+download or image-decode cost, and cannot smear into blurry blobs on
+magnification. The static low/fallback backdrop is a pure CSS gradient.
+
 The `worker` service runs Celery for photo optimization and durable media
 erasure cleanup:
 `celery -A app.workers.celery_app worker`. The `bot` service runs the aiogram

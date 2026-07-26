@@ -99,7 +99,12 @@ Functional only, one purpose each. Easing `cubic-bezier(0.2, 0, 0, 1)`.
 | Fades, chip expand/collapse | 200 ms |
 | Bottom sheet slide-up, cluster expand | 250 ms |
 
-No spring-bounce, no decorative parallax, no animated gradients.
+No spring-bounce, general-purpose decorative parallax, or animated gradients.
+
+The Home globe is the single approved parallax exception. Its space background
+moves only in response to globe-camera movement, at 0.05–0.15× of the planet's
+rotation, then settles. It must stop or reduce motion for reduced-motion users,
+degrade visual quality before frame rate, and never delay map input.
 
 ## Empty states
 
@@ -117,6 +122,14 @@ No illustrations, no emoji, no multi-line apologetic copy.
   OpenFreeMap source. Colored changes the loaded style in place and adds only
   wood, grass, and sand fills from that source; it does not use Google tiles,
   reload the style, or change story and cluster layers.
+- Globe space uses a static fallback plus an optional client-side WebGL layer.
+  Quality defaults to **Auto**, may be overridden with Ultra, High, Medium, or
+  Low, and is allowed to step down during sustained frame pressure. Low and
+  unsupported devices keep the static background. Space rendering performs no
+  API, database, polling, or realtime work.
+- Performance takes precedence over effects: lower the space canvas resolution
+  first, then star density, then haze/animation. Pause in background tabs and
+  release all GPU resources when the map unmounts.
 
 ## Transactional email (auth: verification, reset, change notice)
 

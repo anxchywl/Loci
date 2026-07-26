@@ -1,12 +1,26 @@
 "use client";
 
 import maplibregl, { type Map as MapLibreMap } from "maplibre-gl";
-import { Loader2, MapPinOff, RefreshCw } from "lucide-react";
+import { MapPinOff, RefreshCw } from "lucide-react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 import type { Category, MapCluster, StoryPin } from "@/features/stories/api";
 import { useDict } from "@/lib/i18n/use-dict";
-import { addCategoryGlyphImages, applyMapAppearance, applyMapTheme, createMap, type MapLabelDensity, MAP_STYLE_DARK_URL, MAP_STYLE_URL, saveCamera, setMapLabelDensity, setMapLanguage } from "@/lib/map/setup";
+import {
+  addCategoryGlyphImages,
+  applyGlobeAtmosphere,
+  applyMapAppearance,
+  applyMapTheme,
+  createMap,
+  type MapLabelDensity,
+  MAP_STYLE_DARK_URL,
+  MAP_STYLE_URL,
+  saveCamera,
+  setMapLabelDensity,
+  setMapLanguage,
+} from "@/lib/map/setup";
+import { MapDiagnostics, shouldEnableMapDiagnostics } from "@/lib/map/map-diagnostics";
+import { createSpaceRenderer, type SpaceRenderer } from "@/lib/map/space-renderer";
 import {
   addStoryLayers,
   clustersToGeoJson,
@@ -31,15 +45,6 @@ function mediaMatches(query: string): boolean {
 
 function prefersReducedMotion(): boolean {
   return mediaMatches("(prefers-reduced-motion: reduce)");
-}
-
-export function spaceParallaxOffset(longitude: number, latitude: number): { x: number; y: number } {
-  const longitudeRadians = longitude * Math.PI / 180;
-  const latitudeRadians = latitude * Math.PI / 180;
-  return {
-    x: Math.sin(longitudeRadians) * 14,
-    y: (1 - Math.cos(longitudeRadians)) * 3 - Math.sin(latitudeRadians) * 8,
-  };
 }
 
 export interface MapBounds {
@@ -71,7 +76,8 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const spaceRef = useRef<HTMLDivElement>(null);
+  const spaceCanvasRef = useRef<HTMLCanvasElement>(null);
+  const spaceRendererRef = useRef<SpaceRenderer | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const readyRef = useRef(false);
   const statusRef = useRef<MapStatus>("loading");
@@ -95,6 +101,21 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   const [mapAttempt, setMapAttempt] = useState(0);
   const [mapStatus, setMapStatus] = useState<MapStatus>("loading");
   const t = useDict();
+
+  const replaceSpaceRenderer = useCallback((map: MapLibreMap) => {
+    spaceRendererRef.current?.dispose();
+    spaceRendererRef.current = null;
+    const canvas = spaceCanvasRef.current;
+    if (!canvas) return;
+    const result = createSpaceRenderer(canvas, (level) => {
+      if (mapRef.current === map) applyGlobeAtmosphere(map, level);
+    });
+    spaceRendererRef.current = result.renderer;
+    applyGlobeAtmosphere(map, result.level);
+    const center = map.getCenter();
+    result.renderer?.setOrientation(center.lng, center.lat);
+    result.renderer?.setGlobeVisible(map.getZoom() <= 5.5);
+  }, []);
 
   // stable click handler shared by every place that (re)creates the story
   // layers: initial load, theme restyle, and clustering-mode toggle
@@ -139,14 +160,25 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         return;
       }
 
-      const overviewZoom = Math.min(map.getZoom(), 3);
-      const zoomOutDuration = map.getZoom() > overviewZoom ? 650 : 250;
-      map.easeTo({ zoom: overviewZoom, duration: zoomOutDuration });
+      // Cinematic locate in three smooth phases, like Google Earth:
+      //   1. pull back until the whole planet is in view
+      //   2. spin the globe around so the user's location rotates to the front
+      //   3. glide down into the location
+      const PLANET_ZOOM = 1.4;
+      const startZoom = map.getZoom();
+      const pullBackDuration = startZoom > PLANET_ZOOM + 0.2 ? 900 : 300;
+
+      map.easeTo({ zoom: PLANET_ZOOM, duration: pullBackDuration });
       locateAnimationTimerRef.current = window.setTimeout(() => {
-        locateAnimationTimerRef.current = null;
         if (mapRef.current !== map) return;
-        map.flyTo({ center: [lon, lat], zoom: 15, duration: 1_400, curve: 1.4 });
-      }, zoomOutDuration);
+        // rotate to the target while staying zoomed out — the globe spins in place
+        map.easeTo({ center: [lon, lat], zoom: PLANET_ZOOM, duration: 1_500 });
+        locateAnimationTimerRef.current = window.setTimeout(() => {
+          locateAnimationTimerRef.current = null;
+          if (mapRef.current !== map) return;
+          map.flyTo({ center: [lon, lat], zoom: 15, duration: 1_800, curve: 1.3 });
+        }, 1_500);
+      }, pullBackDuration);
     },
     setLabelDensity: (density: MapLabelDensity) => {
       const map = mapRef.current;
@@ -164,11 +196,9 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     let disposed = false;
     let moveTimer = 0;
     let loadTimer = 0;
-    let revealTimer = 0;
-    let revealFrame = 0;
-    let spaceFrame = 0;
     let styleReady = false;
     let lastRecoveryAt = 0;
+    let diagnostics: MapDiagnostics | null = null;
     const lifecycleAbort = new AbortController();
     const updateStatus = (status: MapStatus) => {
       if (disposed) return;
@@ -194,24 +224,12 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       return;
     }
     mapRef.current = map;
-    const reduceSpaceMotion = prefersReducedMotion();
 
     const updateSpacePosition = () => {
-      if (spaceFrame) return;
-      spaceFrame = window.requestAnimationFrame(() => {
-        spaceFrame = 0;
-        const space = spaceRef.current;
-        if (!space) return;
-        if (reduceSpaceMotion) {
-          space.style.transform = "translate3d(0, 0, 0) scale(1.06)";
-          return;
-        }
-        const center = map.getCenter();
-        const offset = spaceParallaxOffset(center.lng, center.lat);
-        space.style.transform = `translate3d(${offset.x.toFixed(2)}px, ${offset.y.toFixed(2)}px, 0) scale(1.06)`;
-      });
+      const center = map.getCenter();
+      spaceRendererRef.current?.setOrientation(center.lng, center.lat);
+      spaceRendererRef.current?.setGlobeVisible(map.getZoom() <= 5.5);
     };
-    updateSpacePosition();
     map.on("move", updateSpacePosition);
 
     map.on("styleimagemissing", (event) => {
@@ -263,13 +281,18 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     };
     map.on("move", emitThrottled);
 
-    const revealMap = () => {
+    const checkReveal = () => {
       if (disposed || !styleReady) return;
-      if (revealTimer) window.clearTimeout(revealTimer);
-      if (revealFrame) window.cancelAnimationFrame(revealFrame);
-      revealTimer = 0;
-      revealFrame = 0;
-      updateStatus("ready");
+      if (map.isStyleLoaded() && map.loaded() && map.areTilesLoaded()) {
+        window.requestAnimationFrame(() => {
+          if (disposed) return;
+          window.requestAnimationFrame(() => {
+            if (!disposed) updateStatus("ready");
+          });
+        });
+      } else {
+        map.once("render", checkReveal);
+      }
     };
 
     const initializeStyle = () => {
@@ -282,6 +305,8 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         applyMapAppearance(map, state.mapStyle === "bright", false);
         setMapLabelDensity(map, state.mapLabelDensity);
         addStoryLayers(map, handleStoryClick, !showAllPinsRef.current);
+        replaceSpaceRenderer(map);
+        if (!diagnostics && shouldEnableMapDiagnostics()) diagnostics = new MapDiagnostics(map);
         styleReady = true;
         readyRef.current = true;
         updateStoryData(map, storiesToGeoJson(storiesRef.current));
@@ -291,8 +316,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         if (loadTimer) window.clearTimeout(loadTimer);
         loadTimer = 0;
         emitBounds();
-        revealFrame = window.requestAnimationFrame(revealMap);
-        revealTimer = window.setTimeout(revealMap, 250);
+        checkReveal();
         void addCategoryGlyphImages(map, categoriesRef.current, lifecycleAbort.signal)
           .then(() => {
             if (!disposed && readyRef.current) {
@@ -339,6 +363,8 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     });
 
     map.on("moveend", () => {
+      spaceRendererRef.current?.setInteractionActive(false);
+      updateSpacePosition();
       if (moveTimer) {
         clearTimeout(moveTimer);
         moveTimer = 0;
@@ -346,7 +372,10 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       emitBounds();
       saveCamera(map);
     });
-    map.on("movestart", () => useUiStore.getState().setMapViewOpen(false));
+    map.on("movestart", () => {
+      spaceRendererRef.current?.setInteractionActive(true);
+      useUiStore.getState().setMapViewOpen(false);
+    });
     map.on("click", (event) => {
       useUiStore.getState().setMapViewOpen(false);
       if (useUiStore.getState().mode === "pick-location") {
@@ -373,9 +402,10 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       lifecycleAbort.abort();
       if (moveTimer) clearTimeout(moveTimer);
       if (loadTimer) clearTimeout(loadTimer);
-      if (revealTimer) clearTimeout(revealTimer);
-      if (revealFrame) cancelAnimationFrame(revealFrame);
-      if (spaceFrame) cancelAnimationFrame(spaceFrame);
+      diagnostics?.dispose();
+      diagnostics = null;
+      spaceRendererRef.current?.dispose();
+      spaceRendererRef.current = null;
       if (locateAnimationTimerRef.current !== null) {
         clearTimeout(locateAnimationTimerRef.current);
         locateAnimationTimerRef.current = null;
@@ -391,7 +421,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     };
     // map lifecycle reads current store state inside async handlers
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapAttempt]);
+  }, [mapAttempt, replaceSpaceRenderer]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -538,31 +568,26 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       mediaMatches("(prefers-color-scheme: dark)"));
 
   return (
-    <div className="absolute inset-0">
-      <div ref={spaceRef} aria-hidden="true" className="lm-map-space absolute inset-0" data-testid="map-space" />
-      <div ref={containerRef} className="absolute inset-0" data-testid="map" />
-      <div
-        suppressHydrationWarning
-        className="pointer-events-none absolute inset-0 motion-safe:transition-opacity motion-safe:duration-200"
-        style={{ backgroundColor: isDark ? "#121416" : "#f8f8f8", opacity: mapStatus === "ready" ? 0 : 1 }}
-      />
-      {mapStatus === "loading" && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-muted" aria-live="polite">
-          <div className="flex items-center gap-2 text-[13px]">
-            <Loader2 size={18} className="motion-safe:animate-spin" />
-            <span>{t.loading}</span>
-          </div>
+    <div className="absolute inset-0 bg-[#0a0a0c]">
+      <div 
+        className="absolute inset-0 transition-transform duration-[1200ms] ease-out"
+        style={{ transform: mapStatus === "ready" ? "scale(1)" : "scale(1.05)" }}
+      >
+        <div aria-hidden="true" className="lm-map-space absolute inset-0" data-testid="map-space">
+          <canvas ref={spaceCanvasRef} className="absolute inset-0 h-full w-full" data-testid="space-canvas" />
         </div>
-      )}
+        <div ref={containerRef} className="absolute inset-0" data-testid="map" />
+      </div>
+
       {mapStatus === "error" && (
-        <div className="absolute inset-0 flex items-center justify-center p-4">
-          <div role="alert" className="flex max-w-xs flex-col items-center gap-3 rounded-lg border border-border bg-bg p-4 text-center">
-            <MapPinOff size={24} className="text-muted" />
-            <p className="text-[15px]">{t.mapUnavailable}</p>
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center" aria-live="polite">
+          <div role="alert" className="pointer-events-auto flex max-w-xs flex-col items-center gap-4 text-center text-white">
+            <MapPinOff size={32} className="text-white/50" />
+            <p className="text-[15px] font-medium text-white/90">{t.mapUnavailable}</p>
             <button
               type="button"
               onClick={() => retryMapRef.current()}
-              className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-[14px] font-semibold text-accent-text"
+              className="flex items-center gap-2 rounded-full bg-white/10 px-5 py-2.5 text-[14px] font-semibold text-white backdrop-blur transition-colors hover:bg-white/20 active:scale-95"
             >
               <RefreshCw size={16} />
               {t.retry}

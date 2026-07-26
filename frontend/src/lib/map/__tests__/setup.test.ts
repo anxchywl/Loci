@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const maplibreMock = vi.hoisted(() => {
   const instance = {
     on: vi.fn(),
+    setLight: vi.fn(),
     setProjection: vi.fn(),
+    setSky: vi.fn(),
   };
   return {
     instance,
@@ -17,7 +19,13 @@ vi.mock("maplibre-gl", () => ({
 
 import type { Map as MapLibreMap } from "maplibre-gl";
 
-import { applyMapAppearance, createMap, parseSavedCamera } from "@/lib/map/setup";
+import {
+  applyGlobeAtmosphere,
+  applyMapAppearance,
+  createMap,
+  parseSavedCamera,
+  setMapLabelDensity,
+} from "@/lib/map/setup";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -61,11 +69,12 @@ describe("map creation", () => {
 
     createMap(container);
 
-    expect(maplibreMock.Map).toHaveBeenCalledWith(expect.objectContaining({
-      fadeDuration: 0,
-      minZoom,
-      zoom: 3,
-    }));
+    const options = (maplibreMock.Map.mock.calls.at(-1) as unknown as [Record<string, number>])[0];
+    expect(options).toEqual(expect.objectContaining({ minZoom, zoom: 3 }));
+    // fadeDuration must be 0 to prevent markers from bleeding through the globe during rotation.
+    expect(options.fadeDuration).toBe(0);
+    expect(options.pixelRatio).toBeGreaterThan(0);
+    expect(options.maxTileCacheZoomLevels).toBeGreaterThanOrEqual(3);
   });
 
   it("enables native globe projection when the style is ready", () => {
@@ -83,6 +92,19 @@ describe("map creation", () => {
 });
 
 describe("map appearance", () => {
+  it("uses the native globe atmosphere without hiding the space canvas", () => {
+    applyGlobeAtmosphere(maplibreMock.instance as unknown as MapLibreMap, "high");
+
+    expect(maplibreMock.instance.setLight).toHaveBeenCalledWith(expect.objectContaining({
+      anchor: "viewport",
+      intensity: 0.36,
+    }));
+    expect(maplibreMock.instance.setSky).toHaveBeenCalledWith(expect.objectContaining({
+      "sky-color": "transparent",
+      "atmosphere-blend": 0.48,
+    }));
+  });
+
   it("applies the colored palette to matching provider layers", () => {
     const layers = new Set(["background", "water", "park", "landcover_wood"]);
     const map = {
@@ -107,4 +129,33 @@ describe("map appearance", () => {
 
     expect(map.removeLayer).toHaveBeenCalledTimes(3);
   });
+
+  it("preserves provider label alignment while changing density", () => {
+    const map = {
+      getStyle: vi.fn(() => ({
+        layers: [
+          { id: "place_country", type: "symbol", source: "openmaptiles" },
+          { id: "story-points", type: "symbol", source: "stories" },
+        ],
+      })),
+      getPaintProperty: vi.fn(() => "#ffffff"),
+      setLayoutProperty: vi.fn(),
+      setPaintProperty: vi.fn(),
+    } as unknown as MapLibreMap;
+
+    setMapLabelDensity(map, "all");
+
+    expect(map.setLayoutProperty).toHaveBeenCalledWith("place_country", "visibility", "visible");
+    expect(map.setLayoutProperty).not.toHaveBeenCalledWith(
+      "place_country",
+      "text-pitch-alignment",
+      expect.anything(),
+    );
+    expect(map.setLayoutProperty).not.toHaveBeenCalledWith(
+      "story-points",
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
 });

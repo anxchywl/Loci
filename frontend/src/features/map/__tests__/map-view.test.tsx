@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { createRef, StrictMode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MapView, type MapViewHandle, spaceParallaxOffset } from "@/features/map/map-view";
+import { MapView, type MapViewHandle } from "@/features/map/map-view";
 import { useUiStore } from "@/stores/ui-store";
 
 const mapMocks = vi.hoisted(() => ({
@@ -27,6 +27,13 @@ function makeMap() {
     remove: vi.fn(),
     resize: vi.fn(),
     triggerRepaint: vi.fn(),
+    once: vi.fn((event: string, handler: (value?: unknown) => void) => {
+      const eventHandlers = handlers.get(event) ?? new Set();
+      eventHandlers.add(handler);
+      handlers.set(event, eventHandlers);
+    }),
+    loaded: vi.fn(() => false),
+    areTilesLoaded: vi.fn(() => false),
     isStyleLoaded: vi.fn(() => false),
     getBounds: vi.fn(() => ({
       getSouth: () => -45,
@@ -38,6 +45,7 @@ function makeMap() {
     getCenter: vi.fn(() => ({ lng: 0, lat: 0 })),
     getBearing: vi.fn(() => 0),
     getPitch: vi.fn(() => 0),
+    isMoving: vi.fn(() => false),
     zoomIn: vi.fn(),
     zoomOut: vi.fn(),
     stop: vi.fn(),
@@ -61,6 +69,7 @@ vi.mock("@/lib/map/setup", () => ({
   MAP_STYLE_DARK_URL: "dark-style",
   MAP_STYLE_URL: "light-style",
   addCategoryGlyphImages: vi.fn(async () => undefined),
+  applyGlobeAtmosphere: vi.fn(),
   applyMapAppearance: vi.fn(),
   applyMapTheme: vi.fn(),
   createMap: vi.fn(() => {
@@ -73,6 +82,10 @@ vi.mock("@/lib/map/setup", () => ({
   setMapLanguage: vi.fn(() => null),
 }));
 
+vi.mock("@/lib/map/space-renderer", () => ({
+  createSpaceRenderer: vi.fn(() => ({ level: "low", renderer: null })),
+}));
+
 vi.mock("@/lib/map/story-layers", () => ({
   addStoryLayers: vi.fn(),
   clustersToGeoJson: vi.fn(() => ({ type: "FeatureCollection", features: [] })),
@@ -83,7 +96,7 @@ vi.mock("@/lib/map/story-layers", () => ({
   updateStoryData: vi.fn(),
 }));
 
-import { applyMapAppearance, createMap } from "@/lib/map/setup";
+import { applyMapAppearance, createMap, setMapLabelDensity } from "@/lib/map/setup";
 import { addStoryLayers } from "@/lib/map/story-layers";
 
 const mapProps = {
@@ -92,18 +105,6 @@ const mapProps = {
   clusters: [],
   onBoundsChange: vi.fn(),
 };
-
-describe("space parallax", () => {
-  it("stays continuous at the antimeridian and bounded near the poles", () => {
-    const east = spaceParallaxOffset(180, 90);
-    const west = spaceParallaxOffset(-180, 90);
-
-    expect(east.x).toBeCloseTo(west.x);
-    expect(east.y).toBeCloseTo(west.y);
-    expect(Math.abs(east.x)).toBeLessThanOrEqual(14);
-    expect(Math.abs(east.y)).toBeLessThanOrEqual(14);
-  });
-});
 
 describe("MapView lifecycle", () => {
   beforeEach(() => {
@@ -138,6 +139,7 @@ describe("MapView lifecycle", () => {
 
     expect(screen.getByTestId("map-space")).toHaveClass("lm-map-space");
     expect(screen.getByTestId("map-space")).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getByTestId("space-canvas").tagName).toBe("CANVAS");
     act(() => mapMocks.created[0].emit("style.load"));
 
     expect(mapMocks.created[0].isStyleLoaded()).toBe(false);
@@ -154,7 +156,19 @@ describe("MapView lifecycle", () => {
     expect(createMap).toHaveBeenCalledOnce();
   });
 
-  it("zooms out before flying smoothly to the user location", () => {
+  it("keeps labels and pins visible during camera movement", () => {
+    render(<MapView {...mapProps} />);
+    const map = mapMocks.created[0];
+    act(() => map.emit("style.load"));
+    const labelUpdates = vi.mocked(setMapLabelDensity).mock.calls.length;
+
+    act(() => map.emit("movestart"));
+    act(() => map.emit("moveend"));
+
+    expect(setMapLabelDensity).toHaveBeenCalledTimes(labelUpdates);
+  });
+
+  it("pulls back to the whole planet, spins around, then zooms into the user location", () => {
     vi.useFakeTimers();
     const ref = createRef<MapViewHandle>();
     render(<MapView ref={ref} {...mapProps} />);
@@ -163,17 +177,23 @@ describe("MapView lifecycle", () => {
 
     act(() => ref.current?.flyToUser(43.24, 76.94));
 
+    // phase 1: pull back to the whole planet
     expect(map.stop).toHaveBeenCalledOnce();
-    expect(map.easeTo).toHaveBeenCalledWith({ zoom: 3, duration: 650 });
+    expect(map.easeTo).toHaveBeenCalledWith({ zoom: 1.4, duration: 900 });
     expect(map.flyTo).not.toHaveBeenCalled();
 
-    act(() => vi.advanceTimersByTime(650));
+    // phase 2: spin the globe around to the target, still zoomed out
+    act(() => vi.advanceTimersByTime(900));
+    expect(map.easeTo).toHaveBeenLastCalledWith({ center: [76.94, 43.24], zoom: 1.4, duration: 1_500 });
+    expect(map.flyTo).not.toHaveBeenCalled();
 
+    // phase 3: glide down into the location
+    act(() => vi.advanceTimersByTime(1_500));
     expect(map.flyTo).toHaveBeenCalledWith({
       center: [76.94, 43.24],
       zoom: 15,
-      duration: 1_400,
-      curve: 1.4,
+      duration: 1_800,
+      curve: 1.3,
     });
   });
 

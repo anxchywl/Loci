@@ -37,12 +37,22 @@ const config: Config = {
           from: { opacity: "0", transform: "translateY(8px) scale(0.98)" },
           to: { opacity: "1", transform: "translateY(0) scale(1)" },
         },
+        "glow-pulse": {
+          "0%, 100%": { opacity: "0.4", transform: "scale(1)" },
+          "50%": { opacity: "0.7", transform: "scale(1.1)" },
+        },
+        "stars-pan": {
+          "0%": { transform: "translateY(0)" },
+          "100%": { transform: "translateY(-50%)" },
+        },
       },
       animation: {
         "sheet-up": "sheet-up 240ms cubic-bezier(0.2, 0, 0, 1)",
         "fade-in": "fade-in 150ms cubic-bezier(0.2, 0, 0, 1)",
         "story-state": "story-state 240ms cubic-bezier(0.2, 0, 0, 1)",
         "dialog-in": "dialog-in 200ms cubic-bezier(0.2, 0, 0, 1)",
+        "glow-pulse": "glow-pulse 4s ease-in-out infinite",
+        "stars-pan": "stars-pan 60s linear infinite",
       },
     },
   },
