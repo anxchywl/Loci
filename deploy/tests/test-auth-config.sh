@@ -41,4 +41,18 @@ if ENV_FILE="$ENV_FILE" "$REPO_DIR/deploy/check-auth-config.sh" >/dev/null 2>&1;
   exit 1
 fi
 
+write_valid_config
+{
+  echo 'DEPLOYMENT_TARGET=shared-host'
+  echo 'EMAIL_HOST=smtp.resend.com'
+  echo 'EMAIL_PORT=587'
+} >> "$ENV_FILE"
+if ENV_FILE="$ENV_FILE" "$REPO_DIR/deploy/check-auth-config.sh" >/dev/null 2>&1; then
+  echo "expected blocked Resend SMTP port to fail" >&2
+  exit 1
+fi
+
+sed -i.bak 's/EMAIL_PORT=587/EMAIL_PORT=2587/' "$ENV_FILE"
+ENV_FILE="$ENV_FILE" "$REPO_DIR/deploy/check-auth-config.sh" >/dev/null
+
 echo "auth configuration tests passed"

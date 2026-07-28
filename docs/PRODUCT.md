@@ -219,7 +219,7 @@ shortcut.
 
 | Route | Behavior |
 |---|---|
-| `POST /api/v1/auth/email/register` | Body `{email, password}`. Argon2id, ≥12 chars, no composition rules; optional HIBP screen (fail-open). Creates a **pending** challenge (no user yet) and emails a keyed-HMAC 6-digit code. Always returns a generic 202 (anti-enumeration); already-registered addresses get no code |
+| `POST /api/v1/auth/email/register` | Body `{email, password}`. Argon2id, ≥8 chars, no composition rules; optional HIBP screen (fail-open). Creates a **pending** challenge (no user yet) and emails a keyed-HMAC 6-digit code. Always returns a generic 202 (anti-enumeration); already-registered addresses get no code |
 | `POST /api/v1/auth/email/resend` | Reissues the code (invalidating the prior one) under a cooldown + hourly limit; generic 202 |
 | `POST /api/v1/auth/email/verify` | Body `{email, code}`. Attempt-limited, single-use; on success creates the user + email identity + credential in one transaction and issues a session (refresh cookie + access token). Generic 401 on bad/expired code |
 | `POST /api/v1/auth/email/login` | Body `{email, password}`. Generic 401 for unknown email or wrong password (identical response); rehashes on Argon2 parameter change; rate-limited by IP and normalized email |

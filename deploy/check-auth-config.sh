@@ -58,4 +58,15 @@ if [ -n "$GOOGLE_CLIENT_ID_VALUE" ] || [ -n "$GOOGLE_CLIENT_SECRET_VALUE" ] || [
   GOOGLE_CONFIGURED=true
 fi
 
+EMAIL_HOST_VALUE=$(env_value EMAIL_HOST)
+EMAIL_PORT_VALUE=$(env_value EMAIL_PORT)
+EMAIL_PORT_VALUE=${EMAIL_PORT_VALUE:-587}
+DEPLOYMENT_TARGET_VALUE=${DEPLOYMENT_TARGET:-$(env_value DEPLOYMENT_TARGET)}
+case "$DEPLOYMENT_TARGET_VALUE:$EMAIL_HOST_VALUE:$EMAIL_PORT_VALUE" in
+  dedicated:smtp.resend.com:25|dedicated:smtp.resend.com:465|dedicated:smtp.resend.com:587|\
+  shared-host:smtp.resend.com:25|shared-host:smtp.resend.com:465|shared-host:smtp.resend.com:587)
+    fail "Resend SMTP must use port 2587 on the DigitalOcean deployment target"
+    ;;
+esac
+
 echo "auth configuration valid: domain=$DOMAIN google=$GOOGLE_CONFIGURED"

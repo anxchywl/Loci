@@ -73,7 +73,7 @@ injects everything; the backend reads them via `pydantic-settings`
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` | Google OIDC login; set all three to enable, leave empty to disable. Redirect URI must be HTTPS in production. Startup rejects partial configuration |
 | `EMAIL_CODE_SECRET` | keys the HMAC over 6-digit email codes; ≥24 chars enforced in production. Leaking it does not reveal codes without the stored hashes, but rotate on suspicion |
 | `EMAIL_CODE_TTL_MINUTES` / `EMAIL_CODE_MAX_ATTEMPTS` / `EMAIL_RESEND_COOLDOWN_SECONDS` | verification/reset code lifetime, attempt cap, and resend cooldown |
-| `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USERNAME` / `EMAIL_PASSWORD` / `EMAIL_FROM` | SMTP delivery; `EMAIL_HOST=console` is development-only. A real host and credentials are required in production |
+| `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USERNAME` / `EMAIL_PASSWORD` / `EMAIL_FROM` | SMTP delivery; `EMAIL_HOST=console` is development-only. A real host and credentials are required in production. Resend uses STARTTLS port 2587 on the DigitalOcean targets because DigitalOcean blocks ports 25, 465, and 587 |
 | `HIBP_ENABLED` | optional k-anonymity compromised-password screening; fails open (allows) on API error |
 | `LOCATION_FUZZ_SECRET` | keys the deterministic location-fuzz offset; leaking it makes approximate locations reversible |
 | `JWT_SECRET_KEY` / `JWT_ALGORITHM` | token signing |
@@ -145,7 +145,9 @@ environment, backup, and recovery details.
    - `EMAIL_CODE_SECRET` to a new independent secret of at least 24 characters
    - `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USERNAME`, `EMAIL_PASSWORD`, and
      `EMAIL_FROM` to a verified SMTP sender; production rejects the `console`
-     transport because verification and reset codes must reach users
+     transport because verification and reset codes must reach users. For
+     Resend on DigitalOcean, set `EMAIL_HOST=smtp.resend.com` and
+     `EMAIL_PORT=2587`
    - optionally set all three `GOOGLE_*` values and register the exact HTTPS
      callback URI in Google Cloud; leave all three empty to disable Google login
    - decide whether to enable `HIBP_ENABLED` after confirming outbound access to
