@@ -441,7 +441,7 @@ export function AccountSettings({
       // local sign-out still prevents a stale session from blocking recovery
     }
     signOutState();
-    window.location.assign("/profile");
+    window.location.assign("/");
   }
 
   const errorBanner = error ? (
