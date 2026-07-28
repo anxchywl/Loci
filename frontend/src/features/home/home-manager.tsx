@@ -631,19 +631,23 @@ export function HomeManager() {
                   authSheet={settingsSheet}
                 />
               </div>
-              {mobileMenuItems.length > 0 && <div className="mx-2 mb-2 h-px bg-border" />}
-              {mobileMenuItems.map((item) => (
-                <button
-                  key={item.panel}
-                  onClick={() => openMobilePanel(item.panel)}
-                  className="group flex w-full items-center gap-3 rounded-lg px-1 py-2.5 text-left text-[14px] font-medium text-text transition-colors duration-150 active:scale-[0.99]"
-                >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center text-muted transition-colors group-hover:text-[var(--lm-accent-soft)]">
-                    {item.icon}
-                  </span>
-                  <span className="min-w-0 flex-1 transition-colors group-hover:text-[var(--lm-accent-soft)]">{item.label}</span>
-                </button>
-              ))}
+              {!settingsView && mobileMenuItems.length > 0 && (
+                <>
+                  <div className="mx-2 mb-2 h-px bg-border" />
+                  {mobileMenuItems.map((item) => (
+                    <button
+                      key={item.panel}
+                      onClick={() => openMobilePanel(item.panel)}
+                      className="group flex w-full items-center gap-3 rounded-lg px-1 py-2.5 text-left text-[14px] font-medium text-text transition-colors duration-150 active:scale-[0.99]"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center text-muted transition-colors group-hover:text-[var(--lm-accent-soft)]">
+                        {item.icon}
+                      </span>
+                      <span className="min-w-0 flex-1 transition-colors group-hover:text-[var(--lm-accent-soft)]">{item.label}</span>
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
           )}
 
