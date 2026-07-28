@@ -22,9 +22,9 @@ describe("resolveMapTuning", () => {
     expect(tuning.maxTileCacheZoomLevels).toBe(6);
   });
 
-  it("caps DPR at 1.5 on phones and only antialiases capable ones", () => {
+  it("keeps retina detail on capable phones and lowers modest devices", () => {
     const capable = resolveMapTuning({ ...base, coarsePointer: true }, 3);
-    expect(capable.pixelRatio).toBe(1.5);
+    expect(capable.pixelRatio).toBe(2);
     expect(capable.antialias).toBe(true);
 
     const modest = resolveMapTuning(

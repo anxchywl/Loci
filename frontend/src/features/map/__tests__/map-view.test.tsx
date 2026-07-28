@@ -168,6 +168,33 @@ describe("MapView lifecycle", () => {
     expect(setMapLabelDensity).toHaveBeenCalledTimes(labelUpdates);
   });
 
+  it("applies sidebar padding only at the desktop breakpoint", () => {
+    const view = render(<MapView {...mapProps} desktopLeftInset={320} />);
+    const mobileMap = mapMocks.created[0];
+
+    expect(mobileMap.easeTo).toHaveBeenCalledWith(expect.objectContaining({
+      padding: { top: 0, right: 0, bottom: 0, left: 0 },
+    }));
+
+    view.unmount();
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(min-width: 1024px)",
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    render(<MapView {...mapProps} desktopLeftInset={320} />);
+    const desktopMap = mapMocks.created[1];
+    expect(desktopMap.easeTo).toHaveBeenCalledWith(expect.objectContaining({
+      padding: { top: 0, right: 0, bottom: 0, left: 320 },
+    }));
+  });
+
   it("pulls back to the whole planet, spins around, then zooms into the user location", () => {
     vi.useFakeTimers();
     const ref = createRef<MapViewHandle>();

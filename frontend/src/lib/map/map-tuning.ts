@@ -51,12 +51,11 @@ export function resolveMapTuning(
     return { pixelRatio: Math.min(dpr, 1), maxTileCacheZoomLevels: 3, fadeDuration: 200, antialias: false };
   }
 
-  // Phones / tablets: cap DPR at 1.5 (crisp enough, roughly halves fragment work
-  // vs. a 3x panel) and only enable MSAA on the beefier ones.
+  // capable phones keep retina detail while modest devices retain the cheaper cap
   if (capabilities.coarsePointer) {
     const capable = capabilities.hardwareConcurrency >= 6 && strongMemory;
     return {
-      pixelRatio: Math.min(dpr, 1.5),
+      pixelRatio: Math.min(dpr, capable ? 2 : 1.5),
       maxTileCacheZoomLevels: capable ? 5 : 4,
       fadeDuration: 200,
       antialias: capable,

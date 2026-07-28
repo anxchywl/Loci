@@ -571,11 +571,18 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   }, [desktopLeftInset, openStoryId, panRequest]);
 
   useEffect(() => {
-    if (!mapRef.current || openStoryId) return;
-    mapRef.current.easeTo({
-      padding: { top: 0, right: 0, bottom: 0, left: desktopLeftInset },
-      duration: prefersReducedMotion() ? 0 : 250,
-    });
+    const map = mapRef.current;
+    if (!map || openStoryId) return;
+    const desktopQuery = window.matchMedia("(min-width: 1024px)");
+    const applyResponsivePadding = () => {
+      map.easeTo({
+        padding: { top: 0, right: 0, bottom: 0, left: desktopQuery.matches ? desktopLeftInset : 0 },
+        duration: prefersReducedMotion() ? 0 : 250,
+      });
+    };
+    applyResponsivePadding();
+    desktopQuery.addEventListener("change", applyResponsivePadding);
+    return () => desktopQuery.removeEventListener("change", applyResponsivePadding);
   }, [desktopLeftInset, openStoryId]);
 
   const isDark =
