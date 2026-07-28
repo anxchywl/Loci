@@ -15,6 +15,7 @@ vi.mock("@/features/auth/api", () => ({
   revokeSession: vi.fn(),
   startEmailLink: vi.fn(),
   startGoogleLink: vi.fn(),
+  startTelegramLink: vi.fn(),
   unlinkIdentity: vi.fn(),
   verifyEmailLink: vi.fn(),
 }));
@@ -31,9 +32,10 @@ import {
   listSessions,
   logout,
   revokeSession,
+  startGoogleLink,
+  startTelegramLink,
   unlinkIdentity,
 } from "@/features/auth/api";
-import { openTelegramLink } from "@/lib/telegram/init";
 
 const now = "2026-07-24T00:00:00Z";
 
@@ -182,7 +184,15 @@ describe("AccountSettings", () => {
     expect(screen.getByText("Sign-in was cancelled.")).toHaveAttribute("role", "status");
   });
 
-  it("explains how to add Telegram when it is not linked", async () => {
+  it("opens the bot on the one-time deep link as soon as Add Telegram is clicked", async () => {
+    const tab = { location: { href: "" }, close: vi.fn() };
+    const open = vi.fn(() => tab);
+    vi.stubGlobal("open", open);
+    vi.mocked(startTelegramLink).mockResolvedValue({
+      url: "https://t.me/loci_app_bot?start=one-time-token",
+      expires_in: 600,
+    });
+
     renderWithQuery(<AccountSettings />);
     const telegramLabel = await screen.findByText("Telegram");
     const telegramRow = telegramLabel.closest<HTMLElement>("div.flex.items-center");
@@ -190,9 +200,49 @@ describe("AccountSettings", () => {
 
     fireEvent.click(within(telegramRow).getByRole("button", { name: "Add" }));
 
-    expect(screen.getByText("Open @loci_app_bot")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Open @loci_app_bot"));
-    expect(openTelegramLink).toHaveBeenCalledWith("https://t.me/loci_app_bot");
+    // the tab is claimed on the click itself, before the token request, or
+    // Safari treats it as a popup
+    expect(open).toHaveBeenCalledWith("about:blank", "_blank");
+    await waitFor(() =>
+      expect(tab.location.href).toBe("https://t.me/loci_app_bot?start=one-time-token"),
+    );
+    expect(screen.getByText("Tap Start in Telegram — this connects on its own.")).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it("connects the Telegram row on its own once the bot has linked the account", async () => {
+    const tab = { location: { href: "" }, close: vi.fn() };
+    vi.stubGlobal("open", vi.fn(() => tab));
+    vi.mocked(startTelegramLink).mockResolvedValue({ url: "https://t.me/bot?start=t", expires_in: 600 });
+
+    renderWithQuery(<AccountSettings />);
+    const telegramRow = (await screen.findByText("Telegram")).closest<HTMLElement>("div.flex.items-center");
+    fireEvent.click(within(telegramRow!).getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(tab.location.href).not.toBe(""));
+
+    // the bot's side of the link lands between polls; nothing is clicked here
+    vi.mocked(listIdentities).mockResolvedValue([
+      { provider: "google", email: "person@example.com", created_at: now, last_used_at: now },
+      { provider: "email", email: "person@example.com", created_at: now, last_used_at: now },
+      { provider: "telegram", email: null, created_at: now, last_used_at: now },
+    ]);
+
+    expect(await screen.findByText("Telegram connected.", {}, { timeout: 5000 })).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it("starts the Google hand-off without a confirmation step", async () => {
+    vi.mocked(listIdentities).mockResolvedValue([
+      { provider: "email", email: "person@example.com", created_at: now, last_used_at: now },
+    ]);
+    vi.mocked(startGoogleLink).mockResolvedValue("same-tab");
+    renderWithQuery(<AccountSettings />);
+    const googleRow = (await screen.findByText("Google")).closest<HTMLElement>("div.flex.items-center");
+
+    fireEvent.click(within(googleRow!).getByRole("button", { name: "Add" }));
+
+    await waitFor(() => expect(startGoogleLink).toHaveBeenCalledOnce());
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("requires confirmation before logging out from the profile action", () => {

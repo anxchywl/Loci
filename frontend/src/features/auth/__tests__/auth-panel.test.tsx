@@ -37,7 +37,7 @@ describe("AuthPanel", () => {
     vi.mocked(registerEmail).mockResolvedValue({ detail: "accepted" });
     vi.mocked(fetchAuthProviders).mockResolvedValue({ google: true, email: true });
     vi.mocked(requestPasswordReset).mockResolvedValue({ detail: "accepted" });
-    vi.mocked(startGoogleLogin).mockResolvedValue("same-tab");
+    vi.mocked(startGoogleLogin).mockReturnValue("same-tab");
     window.history.replaceState(null, "", "/profile");
     useAuthStore.setState({
       status: "signed-out",
@@ -112,7 +112,7 @@ describe("AuthPanel", () => {
     expect(onViewChange).toHaveBeenLastCalledWith(false);
   });
 
-  it("moves Google into the host sheet before starting its handoff", async () => {
+  it("leaves for Google on the click, with no view in between", async () => {
     const sheet = {
       setView: vi.fn(),
       transition: vi.fn((apply: () => void) => apply()),
@@ -121,10 +121,8 @@ describe("AuthPanel", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Continue with Google" }));
 
-    expect(sheet.setView).toHaveBeenCalledWith(expect.objectContaining({
-      title: "Continue with Google",
-    }));
-    await waitFor(() => expect(startGoogleLogin).toHaveBeenCalledOnce());
+    expect(startGoogleLogin).toHaveBeenCalledOnce();
+    expect(sheet.setView).not.toHaveBeenCalled();
   });
 
   it("preserves query and open-story intent for Google, without the hash", async () => {

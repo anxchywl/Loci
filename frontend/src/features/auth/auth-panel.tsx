@@ -26,7 +26,7 @@ import { useDict } from "@/lib/i18n/use-dict";
 import { openExternalLink, openTelegramLink } from "@/lib/telegram/init";
 import { useAuthStore } from "@/stores/auth-store";
 
-type View = "choose" | "google" | "login" | "register" | "verify" | "forgot" | "reset";
+type View = "choose" | "login" | "register" | "verify" | "forgot" | "reset";
 
 export function AuthPanel({
   useDialogForEmail = false,
@@ -73,12 +73,11 @@ export function AuthPanel({
   }, [navigate, pending, sheet, useDialogForEmail, view]);
 
   const viewTitle = (next: Exclude<View, "choose">) =>
-    next === "google" ? t.continueGoogle
-      : next === "register" ? t.createAccount
-        : next === "verify" ? t.verifyTitle
-          : next === "forgot" ? t.forgotTitle
-            : next === "reset" ? t.resetTitle
-              : t.signIn;
+    next === "register" ? t.createAccount
+      : next === "verify" ? t.verifyTitle
+        : next === "forgot" ? t.forgotTitle
+          : next === "reset" ? t.resetTitle
+            : t.signIn;
 
   const backTarget = (next: Exclude<View, "choose">): View =>
     next === "register" ? "choose"
@@ -131,12 +130,14 @@ export function AuthPanel({
     }
   }
 
+  // one click, one navigation: the browser leaves for Google immediately, and
+  // only the mini app stays behind — there Google opens in a real browser
   const onGoogle = () => {
-    navigate("google");
-    run(async () => {
-      const handoff = await startGoogleLogin(currentAuthRedirectTarget());
-      if (handoff === "external") setNotice(t.continueInBrowser);
-    });
+    setError(null);
+    setReturnNotice(null);
+    if (startGoogleLogin(currentAuthRedirectTarget()) === "external") {
+      setNotice(t.continueInBrowser);
+    }
   };
 
   const onTelegram = () => {
@@ -377,13 +378,6 @@ export function AuthPanel({
           <p className="text-center text-[13px] text-muted">{t.noAccount}{" "}
             <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); navigate("register"); }} className="font-medium text-accent">{t.createAccount}</button>
           </p>
-          <Feedback />
-        </div>
-      )}
-      {view === "google" && (
-        <div className="flex min-h-28 flex-col items-center justify-center gap-3 text-center">
-          {pending && <Loader2 size={20} className="animate-spin text-muted" />}
-          {!error && !notice && <p className="text-[14px] text-muted">{t.continueGoogle}</p>}
           <Feedback />
         </div>
       )}

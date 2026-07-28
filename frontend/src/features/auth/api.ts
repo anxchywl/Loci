@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiUrl } from "@/lib/api";
 import { isTelegramWebApp, openExternalLink } from "@/lib/telegram/init";
 
 export interface AuthUser {
@@ -135,11 +135,13 @@ function openProvider(authorizationUrl: string): ProviderHandoff {
   return "same-tab";
 }
 
-export async function startGoogleLogin(redirect: string): Promise<ProviderHandoff> {
-  const { authorization_url } = await apiFetch<{ authorization_url: string }>(
-    `/auth/google/start?redirect=${encodeURIComponent(redirect)}`,
-  );
-  return openProvider(authorization_url);
+/**
+ * Sign-in goes straight to the backend, which redirects on to Google. Nothing
+ * is fetched first, so the click and the navigation are one step — no spinner
+ * to sit on if a request stalls, which is what Safari used to do.
+ */
+export function startGoogleLogin(redirect: string): ProviderHandoff {
+  return openProvider(apiUrl(`/auth/google/redirect?redirect=${encodeURIComponent(redirect)}`));
 }
 
 export async function startGoogleLink(redirect: string): Promise<ProviderHandoff> {
@@ -147,6 +149,16 @@ export async function startGoogleLink(redirect: string): Promise<ProviderHandoff
     `/auth/google/link/start?redirect=${encodeURIComponent(redirect)}`,
   );
   return openProvider(authorization_url);
+}
+
+export interface TelegramLinkStart {
+  /** t.me deep link carrying the one-time link token as the bot's start payload */
+  url: string;
+  expires_in: number;
+}
+
+export function startTelegramLink(): Promise<TelegramLinkStart> {
+  return apiFetch<TelegramLinkStart>("/auth/telegram/link/start", { method: "POST" });
 }
 
 export function listIdentities(): Promise<IdentitySummary[]> {

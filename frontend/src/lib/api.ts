@@ -1,5 +1,16 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
 
+/**
+ * For the few endpoints the browser navigates to instead of fetching. Always
+ * absolute: a relative API base is fine for `location.assign` but not for the
+ * Telegram client, which needs a full URL to hand to an external browser.
+ */
+export function apiUrl(path: string): string {
+  const url = `${BASE_URL}${path}`;
+  if (typeof window === "undefined" || /^https?:\/\//.test(url)) return url;
+  return new URL(url, window.location.origin).toString();
+}
+
 let accessToken: string | null = null;
 let refreshPromise: Promise<boolean> | null = null;
 

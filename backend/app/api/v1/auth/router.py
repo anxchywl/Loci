@@ -35,6 +35,7 @@ from app.modules.auth import account_erasure as account_erasure_service
 from app.modules.auth import google as google_service
 from app.modules.auth import linking as linking_service
 from app.modules.auth import sessions as sessions_service
+from app.modules.auth import telegram_link as telegram_link_service
 from app.modules.auth.email import EmailAuthError
 from app.modules.auth.linking import LinkAuthError, LinkError
 from app.modules.auth.schemas import (
@@ -54,6 +55,7 @@ from app.modules.auth.schemas import (
     RefreshResponse,
     SessionSummary,
     TelegramAuthRequest,
+    TelegramLinkStartResponse,
     TokenResponse,
 )
 from app.modules.auth.service import (
@@ -238,6 +240,7 @@ def _browser_redirect_base(settings: Settings) -> str:
 @router.get("/google/start", response_model=GoogleStartResponse)
 async def google_start(
     request: Request,
+    response: Response,
     settings: Annotated[Settings, Depends(get_settings)],
     redis: Annotated[Redis, Depends(get_redis)],
     redirect: Annotated[str, Query(max_length=512)] = "/",
@@ -248,7 +251,35 @@ async def google_start(
         )
     await _check_auth_rate_limit(redis, request, settings)
     url = await google_service.build_authorization_url(settings, redis, redirect)
+    # each response carries a single-use state; a cached one would send the next
+    # sign-in to Google with a state the callback has already consumed
+    response.headers["Cache-Control"] = "no-store"
     return GoogleStartResponse(authorization_url=url)
+
+
+@router.get("/google/redirect")
+async def google_redirect(
+    request: Request,
+    settings: Annotated[Settings, Depends(get_settings)],
+    redis: Annotated[Redis, Depends(get_redis)],
+    redirect: Annotated[str, Query(max_length=512)] = "/",
+) -> Response:
+    """The browser's entry point into Google sign-in.
+
+    Navigating straight here, rather than fetching the authorization URL and
+    then assigning it, keeps the whole hand-off inside one top-level navigation:
+    no XHR to stall, no gap between the click and the redirect for a browser to
+    lose — which is what left Safari sitting on a spinner.
+    """
+    if not settings.google_login_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Google login is not configured"
+        )
+    await _check_auth_rate_limit(redis, request, settings)
+    url = await google_service.build_authorization_url(settings, redis, redirect)
+    response = RedirectResponse(url, status_code=status.HTTP_303_SEE_OTHER)
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @router.get("/google/callback")
@@ -489,6 +520,7 @@ async def unlink_identity(
 @router.get("/google/link/start", response_model=GoogleStartResponse)
 async def google_link_start(
     request: Request,
+    response: Response,
     user: Annotated[User, Depends(require_recent_auth)],
     settings: Annotated[Settings, Depends(get_settings)],
     redis: Annotated[Redis, Depends(get_redis)],
@@ -498,7 +530,33 @@ async def google_link_start(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Google login is not configured")
     await _check_auth_rate_limit(redis, request, settings)
     url = await google_service.build_authorization_url(settings, redis, redirect, link_user_id=user.id)
+    response.headers["Cache-Control"] = "no-store"
     return GoogleStartResponse(authorization_url=url)
+
+
+@router.post("/telegram/link/start", response_model=TelegramLinkStartResponse)
+async def telegram_link_start(
+    request: Request,
+    user: Annotated[User, Depends(require_recent_auth)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    redis: Annotated[Redis, Depends(get_redis)],
+) -> TelegramLinkStartResponse:
+    """Mint the one-time token the bot redeems when the user presses Start."""
+    if not settings.telegram_bot_username:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Telegram linking is not configured"
+        )
+    await _limit(redis, request, settings, "rl:tg:link:user", str(user.id), 3600, 10)
+    try:
+        await linking_service.ensure_telegram_linkable(db, user.id)
+    except LinkError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    token = await telegram_link_service.issue_token(redis, user.id)
+    return TelegramLinkStartResponse(
+        url=telegram_link_service.deep_link(settings, token),
+        expires_in=telegram_link_service.LINK_TOKEN_TTL_SECONDS,
+    )
 
 
 @router.post("/identities/email/start", status_code=status.HTTP_202_ACCEPTED, response_model=MessageResponse)

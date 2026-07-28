@@ -139,3 +139,29 @@ async def test_state_is_single_use(client, fake_redis, monkeypatch):
     # replaying the same state is rejected (consumed) → error redirect, no session
     second = await client.get(CALLBACK_URL, params={"code": "c2", "state": state})
     assert second.headers["location"] == "https://app.example/?auth=error"
+
+
+async def test_redirect_entry_point_hands_the_browser_straight_to_google(client, fake_redis):
+    """The browser navigates here on the click; nothing is fetched in between."""
+    resp = await client.get(
+        "/api/v1/auth/google/redirect", params={"redirect": "/story/42"}, follow_redirects=False
+    )
+
+    assert resp.status_code == 303
+    location = resp.headers["location"]
+    assert location.startswith("https://accounts.google.com/o/oauth2/v2/auth?")
+    query = parse_qs(urlparse(location).query)
+    assert query["code_challenge_method"] == ["S256"]
+    assert query["redirect_uri"] == ["https://app.example/api/v1/auth/google/callback"]
+    # every response carries a fresh single-use state, so none of them may be
+    # cached — a replayed state is exactly what a Safari-cached redirect causes
+    assert resp.headers["cache-control"] == "no-store"
+
+    state = query["state"][0]
+    stored = json.loads(await fake_redis.get(f"oauth:google:{state}"))
+    assert stored["destination"] == "/story/42"
+
+
+async def test_start_response_is_not_cacheable(client):
+    resp = await client.get(START_URL, params={"redirect": "/"})
+    assert resp.headers["cache-control"] == "no-store"

@@ -309,9 +309,8 @@ export interface AuthStrings {
   removeDeviceConfirm: string;
   removeMethodTitle: string;
   removeMethodConfirm: string;
-  addGoogleBody: string;
-  addTelegramBody: string;
-  openTelegramBot: string;
+  telegramWaiting: string;
+  telegramConnected: string;
   lastMethod: string;
   continueInBrowser: string;
   reauthNeeded: string;
@@ -467,9 +466,8 @@ export const dict: Record<Locale, Dict> = {
       removeDeviceConfirm: "This device will be signed out immediately.",
       removeMethodTitle: "Remove sign-in method",
       removeMethodConfirm: "You will no longer be able to sign in this way.",
-      addGoogleBody: "Google will ask you to pick an account and confirm.",
-      addTelegramBody: "Open the Loci bot to connect Telegram as a sign-in method:",
-      openTelegramBot: "Open @loci_app_bot",
+      telegramWaiting: "Tap Start in Telegram — this connects on its own.",
+      telegramConnected: "Telegram connected.",
       lastMethod: "You can't remove your only sign-in method.",
       continueInBrowser: "Continue in the browser that just opened, then come back here.",
       reauthNeeded: "Please sign in again to make this change.",
@@ -814,9 +812,8 @@ export const dict: Record<Locale, Dict> = {
       removeDeviceConfirm: "Бұл құрылғы бірден шығарылады.",
       removeMethodTitle: "Кіру әдісін алып тастау",
       removeMethodConfirm: "Бұдан кейін осы әдіспен кіру мүмкін болмайды.",
-      addGoogleBody: "Google аккаунт таңдап, растауды сұрайды.",
-      addTelegramBody: "Telegram-ды кіру әдісі ретінде қосу үшін Loci ботын ашыңыз:",
-      openTelegramBot: "@loci_app_bot ашу",
+      telegramWaiting: "Telegram-да Start басыңыз — қалғаны өздігінен қосылады.",
+      telegramConnected: "Telegram қосылды.",
       lastMethod: "Жалғыз кіру әдісін жоя алмайсыз.",
       continueInBrowser: "Ашылған браузерде жалғастырып, осында қайтыңыз.",
       reauthNeeded: "Бұл өзгерісті енгізу үшін қайта кіріңіз.",
@@ -1161,9 +1158,8 @@ export const dict: Record<Locale, Dict> = {
       removeDeviceConfirm: "Это устройство выйдет из аккаунта сразу же.",
       removeMethodTitle: "Удалить способ входа",
       removeMethodConfirm: "Войти этим способом больше не получится.",
-      addGoogleBody: "Google попросит выбрать аккаунт и подтвердить.",
-      addTelegramBody: "Откройте бота Loci, чтобы подключить Telegram как способ входа:",
-      openTelegramBot: "Открыть @loci_app_bot",
+      telegramWaiting: "Нажмите «Start» в Telegram — дальше всё подключится само.",
+      telegramConnected: "Telegram подключён.",
       lastMethod: "Нельзя удалить единственный способ входа.",
       continueInBrowser: "Продолжите в открывшемся браузере и вернитесь сюда.",
       reauthNeeded: "Войдите снова, чтобы выполнить это действие.",

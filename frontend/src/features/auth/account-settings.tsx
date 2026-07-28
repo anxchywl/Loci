@@ -14,6 +14,7 @@ import {
   revokeSession,
   startEmailLink,
   startGoogleLink,
+  startTelegramLink,
   unlinkIdentity,
   verifyEmailLink,
   type IdentitySummary,
@@ -27,7 +28,7 @@ import { currentAuthRedirectTarget } from "@/features/auth/redirect";
 import { ApiError } from "@/lib/api";
 import type { AuthStrings } from "@/lib/i18n/dict";
 import { useDict } from "@/lib/i18n/use-dict";
-import { openTelegramLink } from "@/lib/telegram/init";
+import { isTelegramWebApp, openTelegramLink } from "@/lib/telegram/init";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUiStore } from "@/stores/ui-store";
 
@@ -117,7 +118,9 @@ function SessionRow({
 type Confirm =
   | { kind: "remove-device"; session: SessionSummary }
   | { kind: "remove-method"; provider: IdentitySummary["provider"] }
-  | { kind: "add-method"; provider: IdentitySummary["provider"] };
+  // adding google or telegram is a single hand-off with nothing to confirm; only
+  // email needs a step of its own, because it needs an address and a password
+  | { kind: "add-method"; provider: "email" };
 
 /** how a host sheet lends its header to one of those steps */
 export interface SettingsSheet {
@@ -295,11 +298,20 @@ export function AccountSettings({
   const [nameEditing, setNameEditing] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [accountActionPending, setAccountActionPending] = useState(false);
+  // set while the user is over in Telegram pressing Start; the identities query
+  // polls until the bot's link lands, so the row connects itself
+  const [telegramPending, setTelegramPending] = useState(false);
   const returnNotice = useAuthStore((state) => state.returnNotice);
   const setReturnNotice = useAuthStore((state) => state.setReturnNotice);
   const user = useAuthStore((state) => state.user);
 
-  const identities = useQuery({ queryKey: ["identities"], queryFn: listIdentities });
+  const identities = useQuery({
+    queryKey: ["identities"],
+    queryFn: listIdentities,
+    refetchInterval: telegramPending ? 2000 : false,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: telegramPending,
+  });
   const sessions = useQuery({ queryKey: ["sessions"], queryFn: listSessions });
   const providers = useQuery({
     queryKey: ["auth-providers"],
@@ -353,6 +365,21 @@ export function AccountSettings({
 
   const linked = new Map((identities.data ?? []).map((i) => [i.provider, i]));
   const activeSessions = (sessions.data ?? []).filter((s) => s.active);
+  const telegramLinked = linked.has("telegram");
+
+  // the poll answers as soon as the bot has done its part; stop it either when
+  // the link lands or when the token behind it has expired unused
+  useEffect(() => {
+    if (!telegramPending || !telegramLinked) return;
+    setTelegramPending(false);
+    setNotice(t.telegramConnected);
+  }, [t.telegramConnected, telegramLinked, telegramPending]);
+
+  useEffect(() => {
+    if (!telegramPending) return;
+    const timer = window.setTimeout(() => setTelegramPending(false), 3 * 60_000);
+    return () => window.clearTimeout(timer);
+  }, [telegramPending]);
 
   async function addGoogle() {
     setAccountActionPending(true);
@@ -371,6 +398,37 @@ export function AccountSettings({
       if (err instanceof ApiError && err.status === 403) setError(t.reauthNeeded);
       else if (err instanceof ApiError && err.status === 409) setError(t.providerConflict);
       else setError(t.accountActionError);
+      setAccountActionPending(false);
+    }
+  }
+
+  /**
+   * Opens the bot on the one-time deep link and leaves the poll running. The
+   * tab is claimed synchronously, before the token request, because a tab
+   * opened after an await is a popup as far as Safari is concerned; keeping
+   * this page alive is what lets the row update itself when the user comes back.
+   */
+  async function addTelegram() {
+    setAccountActionPending(true);
+    setError(null);
+    setReturnNotice(null);
+    setNotice(null);
+    const inTelegram = isTelegramWebApp();
+    const tab = inTelegram ? null : window.open("about:blank", "_blank");
+    try {
+      const { url } = await startTelegramLink();
+      if (inTelegram) openTelegramLink(url);
+      else if (tab) tab.location.href = url;
+      // popups blocked: hand the whole tab over instead, and pick the link up on return
+      else window.location.assign(url);
+      setTelegramPending(true);
+      setNotice(t.telegramWaiting);
+    } catch (err) {
+      tab?.close();
+      if (err instanceof ApiError && err.status === 403) setError(t.reauthNeeded);
+      else if (err instanceof ApiError && err.status === 409) setError(t.providerConflict);
+      else setError(t.accountActionError);
+    } finally {
       setAccountActionPending(false);
     }
   }
@@ -413,8 +471,6 @@ export function AccountSettings({
         setError(null);
         if (confirm.step.kind === "remove-device") revoke.mutate(confirm.step.session.id);
         else if (confirm.step.kind === "remove-method") unlink.mutate(confirm.step.provider);
-        else if (confirm.step.kind === "add-method" && confirm.step.provider === "telegram") openTelegramLink("https://t.me/loci_app_bot");
-        else if (confirm.step.kind === "add-method") void addGoogle();
       }}
       onEmailLinked={() => {
         void qc.invalidateQueries({ queryKey: ["identities"] });
@@ -511,19 +567,31 @@ export function AccountSettings({
                     ) : (
                       <span className="text-[13px] text-muted">{t.connected}</span>
                     )
-                  ) : provider === "google" || provider === "email" || provider === "telegram" ? (
+                  ) : (
+                    // google and telegram start their hand-off on this click;
+                    // only email opens a step, because it has a form to fill in
                     <button
-                      onClick={() =>
-                        openConfirm(
-                          { kind: "add-method", provider },
-                          `${t.add} ${providerName(provider)}`,
-                        )
-                      }
-                      className="text-[13px] font-semibold text-accent"
+                      disabled={accountActionPending}
+                      onClick={() => {
+                        if (provider === "email") {
+                          openConfirm(
+                            { kind: "add-method", provider: "email" },
+                            `${t.add} ${providerName(provider)}`,
+                          );
+                        } else if (provider === "telegram") {
+                          void addTelegram();
+                        } else {
+                          void addGoogle();
+                        }
+                      }}
+                      className="flex items-center gap-1.5 text-[13px] font-semibold text-accent disabled:opacity-60"
                     >
+                      {provider === "telegram" && telegramPending && (
+                        <Loader2 size={13} className="animate-spin" />
+                      )}
                       {t.add}
                     </button>
-                  ) : null}
+                  )}
                 </div>
               </SettingsRow>
             );
@@ -608,7 +676,7 @@ function ConfirmStep({
 }) {
   const t = useDict().auth;
 
-  if (confirm.kind === "add-method" && confirm.provider === "email") {
+  if (confirm.kind === "add-method") {
     return (
       <div className="flex flex-col gap-3">
         {banner}
@@ -617,45 +685,17 @@ function ConfirmStep({
     );
   }
 
-  if (confirm.kind === "add-method" && confirm.provider === "telegram") {
-    return (
-      <div className="flex flex-col gap-3">
-        {banner}
-        <p className="text-[14px] leading-snug text-muted">{t.addTelegramBody}</p>
-        <a
-          href="https://t.me/loci_app_bot"
-          target="_blank"
-          rel="noreferrer"
-          onClick={(event) => {
-            if (openTelegramLink("https://t.me/loci_app_bot")) event.preventDefault();
-          }}
-          className="font-semibold text-accent underline underline-offset-2"
-        >
-          {t.openTelegramBot}
-        </a>
-        {onCancel && (
-          <button onClick={onCancel} className="rounded-xl border border-border px-3 py-2.5 text-[14px]">
-            {t.cancel}
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  const danger = confirm.kind !== "add-method";
   const { body, item, action } = confirm.kind === "remove-device"
     ? {
         body: t.removeDeviceConfirm,
         item: deviceLines(confirm.session, t).device,
         action: t.remove,
       }
-    : confirm.kind === "remove-method"
-      ? {
-          body: t.removeMethodConfirm,
-          item: providerName(confirm.provider),
-          action: t.confirmRemove,
-        }
-      : { body: t.addGoogleBody, item: null, action: t.continueGoogle };
+    : {
+        body: t.removeMethodConfirm,
+        item: providerName(confirm.provider),
+        action: t.confirmRemove,
+      };
 
   return (
     <div className="flex flex-col gap-3">
@@ -678,10 +718,7 @@ function ConfirmStep({
         <button
           disabled={pending}
           onClick={onConfirm}
-          className={[
-            "flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-[14px] font-semibold disabled:opacity-50",
-            danger ? "bg-[var(--lm-danger,#dc2626)] text-white" : "bg-accent text-accent-text",
-          ].join(" ")}
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--lm-danger,#dc2626)] px-3 py-2.5 text-[14px] font-semibold text-white disabled:opacity-50"
         >
           {pending && <Loader2 size={15} className="animate-spin" />}
           {action}
