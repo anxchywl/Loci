@@ -29,6 +29,7 @@ import {
   eraseAccount,
   listIdentities,
   listSessions,
+  logout,
   revokeSession,
   unlinkIdentity,
 } from "@/features/auth/api";
@@ -64,7 +65,19 @@ describe("AccountSettings", () => {
     ]);
     vi.mocked(unlinkIdentity).mockResolvedValue();
     vi.mocked(revokeSession).mockResolvedValue();
+    vi.mocked(logout).mockResolvedValue();
     vi.mocked(eraseAccount).mockResolvedValue();
+  });
+
+  it("places logout immediately before delete in desktop account settings", async () => {
+    renderWithQuery(<AccountSettings showDelete />);
+
+    const logoutButton = screen.getByRole("button", { name: "Log out" });
+    const deleteButton = screen.getByRole("button", { name: "Delete account" });
+    expect(logoutButton.compareDocumentPosition(deleteButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(logoutButton);
+    expect(screen.getByText("You will need to sign in again on this device.")).toBeInTheDocument();
   });
 
   it("takes unlinking through a confirmation step naming the method", async () => {

@@ -513,6 +513,16 @@ export function AccountSettings({
         <SettingsSection title={t.dangerZone}>
           <SettingsRow>
             <div className="min-w-0 flex-1 text-[15px] font-medium">{t.deleteAccount}</div>
+            {!sheet && !isTelegramWebApp() && (
+              <button
+                type="button"
+                onClick={() => openConfirm({ kind: "log-out" }, t.logOut)}
+                aria-label={t.logOut}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-accent focus-visible:text-accent"
+              >
+                <LogOut size={17} />
+              </button>
+            )}
             <DeleteAccountIconButton sheet={sheet} onOpenChange={setDeleteOpen} />
           </SettingsRow>
         </SettingsSection>
