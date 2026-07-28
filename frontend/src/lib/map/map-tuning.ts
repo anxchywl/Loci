@@ -17,8 +17,8 @@ import { type SpaceCapabilities } from "@/lib/map/space-quality";
 //                            which is what causes transient gaps / black patches.
 //   fadeDuration           — cross-fade time for a freshly-loaded tile over the
 //                            parent tile it replaces, and for symbols fading in/out.
-//                            Must be 0 so pins don't bleed through the planet during
-//                            globe rotation, despite causing LOD changes to pop.
+//                            A short fade keeps provider labels stable while the
+//                            globe rotates; story pins control their own opacity.
 //   antialias              — MSAA on the map context. The globe's silhouette against
 //                            space crawls/shimmers while rotating without it; it is
 //                            cheap on desktop GPUs but costly on weak mobile ones.
@@ -45,11 +45,10 @@ export function resolveMapTuning(
     capabilities.effectiveType === "2g";
 
   // Genuinely weak hardware / constrained network: smallest everything. Render at
-  // 1x, keep the cache lean, no MSAA. A short fade still smooths LOD popping — it
-  // costs nothing on the GPU, but we force 0 to prevent globe bleed-through.
+  // 1x, keep the cache lean, no MSAA, and use a short label crossfade.
   const lowEnd = weakMemory || capabilities.hardwareConcurrency <= 2 || slowNetwork;
   if (lowEnd) {
-    return { pixelRatio: Math.min(dpr, 1), maxTileCacheZoomLevels: 3, fadeDuration: 0, antialias: false };
+    return { pixelRatio: Math.min(dpr, 1), maxTileCacheZoomLevels: 3, fadeDuration: 200, antialias: false };
   }
 
   // Phones / tablets: cap DPR at 1.5 (crisp enough, roughly halves fragment work
@@ -59,7 +58,7 @@ export function resolveMapTuning(
     return {
       pixelRatio: Math.min(dpr, 1.5),
       maxTileCacheZoomLevels: capable ? 5 : 4,
-      fadeDuration: 0,
+      fadeDuration: 200,
       antialias: capable,
     };
   }
@@ -70,7 +69,7 @@ export function resolveMapTuning(
   return {
     pixelRatio: Math.min(dpr, 2),
     maxTileCacheZoomLevels: hugeSurface ? 5 : 6,
-    fadeDuration: 0,
+    fadeDuration: 200,
     antialias: true,
   };
 }

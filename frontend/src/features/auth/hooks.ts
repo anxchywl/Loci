@@ -119,6 +119,12 @@ async function bootstrap(): Promise<void> {
 export function useAuthBootstrap(): void {
   useEffect(() => {
     if (!bootstrapPromise) bootstrapPromise = bootstrap();
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      bootstrapPromise = bootstrap();
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
   }, []);
 }
 

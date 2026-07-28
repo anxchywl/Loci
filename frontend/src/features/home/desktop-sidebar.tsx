@@ -24,7 +24,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { SettingsSection } from "@/components/settings-section";
 import { AccountSettings, DeleteAccountIconButton, LogoutIconButton, type SettingsSheet } from "@/features/auth/account-settings";
@@ -74,6 +74,7 @@ interface DesktopSidebarProps {
   nearbyLocation: { lat: number; lon: number } | null;
   onNearby: () => void;
   authenticated: boolean;
+  authSheet?: SettingsSheet;
 }
 
 interface ItemProps {
@@ -429,7 +430,7 @@ export function ProfilePanel({
               <ShieldCheck size={18} />
             </Link>
           )}
-          {onSettingsClick && (
+          {onSettingsClick && !authActive && (
             <button
               onClick={onSettingsClick}
               aria-label={t.settings}
@@ -447,7 +448,7 @@ export function ProfilePanel({
       ) : (
         <div className="flex flex-1 flex-col justify-center px-1 py-6">
           <AuthPanel useDialogForEmail sheet={authSheet} onViewChange={setAuthActive} />
-          {onSettingsClick && !authActive && (
+          {onSettingsClick && (
             <div className="mt-5 border-t border-border pt-2">
               <button
                 onClick={onSettingsClick}
@@ -470,7 +471,7 @@ export function ProfilePanel({
         </div>
       )}
 
-      {!onSettingsClick && <div className="mt-auto">
+      {!onSettingsClick && <div className="mt-auto border-t border-border pt-4">
         <SettingsPanel />
       </div>}
     </div>
@@ -554,6 +555,7 @@ export function DesktopSidebar({
   nearbyLocation,
   onNearby,
   authenticated,
+  authSheet,
 }: DesktopSidebarProps) {
   const t = useDict();
   const openStory = useUiStore((s) => s.openStory);
@@ -561,7 +563,13 @@ export function DesktopSidebar({
   const closeStory = useUiStore((s) => s.closeStory);
   const requestPanTo = useUiStore((s) => s.requestPanTo);
   const [openDoc, setOpenDoc] = useState<LegalDocId | null>(null);
+  const [authBack, setAuthBack] = useState<(() => void) | null>(null);
   const docTitles = docTitlesFrom(t);
+
+  const desktopAuthSheet = useMemo<SettingsSheet>(() => ({
+    transition: (apply) => apply(),
+    setView: (view) => setAuthBack(() => view?.onBack ?? null),
+  }), []);
 
   // A document is a sub-view of the About panel; drop it whenever we leave About.
   useEffect(() => {
@@ -595,6 +603,10 @@ export function DesktopSidebar({
   const handleToggle = () => {
     if (openDoc) { setOpenDoc(null); return; }
     if (activePanel) {
+      if (activePanel === "profile" && authBack) {
+        authBack();
+        return;
+      }
       if (activePanel === "story") {
         closeStory();
         onSetActivePanel(storySource);
@@ -735,7 +747,7 @@ export function DesktopSidebar({
                   onOpen={(story) => handleStoryOpen(story.id, story.lat, story.lon, "my-stories")}
                 />
               )}
-              {activePanel === "profile" && <ProfilePanel />}
+              {activePanel === "profile" && <ProfilePanel authSheet={desktopAuthSheet} />}
               {activePanel === "settings" && <SettingsPanel includeAccount />}
               {activePanel === "about" && (
                 <div key={openDoc ?? "about"} className="animate-fade-in">

@@ -19,6 +19,10 @@ def test_short_password_rejected():
         validate_password("short")
 
 
+def test_eight_character_password_allowed():
+    validate_password("12345678")
+
+
 def test_long_passphrase_allowed():
     validate_password("correct horse battery staple and then some more words")
 

@@ -1,6 +1,6 @@
 """Argon2id password hashing and policy.
 
-Policy is length-only by design: a 12-char minimum, generous maximum to accept
+Policy is length-only by design: an 8-char minimum, generous maximum to accept
 passphrases, and no composition rules (which push users toward weaker, predictable
 patterns). Long input is rejected, never silently truncated.
 """
@@ -8,7 +8,7 @@ patterns). Long input is rejected, never silently truncated.
 from argon2 import PasswordHasher, Type
 from argon2.exceptions import InvalidHashError
 
-MIN_PASSWORD_LENGTH = 12
+MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_LENGTH = 256
 
 _hasher = PasswordHasher(type=Type.ID)

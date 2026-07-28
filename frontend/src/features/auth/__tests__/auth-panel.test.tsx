@@ -57,6 +57,7 @@ describe("AuthPanel", () => {
 
   it("uses a non-submitting back button inside the login form", () => {
     renderWithQuery(<AuthPanel />);
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "person@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Continue with email" }));
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
 
@@ -67,6 +68,7 @@ describe("AuthPanel", () => {
   it("normalizes authentication fields without blocking password symbols", async () => {
     vi.mocked(loginEmail).mockRejectedValue(new Error("stop after request"));
     renderWithQuery(<AuthPanel />);
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "person@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Continue with email" }));
     fireEvent.change(screen.getByLabelText("Email"), {
       target: { value: "  person @example.com " },
@@ -93,6 +95,7 @@ describe("AuthPanel", () => {
       <AuthPanel useDialogForEmail sheet={sheet} onViewChange={onViewChange} />,
     );
 
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "person@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Continue with email" }));
 
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
@@ -139,6 +142,7 @@ describe("AuthPanel", () => {
 
   it("moves registration to an accessible code form with resend cooldown", async () => {
     renderWithQuery(<AuthPanel />);
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "person@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Continue with email" }));
     fireEvent.click(screen.getByRole("button", { name: "Create account" }));
     fireEvent.change(screen.getByLabelText("Email"), {
@@ -147,6 +151,7 @@ describe("AuthPanel", () => {
     fireEvent.change(screen.getByLabelText("Password"), {
       target: { value: "a-long-test-password" },
     });
+    expect(screen.getByLabelText("Password")).toHaveAttribute("minlength", "8");
     fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
     await waitFor(() => expect(registerEmail).toHaveBeenCalledOnce());
@@ -158,6 +163,7 @@ describe("AuthPanel", () => {
 
   it("moves password recovery to code and new-password inputs", async () => {
     renderWithQuery(<AuthPanel />);
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "person@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Continue with email" }));
     fireEvent.click(screen.getByRole("button", { name: "Forgot password?" }));
     fireEvent.change(screen.getByLabelText("Email"), {
@@ -194,5 +200,15 @@ describe("AuthPanel", () => {
 
     expect(openTelegramLink).toHaveBeenCalledWith("https://t.me/loci_app_bot");
     expect(openExternalLink).toHaveBeenCalledWith("https://t.me/loci_app_bot");
+  });
+
+  it("uses the supplied provider assets on the chooser", async () => {
+    renderWithQuery(<AuthPanel />);
+
+    await screen.findByRole("button", { name: "Continue with Google" });
+    await screen.findByRole("button", { name: "Continue with Telegram" });
+    const providerImages = screen.getAllByRole("presentation");
+    expect(providerImages[0]).toHaveAttribute("src", "/gmail.svg");
+    expect(providerImages[1]).toHaveAttribute("src", "/telegram.svg");
   });
 });

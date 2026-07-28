@@ -70,9 +70,11 @@ describe("map creation", () => {
     createMap(container);
 
     const options = (maplibreMock.Map.mock.calls.at(-1) as unknown as [Record<string, number>])[0];
-    expect(options).toEqual(expect.objectContaining({ minZoom, zoom: 3 }));
-    // fadeDuration must be 0 to prevent markers from bleeding through the globe during rotation.
-    expect(options.fadeDuration).toBe(0);
+    // first-time visitors open on the fully-zoomed-out globe, not the regional
+    // default — so the launch hands off to the whole planet (Phase 9)
+    expect(options).toEqual(expect.objectContaining({ minZoom, zoom: minZoom }));
+    // provider labels need a short crossfade while story pins control their own opacity
+    expect(options.fadeDuration).toBe(200);
     expect(options.pixelRatio).toBeGreaterThan(0);
     expect(options.maxTileCacheZoomLevels).toBeGreaterThanOrEqual(3);
   });

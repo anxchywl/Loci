@@ -269,7 +269,9 @@ async def google_callback(
     base = _browser_redirect_base(settings)
     # cancellation or a malformed callback returns the user to the app without a session
     if error or not code or not state:
-        return RedirectResponse(f"{base}/?auth=cancelled", status_code=status.HTTP_303_SEE_OTHER)
+        response = RedirectResponse(f"{base}/?auth=cancelled", status_code=status.HTTP_303_SEE_OTHER)
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     session_metadata = build_session_metadata(
         request.headers.get("user-agent"),
@@ -282,11 +284,14 @@ async def google_callback(
         )
     except google_service.GoogleAuthError:
         logger.warning("google auth failed")
-        return RedirectResponse(f"{base}/?auth=error", status_code=status.HTTP_303_SEE_OTHER)
+        response = RedirectResponse(f"{base}/?auth=error", status_code=status.HTTP_303_SEE_OTHER)
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     redirect_response = RedirectResponse(
         f"{base}{destination}", status_code=status.HTTP_303_SEE_OTHER
     )
+    redirect_response.headers["Cache-Control"] = "no-store"
     # link flows return no session — the user is already authenticated
     if refresh_token is not None:
         _set_refresh_cookie(redirect_response, refresh_token, refresh_expires_at, settings)

@@ -30,6 +30,7 @@ import {
 } from "@/features/home/desktop-sidebar";
 import { DocView, docTitlesFrom } from "@/features/home/doc-view";
 import { legalDocsFrom, type LegalDocId } from "@/features/home/legal-content";
+import { LaunchOverlay } from "@/features/launch/launch-overlay";
 import { MapErrorBoundary } from "@/features/map/map-error-boundary";
 import { MapView, type MapBounds, type MapViewHandle } from "@/features/map/map-view";
 import { AddStorySheet } from "@/features/stories/add-story-sheet";
@@ -70,6 +71,10 @@ function Toast() {
   );
 }
 
+// Temporarily hidden while the birth-of-a-world launch is being reworked. Flip to
+// `true` to bring the launch curtain back — all its code stays wired up.
+const LAUNCH_ENABLED = false;
+
 export function HomeManager() {
   const t = useDict();
   const { status } = useTelegramAuth();
@@ -104,6 +109,15 @@ export function HomeManager() {
   const storySource = useUiStore((state) => state.storySource);
   const closeStory = useUiStore((state) => state.closeStory);
 
+  // Loading lifecycle for the birth-of-a-world launch, all local to the shell:
+  //   loading  → the launch curtain plays the void→spark→expansion→Earth arc over
+  //              the (real, already-mounted) globe
+  //   revealing→ the arc's exit crossfade dissolves the curtain to the live globe
+  //   done     → curtain gone; the interface emerges
+  const [mapSettled, setMapSettled] = useState(false);
+  const [launchPhase, setLaunchPhase] = useState<"loading" | "revealing" | "done">(
+    LAUNCH_ENABLED ? "loading" : "done",
+  );
   const [bounds, setBounds] = useState<MapBounds | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -301,7 +315,12 @@ export function HomeManager() {
   ];
 
   return (
-    <main className="fixed inset-0 overflow-hidden bg-bg">
+    <main
+      className={[
+        "fixed inset-0 overflow-hidden bg-bg",
+        launchPhase === "done" ? "lm-launched" : "",
+      ].join(" ")}
+    >
       <MapErrorBoundary>
         <MapView
           ref={mapViewRef}
@@ -310,8 +329,17 @@ export function HomeManager() {
           clusters={clusterMode ? clusters : []}
           desktopLeftInset={sidebarOpen ? 320 : 48}
           onBoundsChange={setBounds}
+          onSettled={() => setMapSettled(true)}
         />
       </MapErrorBoundary>
+
+      {LAUNCH_ENABLED && launchPhase !== "done" && (
+        <LaunchOverlay
+          ready={mapSettled}
+          onReveal={() => setLaunchPhase("revealing")}
+          onComplete={() => setLaunchPhase("done")}
+        />
+      )}
 
       <DesktopSidebar
         open={sidebarOpen}
@@ -323,6 +351,7 @@ export function HomeManager() {
         nearbyLocation={nearbyLocation}
         onNearby={handleNearby}
         authenticated={authenticated}
+        authSheet={settingsSheet}
       />
 
       {/* Search + categories bar */}
@@ -330,6 +359,7 @@ export function HomeManager() {
         <div
           data-map-controls
           className={[
+            "lm-emerge-top",
             "absolute inset-x-0 top-0 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]",
             "transition-[padding-left] duration-[230ms] ease-lm",
             sidebarOpen ? "lg:pl-[332px]" : "lg:pl-14",
@@ -363,9 +393,11 @@ export function HomeManager() {
             </div>
             {!searching && (
               <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
-                {categories.map((cat) => (
-                  <CategoryChip key={cat.id} category={cat} selected={categoryFilter === cat.id}
-                    onClick={() => setCategoryFilter(categoryFilter === cat.id ? null : cat.id)} />
+                {categories.map((cat, i) => (
+                  <span key={cat.id} className="lm-emerge shrink-0" style={{ animationDelay: `${180 + i * 45}ms` }}>
+                    <CategoryChip category={cat} selected={categoryFilter === cat.id}
+                      onClick={() => setCategoryFilter(categoryFilter === cat.id ? null : cat.id)} />
+                  </span>
                 ))}
               </div>
             )}
@@ -418,9 +450,11 @@ export function HomeManager() {
             </div>
             {!searching && (
               <div className="flex min-w-0 flex-1 gap-3 overflow-x-auto [scrollbar-width:none]">
-                {categories.map((cat) => (
-                  <CategoryChip key={cat.id} category={cat} selected={categoryFilter === cat.id}
-                    onClick={() => setCategoryFilter(categoryFilter === cat.id ? null : cat.id)} />
+                {categories.map((cat, i) => (
+                  <span key={cat.id} className="lm-emerge shrink-0" style={{ animationDelay: `${180 + i * 45}ms` }}>
+                    <CategoryChip category={cat} selected={categoryFilter === cat.id}
+                      onClick={() => setCategoryFilter(categoryFilter === cat.id ? null : cat.id)} />
+                  </span>
                 ))}
               </div>
             )}
@@ -443,7 +477,7 @@ export function HomeManager() {
 
       {mode === "browse" && (
         <>
-          <div className="absolute bottom-6 left-4 z-10 flex flex-col items-center gap-3 lg:hidden">
+          <div className="lm-emerge absolute bottom-6 left-4 z-10 flex flex-col items-center gap-3 lg:hidden" style={{ animationDelay: "150ms" }}>
             <button aria-label={t.trending} onClick={() => setTrendingOpen(true)}
               className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-bg text-muted shadow-sm transition-[color,border-color,transform,box-shadow] duration-150 ease-lm hover:border-accent hover:text-[var(--lm-accent-soft)] focus-visible:border-accent focus-visible:text-accent focus-visible:ring-2 focus-visible:ring-[var(--lm-focus)] active:scale-95">
               <Flame size={18} />
@@ -473,8 +507,9 @@ export function HomeManager() {
                 setActivePanel("profile");
               }
             }}
+            style={{ animationDelay: "90ms" }}
             className={[
-              "absolute bottom-6 z-10 hidden rounded-full bg-accent p-4 text-accent-text shadow-lg",
+              "lm-emerge absolute bottom-6 z-10 hidden rounded-full bg-accent p-4 text-accent-text shadow-lg",
               "transition-[left,transform,box-shadow] duration-[230ms] ease-lm hover:shadow-xl active:scale-95 lg:block",
               sidebarOpen ? "lg:left-[336px]" : "lg:left-16",
             ].join(" ")}>
@@ -486,15 +521,16 @@ export function HomeManager() {
             aria-label={t.locateMe}
             onClick={locateMe}
             disabled={locating}
-            style={{ bottom: locateBottom }}
-            className="absolute right-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-bg text-muted shadow-sm transition-[color,border-color,transform,box-shadow] duration-150 ease-lm hover:border-accent hover:text-[var(--lm-accent-soft)] focus-visible:border-accent focus-visible:text-accent focus-visible:ring-2 focus-visible:ring-[var(--lm-focus)] active:scale-95 disabled:opacity-50 lg:h-10 lg:w-10"
+            style={{ bottom: locateBottom, animationDelay: "210ms" }}
+            className="lm-emerge absolute right-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-bg text-muted shadow-sm transition-[color,border-color,transform,box-shadow] duration-150 ease-lm hover:border-accent hover:text-[var(--lm-accent-soft)] focus-visible:border-accent focus-visible:text-accent focus-visible:ring-2 focus-visible:ring-[var(--lm-focus)] active:scale-95 disabled:opacity-50 lg:h-10 lg:w-10"
           >
             <Navigation size={16} className={locating ? "animate-pulse" : undefined} />
           </button>
 
           {/* Zoom controls — above locate */}
           <div
-            className="absolute right-3 bottom-[calc(1.5rem+36px+8px)] z-10 flex flex-col overflow-hidden rounded-lg border border-border bg-bg shadow-sm lg:bottom-[calc(1.5rem+48px)]"
+            style={{ animationDelay: "270ms" }}
+            className="lm-emerge absolute right-3 bottom-[calc(1.5rem+36px+8px)] z-10 flex flex-col overflow-hidden rounded-lg border border-border bg-bg shadow-sm lg:bottom-[calc(1.5rem+48px)]"
           >
             <button aria-label="Zoom in" onClick={() => mapViewRef.current?.zoomIn()}
               className="flex h-7 w-8 items-center justify-center text-[18px] leading-none text-text transition-colors hover:bg-surface hover:text-[var(--lm-accent-soft)] focus-visible:bg-surface focus-visible:text-accent active:bg-surface lg:h-[38px] lg:w-10 lg:text-[20px]">
@@ -508,7 +544,7 @@ export function HomeManager() {
           </div>
 
           {/* Pin display toggle — clustered counts vs. every pin visible */}
-          <div className="absolute right-3 bottom-[calc(1.5rem+36px+8px+57px+8px)] z-10 block lg:bottom-[calc(1.5rem+48px+76px+8px)]">
+          <div style={{ animationDelay: "330ms" }} className="lm-emerge absolute right-3 bottom-[calc(1.5rem+36px+8px+57px+8px)] z-10 block lg:bottom-[calc(1.5rem+48px+76px+8px)]">
             <button
               aria-label={t.mapView}
               aria-expanded={mapViewOpen}

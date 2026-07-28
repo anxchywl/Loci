@@ -30,6 +30,7 @@ export type CategorySlug =
 
 interface Dict {
   appName: string;
+  launchTagline: string;
   loading: string;
   errorGeneric: string;
   mapUnavailable: string;
@@ -251,7 +252,13 @@ interface Dict {
 
 export interface AuthStrings {
   signIn: string;
+  signInToLoci: string;
   subtitle: string;
+  emailAddress: string;
+  orContinueWith: string;
+  noAccount: string;
+  alreadyHaveAccount: string;
+  signInLink: string;
   continueGoogle: string;
   continueTelegram: string;
   continueEmail: string;
@@ -332,6 +339,7 @@ export interface AuthStrings {
 export const dict: Record<Locale, Dict> = {
   en: {
     appName: "Loci",
+    launchTagline: "Every place has a story",
     loading: "Loading…",
     errorGeneric: "Something went wrong",
     mapUnavailable: "Map unavailable",
@@ -399,16 +407,22 @@ export const dict: Record<Locale, Dict> = {
     noSavedYet: "Nothing saved yet",
     addFirstStory: "Add your first story",
     exploreMap: "Explore the map",
-    openInTelegram: "Open in Telegram to sign in",
+    openInTelegram: "Sign in to continue",
     auth: {
       signIn: "Sign in",
+      signInToLoci: "Sign in to Loci",
       subtitle: "Sign in to add stories, save places, and manage your profile.",
+      emailAddress: "Email address",
+      orContinueWith: "or continue with",
+      noAccount: "Don't have an account?",
+      alreadyHaveAccount: "Already have an account?",
+      signInLink: "Sign in",
       continueGoogle: "Continue with Google",
       continueTelegram: "Continue with Telegram",
       continueEmail: "Continue with email",
       email: "Email",
       password: "Password",
-      passwordHint: "At least 12 characters",
+      passwordHint: "At least 8 characters",
       signInAction: "Sign in",
       createAccount: "Create account",
       toRegister: "New to Loci? Create an account",
@@ -672,6 +686,7 @@ export const dict: Record<Locale, Dict> = {
   },
   kk: {
     appName: "Loci",
+    launchTagline: "Әр жердің өз оқиғасы бар",
     loading: "Жүктелуде…",
     errorGeneric: "Бірдеңе дұрыс болмады",
     mapUnavailable: "Карта қолжетімсіз",
@@ -739,16 +754,22 @@ export const dict: Record<Locale, Dict> = {
     noSavedYet: "Әзірге ештеңе сақталмаған",
     addFirstStory: "Алғашқы оқиғаңызды қосыңыз",
     exploreMap: "Картаны шолу",
-    openInTelegram: "Кіру үшін Telegram-да ашыңыз",
+    openInTelegram: "Жалғастыру үшін кіріңіз",
     auth: {
       signIn: "Кіру",
+      signInToLoci: "Loci-ге кіріңіз",
       subtitle: "Оқиға қосу, орындарды сақтау және профильді басқару үшін кіріңіз.",
+      emailAddress: "Email мекенжайы",
+      orContinueWith: "немесе жалғастыру",
+      noAccount: "Тіркелгіңіз жоқ па?",
+      alreadyHaveAccount: "Тіркелгіңіз бар ма?",
+      signInLink: "Кіру",
       continueGoogle: "Google арқылы жалғастыру",
       continueTelegram: "Telegram арқылы жалғастыру",
       continueEmail: "Email арқылы жалғастыру",
       email: "Email",
       password: "Құпиясөз",
-      passwordHint: "Кемінде 12 таңба",
+      passwordHint: "Кемінде 8 таңба",
       signInAction: "Кіру",
       createAccount: "Тіркелгі жасау",
       toRegister: "Loci-де жаңасыз ба? Тіркелгі жасаңыз",
@@ -1012,6 +1033,7 @@ export const dict: Record<Locale, Dict> = {
   },
   ru: {
     appName: "Loci",
+    launchTagline: "У каждого места есть история",
     loading: "Загрузка…",
     errorGeneric: "Что-то пошло не так",
     mapUnavailable: "Карта недоступна",
@@ -1079,16 +1101,22 @@ export const dict: Record<Locale, Dict> = {
     noSavedYet: "Пока ничего не сохранено",
     addFirstStory: "Добавьте первую историю",
     exploreMap: "Смотреть карту",
-    openInTelegram: "Откройте в Telegram, чтобы войти",
+    openInTelegram: "Войдите, чтобы продолжить",
     auth: {
       signIn: "Вход",
+      signInToLoci: "Войти в Loci",
       subtitle: "Войдите, чтобы добавлять истории, сохранять места и управлять профилем.",
+      emailAddress: "Адрес email",
+      orContinueWith: "или продолжить с",
+      noAccount: "Нет аккаунта?",
+      alreadyHaveAccount: "Уже есть аккаунт?",
+      signInLink: "Войти",
       continueGoogle: "Продолжить с Google",
       continueTelegram: "Продолжить с Telegram",
       continueEmail: "Продолжить с email",
       email: "Email",
       password: "Пароль",
-      passwordHint: "Не менее 12 символов",
+      passwordHint: "Не менее 8 символов",
       signInAction: "Войти",
       createAccount: "Создать аккаунт",
       toRegister: "Впервые в Loci? Создайте аккаунт",

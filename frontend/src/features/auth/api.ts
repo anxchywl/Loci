@@ -131,7 +131,8 @@ function openProvider(authorizationUrl: string): ProviderHandoff {
     openExternalLink(authorizationUrl);
     return "external";
   }
-  window.location.assign(authorizationUrl);
+  // replace avoids Safari restoring the pre-auth page from its history stack
+  window.location.replace(authorizationUrl);
   return "same-tab";
 }
 

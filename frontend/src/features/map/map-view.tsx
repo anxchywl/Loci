@@ -69,10 +69,14 @@ interface MapViewProps {
   clusters: MapCluster[];
   onBoundsChange: (bounds: MapBounds) => void;
   desktopLeftInset?: number;
+  // Fires once the globe has settled — either interactive ("ready") or given up
+  // ("error") — so the launch curtain knows it can lift without revealing a
+  // half-drawn map.
+  onSettled?: () => void;
 }
 
 export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
-  { categories, stories, clusters, onBoundsChange, desktopLeftInset = 0 },
+  { categories, stories, clusters, onBoundsChange, desktopLeftInset = 0, onSettled },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -100,7 +104,20 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   const showAllPinsRef = useRef(showAllPins);
   const [mapAttempt, setMapAttempt] = useState(0);
   const [mapStatus, setMapStatus] = useState<MapStatus>("loading");
+  const settledRef = useRef(false);
+  const onSettledRef = useRef(onSettled);
+  onSettledRef.current = onSettled;
   const t = useDict();
+
+  // Tell the launch overlay the globe has settled, exactly once, the first time
+  // it reaches an interactive or error state.
+  useEffect(() => {
+    if (settledRef.current) return;
+    if (mapStatus === "ready" || mapStatus === "error") {
+      settledRef.current = true;
+      onSettledRef.current?.();
+    }
+  }, [mapStatus]);
 
   const replaceSpaceRenderer = useCallback((map: MapLibreMap) => {
     spaceRendererRef.current?.dispose();
@@ -569,10 +586,10 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
 
   return (
     <div className="absolute inset-0 bg-[#0a0a0c]">
-      <div 
-        className="absolute inset-0 transition-transform duration-[1200ms] ease-out"
-        style={{ transform: mapStatus === "ready" ? "scale(1)" : "scale(1.05)" }}
-      >
+      {/* The globe stays perfectly still behind the loading cover — no scale-in,
+          no camera move — so the reveal feels like uncovering something that was
+          always there rather than the map "arriving". */}
+      <div className="absolute inset-0">
         <div aria-hidden="true" className="lm-map-space absolute inset-0" data-testid="map-space">
           <canvas ref={spaceCanvasRef} className="absolute inset-0 h-full w-full" data-testid="space-canvas" />
         </div>

@@ -18,9 +18,13 @@ export const DEFAULT_CENTER: [number, number] = [28, 52];
 export const DEFAULT_ZOOM = 3;
 export const MIN_ZOOM = 2;
 const MOBILE_MIN_ZOOM = 1;
-const RANDOM_START_CENTERS: [number, number][] = [
-  [-5, 48], [18, 52], [52, 48], [88, 50], [125, 42],
-];
+// First-time visitors are revealed the whole planet at a random longitude (the
+// launch sequence "births" the Earth, then hands off to this camera — Phase 9), so
+// two people never open on the same face. A gentle northern bias frames more land.
+const FIRST_VISIT_LATITUDE = 12;
+function randomFirstVisitCenter(): [number, number] {
+  return [Math.random() * 360 - 180, FIRST_VISIT_LATITUDE];
+}
 
 export interface CategoryStyle {
   id: number;
@@ -320,7 +324,9 @@ export function loadCamera(): SavedCamera | null {
 export function createMap(container: HTMLElement, style = MAP_STYLE_URL): MapLibreMap {
   const saved = loadCamera();
   const minZoom = container.clientWidth < 640 ? MOBILE_MIN_ZOOM : MIN_ZOOM;
-  const center = saved?.center ?? RANDOM_START_CENTERS[Math.floor(Math.random() * RANDOM_START_CENTERS.length)];
+  // Returning visitors resume exactly where they left off; first-timers start on
+  // the fully-zoomed-out globe (never the default regional view — Phase 9).
+  const center = saved?.center ?? randomFirstVisitCenter();
   // Device-adaptive rendering budget: cap the backing-store DPR on phones, size
   // the tile cache so fast spins re-use tiles instead of re-downloading them, and
   // cross-fade LOD changes so tiles blend in over their parent instead of popping.
@@ -329,7 +335,7 @@ export function createMap(container: HTMLElement, style = MAP_STYLE_URL): MapLib
     container,
     style,
     center,
-    zoom: saved ? Math.max(saved.zoom, minZoom) : DEFAULT_ZOOM,
+    zoom: saved ? Math.max(saved.zoom, minZoom) : minZoom,
     bearing: saved?.bearing ?? 0,
     pitch: saved?.pitch ?? 0,
     minZoom,

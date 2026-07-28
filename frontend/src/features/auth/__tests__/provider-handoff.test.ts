@@ -37,14 +37,14 @@ describe("Google hand-off", () => {
 
   it("navigates in place in a normal browser", async () => {
     vi.mocked(isTelegramWebApp).mockReturnValue(false);
-    const assign = vi.fn();
+    const replace = vi.fn();
     Object.defineProperty(window, "location", {
       configurable: true,
-      value: { ...window.location, assign },
+      value: { ...window.location, replace },
     });
 
     await expect(startGoogleLogin("/")).resolves.toBe("same-tab");
     expect(openExternalLink).not.toHaveBeenCalled();
-    expect(assign).toHaveBeenCalledWith(AUTH_URL);
+    expect(replace).toHaveBeenCalledWith(AUTH_URL);
   });
 });

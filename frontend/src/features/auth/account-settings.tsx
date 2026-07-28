@@ -840,7 +840,7 @@ function AddEmail({ onDone, onCancel }: { onDone: () => void; onCancel?: () => v
           </div>
           <div>
             <label htmlFor={`${fieldId}-password`} className="mb-1 block text-[13px] text-muted">{t.password}</label>
-            <input id={`${fieldId}-password`} type="password" required minLength={12} maxLength={256} autoComplete="new-password" placeholder={t.password} value={password} onChange={(e) => setPassword(cleanPasswordInput(e.target.value))} className={input} />
+            <input id={`${fieldId}-password`} type="password" required minLength={8} maxLength={256} autoComplete="new-password" placeholder={t.password} value={password} onChange={(e) => setPassword(cleanPasswordInput(e.target.value))} className={input} />
           </div>
         </>
       ) : (

@@ -18,7 +18,7 @@ describe("resolveMapTuning", () => {
     const tuning = resolveMapTuning(base, 3);
     expect(tuning.pixelRatio).toBe(2);
     expect(tuning.antialias).toBe(true);
-    expect(tuning.fadeDuration).toBe(0);
+    expect(tuning.fadeDuration).toBe(200);
     expect(tuning.maxTileCacheZoomLevels).toBe(6);
   });
 
@@ -40,7 +40,7 @@ describe("resolveMapTuning", () => {
     const weak = resolveMapTuning({ ...base, deviceMemory: 2 }, 2);
     expect(weak.pixelRatio).toBe(1);
     expect(weak.antialias).toBe(false);
-    expect(weak.fadeDuration).toBe(0);
+    expect(weak.fadeDuration).toBe(200);
     expect(weak.maxTileCacheZoomLevels).toBe(3);
 
     const saveData = resolveMapTuning({ ...base, saveData: true }, 2);

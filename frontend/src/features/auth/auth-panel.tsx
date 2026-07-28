@@ -1,9 +1,11 @@
 "use client";
 
-import { ArrowLeft, Loader2, Mail, Send } from "lucide-react";
+import Image from "next/image";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
+import type { ClipboardEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import {
   confirmPasswordReset,
@@ -25,21 +27,6 @@ import { openExternalLink, openTelegramLink } from "@/lib/telegram/init";
 import { useAuthStore } from "@/stores/auth-store";
 
 type View = "choose" | "google" | "login" | "register" | "verify" | "forgot" | "reset";
-
-function GoogleIcon({ size = 18, className = "" }: { size?: number; className?: string }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      className={className}
-      aria-hidden="true"
-    >
-      <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" />
-    </svg>
-  );
-}
 
 export function AuthPanel({
   useDialogForEmail = false,
@@ -76,6 +63,15 @@ export function AuthPanel({
     return () => window.clearInterval(timer);
   }, [resendRemaining]);
 
+  useEffect(() => {
+    if (view === "choose" || !useDialogForEmail || sheet) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !pending) navigate("choose");
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [navigate, pending, sheet, useDialogForEmail, view]);
+
   const viewTitle = (next: Exclude<View, "choose">) =>
     next === "google" ? t.continueGoogle
       : next === "register" ? t.createAccount
@@ -85,7 +81,8 @@ export function AuthPanel({
               : t.signIn;
 
   const backTarget = (next: Exclude<View, "choose">): View =>
-    next === "register" || next === "forgot" ? "login"
+    next === "register" ? "choose"
+      : next === "forgot" ? "login"
       : next === "verify" ? "register"
         : next === "reset" ? "forgot"
           : "choose";
@@ -107,6 +104,17 @@ export function AuthPanel({
     if (sheet) sheet.transition(apply);
     else apply();
   };
+
+  function preventInvalidEmailKey(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key.length === 1 && !/[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~@-]/.test(event.key)) {
+      event.preventDefault();
+    }
+  }
+
+  function sanitizeEmailPaste(event: ClipboardEvent<HTMLInputElement>) {
+    event.preventDefault();
+    setEmail(cleanEmailInput(event.clipboardData.getData("text")));
+  }
 
   async function run(fn: () => Promise<void>) {
     setPending(true);
@@ -192,7 +200,7 @@ export function AuthPanel({
   const primary =
     "flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2.5 text-[15px] font-semibold text-accent-text transition-[transform,opacity] duration-150 ease-lm active:scale-[0.99] disabled:opacity-60";
   const secondary =
-    "flex w-full items-center justify-center gap-2.5 rounded-lg border border-border bg-bg px-3.5 py-2.5 text-[15px] font-medium text-text transition-[colors,transform] duration-150 ease-lm hover:border-accent active:scale-[0.99] disabled:opacity-60";
+    "auth-provider-button flex w-full items-center justify-center gap-2.5 rounded-lg border border-border bg-bg px-3.5 py-2.5 text-[15px] font-medium text-text transition-[colors,transform,box-shadow] duration-150 ease-lm hover:border-accent disabled:opacity-60";
 
   const Back = ({ to }: { to: View }) => (
     <button type="button" onClick={() => navigate(to)} className="flex items-center gap-1.5 text-[13px] text-muted transition-colors hover:text-text">
@@ -222,7 +230,7 @@ export function AuthPanel({
       {!sheet && <h2 className="text-[19px] font-semibold">{t.signIn}</h2>}
       <label className="text-[13px] font-medium text-muted" htmlFor="auth-email">{t.email}</label>
       <input id="auth-email" type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} required maxLength={254} value={email}
-        onChange={(e) => setEmail(cleanEmailInput(e.target.value))} className={input} />
+        onChange={(e) => setEmail(cleanEmailInput(e.target.value))} onKeyDown={preventInvalidEmailKey} onPaste={sanitizeEmailPaste} className={input} />
       <label className="text-[13px] font-medium text-muted" htmlFor="auth-password">{t.password}</label>
       <input id="auth-password" type="password" autoComplete="current-password" required maxLength={256} value={password}
         onChange={(e) => setPassword(cleanPasswordInput(e.target.value))} className={input} />
@@ -244,14 +252,17 @@ export function AuthPanel({
       {!sheet && <h2 className="text-[19px] font-semibold">{t.createAccount}</h2>}
       <label className="text-[13px] font-medium text-muted" htmlFor="reg-email">{t.email}</label>
       <input id="reg-email" type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} required maxLength={254} value={email}
-        onChange={(e) => setEmail(cleanEmailInput(e.target.value))} className={input} />
+        onChange={(e) => setEmail(cleanEmailInput(e.target.value))} onKeyDown={preventInvalidEmailKey} onPaste={sanitizeEmailPaste} className={input} />
       <label className="text-[13px] font-medium text-muted" htmlFor="reg-password">{t.password}</label>
-      <input id="reg-password" type="password" autoComplete="new-password" required minLength={12} maxLength={256} value={password}
+      <input id="reg-password" type="password" autoComplete="new-password" required minLength={8} maxLength={256} value={password}
         onChange={(e) => setPassword(cleanPasswordInput(e.target.value))} className={input} />
       <p className="text-[12px] text-muted">{t.passwordHint}</p>
       <Feedback />
       <button type="submit" disabled={pending} className={primary}><Spinner /> {t.createAccount}</button>
-      <button type="button" onClick={() => navigate("login")} className="text-[13px] text-muted hover:text-text">{t.toLogin}</button>
+      <p className="text-center text-[13px] text-muted">
+        {t.alreadyHaveAccount}{" "}
+        <button type="button" onClick={() => navigate("choose")} className="font-medium text-accent hover:opacity-80">{t.signInLink}</button>
+      </p>
     </form>
   );
 
@@ -270,7 +281,7 @@ export function AuthPanel({
       {view === "reset" && (
         <>
           <label className="text-[13px] font-medium text-muted" htmlFor="reset-password">{t.newPassword}</label>
-          <input id="reset-password" type="password" autoComplete="new-password" required minLength={12} maxLength={256}
+          <input id="reset-password" type="password" autoComplete="new-password" required minLength={8} maxLength={256}
             value={password} onChange={(e) => setPassword(cleanPasswordInput(e.target.value))} className={input} />
           <p className="text-[12px] text-muted">{t.passwordHint}</p>
         </>
@@ -307,7 +318,7 @@ export function AuthPanel({
       {!sheet && <h2 className="text-[19px] font-semibold">{t.forgotTitle}</h2>}
       <label className="text-[13px] font-medium text-muted" htmlFor="forgot-email">{t.email}</label>
       <input id="forgot-email" type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} required maxLength={254} value={email}
-        onChange={(e) => setEmail(cleanEmailInput(e.target.value))} className={input} />
+        onChange={(e) => setEmail(cleanEmailInput(e.target.value))} onKeyDown={preventInvalidEmailKey} onPaste={sanitizeEmailPaste} className={input} />
       <Feedback />
       <button type="submit" disabled={pending} className={primary}><Spinner /> {t.sendCode}</button>
     </form>
@@ -319,11 +330,21 @@ export function AuthPanel({
     : view === "forgot" ? forgotForm
     : null;
 
+  const chooserEmail = (
+    <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); navigate("login"); }}>
+      <label className="sr-only" htmlFor="auth-chooser-email">{t.email}</label>
+      <input id="auth-chooser-email" type="email" inputMode="email" autoComplete="email" autoCapitalize="none"
+        spellCheck={false} required maxLength={254} value={email} placeholder={t.emailAddress}
+        onChange={(e) => setEmail(cleanEmailInput(e.target.value))} onKeyDown={preventInvalidEmailKey} onPaste={sanitizeEmailPaste} className={`${input} auth-modal-input h-12 px-4`} />
+      <button type="submit" className={`${primary} h-12`}>{t.continueEmail}</button>
+    </form>
+  );
+
   const emailDialog = emailContent && useDialogForEmail && !sheet && typeof document !== "undefined"
     ? createPortal(
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true">
-          <button type="button" aria-label="close" onClick={() => navigate("choose")} className="absolute inset-0 bg-black/30 motion-safe:animate-fade-in" />
-          <div className="relative w-full max-w-sm rounded-sheet border border-border bg-bg p-5 shadow-[0_12px_40px_rgba(0,0,0,0.18)] motion-safe:animate-dialog-in">
+          <button type="button" aria-label={t.cancel} onClick={() => !pending && navigate("choose")} className="absolute inset-0 bg-black/30 motion-safe:animate-fade-in" />
+          <div className="auth-dialog relative w-full max-w-[460px] rounded-sheet border border-border bg-bg p-5 shadow-[0_12px_40px_rgba(0,0,0,0.18)] motion-safe:animate-dialog-in sm:p-6">
             {emailContent}
           </div>
         </div>,
@@ -332,27 +353,30 @@ export function AuthPanel({
     : null;
 
   return (
-    <div className="mx-auto w-full max-w-sm">
+    <div className="auth-panel mx-auto w-full max-w-sm">
       {view === "choose" && (
         <div className="flex flex-col gap-3">
-          <div className="mb-1 text-center">
-            <h2 className="text-[19px] font-semibold">{t.signIn}</h2>
+          <div className="text-center">
+            <h2 className="text-[19px] font-semibold">{t.signInToLoci}</h2>
             <p className="mt-1 text-[14px] text-muted">{t.subtitle}</p>
           </div>
-          {providers.data?.google && (
-            <button type="button" onClick={onGoogle} disabled={pending} className={secondary}>
-              <GoogleIcon size={18} />
+          {chooserEmail}
+          <div className="auth-divider my-1 flex items-center gap-3 text-[12px] text-muted">
+            <span className="h-px flex-1 bg-border" /><span>{t.orContinueWith}</span><span className="h-px flex-1 bg-border" />
+          </div>
+          <div className="flex flex-col gap-3">
+            {providers.data?.google && <button type="button" onClick={onGoogle} disabled={pending} className={`${secondary} justify-start`}>
+              <span className="flex h-7 w-7 items-center justify-center"><Image src="/gmail.svg" alt="" width={18} height={18} unoptimized /></span>
               <span>{t.continueGoogle}</span>
+            </button>}
+            <button type="button" onClick={onTelegram} disabled={pending} className={`${secondary} justify-start`}>
+              <span className="flex h-7 w-7 items-center justify-center"><Image src="/telegram.svg" alt="" width={18} height={18} unoptimized /></span>
+              <span>{t.continueTelegram}</span>
             </button>
-          )}
-          <button type="button" onClick={onTelegram} disabled={pending} className={secondary}>
-            <Send size={18} />
-            <span>{t.continueTelegram}</span>
-          </button>
-          <button type="button" onClick={() => navigate("login")} className={secondary}>
-            <Mail size={18} />
-            <span>{t.continueEmail}</span>
-          </button>
+          </div>
+          <p className="text-center text-[13px] text-muted">{t.noAccount}{" "}
+            <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); navigate("register"); }} className="font-medium text-accent">{t.createAccount}</button>
+          </p>
           <Feedback />
         </div>
       )}
