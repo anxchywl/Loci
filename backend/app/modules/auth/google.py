@@ -103,23 +103,33 @@ async def complete_login(
             settings, code, transaction["code_verifier"]
         )
     except Exception as exc:  # network / http errors from the token endpoint
-        raise GoogleAuthError("token exchange failed") from exc
+        raise GoogleAuthError(f"token exchange failed: {exc}") from exc
 
     id_token = token_response.get("id_token")
     if not id_token:
         raise GoogleAuthError("no id token in token response")
 
-    jwks = await google_integ.fetch_jwks()
-    try:
-        claims = oidc.verify_id_token(
+    def _verify(keys: list[dict]) -> dict:
+        return oidc.verify_id_token(
             id_token,
-            jwks,
+            keys,
             client_id=settings.google_client_id,
             nonce=transaction["nonce"],
             issuers=google_integ.GOOGLE_ISSUERS,
         )
+
+    try:
+        claims = _verify(await google_integ.fetch_jwks())
     except oidc.OidcError as exc:
-        raise GoogleAuthError("id token verification failed") from exc
+        # google rotates its signing keys, so a cached set that predates a
+        # rotation has no matching kid; one forced refetch is the whole cure,
+        # and any other verification failure is a real rejection
+        if "unknown signing key" not in str(exc):
+            raise GoogleAuthError(f"id token verification failed: {exc}") from exc
+        try:
+            claims = _verify(await google_integ.fetch_jwks(force_refresh=True))
+        except oidc.OidcError as retry_exc:
+            raise GoogleAuthError(f"id token verification failed: {retry_exc}") from retry_exc
 
     subject = claims["sub"]
     email = claims.get("email")

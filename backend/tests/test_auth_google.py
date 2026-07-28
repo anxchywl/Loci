@@ -165,3 +165,112 @@ async def test_redirect_entry_point_hands_the_browser_straight_to_google(client,
 async def test_start_response_is_not_cacheable(client):
     resp = await client.get(START_URL, params={"redirect": "/"})
     assert resp.headers["cache-control"] == "no-store"
+
+
+async def test_rotated_signing_key_is_refetched_once(client, fake_redis, monkeypatch):
+    """A cached JWKS predating a key rotation must not fail the sign-in."""
+    state = await _start_and_fake_google(client, fake_redis, monkeypatch, sub="g-rotated")
+
+    calls: list[bool] = []
+    real_jwk = public_jwk()
+    stale_jwk = {**real_jwk, "kid": "retired-key"}
+
+    async def fake_jwks(*, force_refresh: bool = False):
+        calls.append(force_refresh)
+        return [real_jwk] if force_refresh else [stale_jwk]
+
+    monkeypatch.setattr(google_integ, "fetch_jwks", fake_jwks)
+
+    resp = await client.get(CALLBACK_URL, params={"code": "c", "state": state})
+
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "https://app.example/story/42"
+    assert "refresh_token" in resp.headers.get("set-cookie", "")
+    # exactly one forced refetch, not a refetch on every verification
+    assert calls == [False, True]
+
+
+async def test_verification_failure_other_than_key_rotation_is_not_retried(
+    client, fake_redis, monkeypatch
+):
+    state = await _start_and_fake_google(client, fake_redis, monkeypatch, sub="g-badnonce")
+    id_token = sign_id_token(sub="g-badnonce", nonce="a-different-nonce")
+
+    async def fake_exchange(settings, code, code_verifier):
+        return {"id_token": id_token}
+
+    calls: list[bool] = []
+
+    async def fake_jwks(*, force_refresh: bool = False):
+        calls.append(force_refresh)
+        return [public_jwk()]
+
+    monkeypatch.setattr(google_integ, "exchange_code", fake_exchange)
+    monkeypatch.setattr(google_integ, "fetch_jwks", fake_jwks)
+
+    resp = await client.get(CALLBACK_URL, params={"code": "c", "state": state})
+
+    assert resp.headers["location"] == "https://app.example/?auth=error"
+    assert "set-cookie" not in resp.headers
+    assert calls == [False]
+
+
+async def test_token_exchange_surfaces_googles_error_code(monkeypatch):
+    """exchange_code must carry Google's own reason, not a bare HTTP error."""
+    import httpx
+    import pytest
+
+    from app.core.config import get_settings
+
+    async def fake_post(self, url, **kwargs):
+        return httpx.Response(
+            401,
+            json={"error": "invalid_client", "error_description": "Unauthorized"},
+            request=httpx.Request("POST", url),
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    with pytest.raises(google_integ.TokenExchangeError) as excinfo:
+        await google_integ.exchange_code(get_settings(), "code", "verifier")
+    assert "invalid_client" in str(excinfo.value)
+    assert "Unauthorized" in str(excinfo.value)
+
+
+async def test_failed_callback_logs_the_cause(client, fake_redis, monkeypatch):
+    """The warning must name why sign-in broke, not just that it did."""
+    import logging
+
+    state = await _start_and_fake_google(client, fake_redis, monkeypatch, sub="g-badsecret")
+
+    async def failing_exchange(settings, code, code_verifier):
+        raise google_integ.TokenExchangeError("401 invalid_client: Unauthorized")
+
+    monkeypatch.setattr(google_integ, "exchange_code", failing_exchange)
+
+    # attached to the emitting logger directly: app startup calls basicConfig,
+    # which makes root-handler capture depend on test order
+    records: list[str] = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(self.format(record))
+
+    logger = logging.getLogger("app.api.v1.auth.router")
+    handler = _Capture()
+    # uvicorn's logging config disables pre-existing loggers when another test
+    # boots the app, so re-enable this one rather than depend on suite order
+    was_disabled = logger.disabled
+    logger.disabled = False
+    logger.addHandler(handler)
+    try:
+        resp = await client.get(CALLBACK_URL, params={"code": "c", "state": state})
+    finally:
+        logger.removeHandler(handler)
+        logger.disabled = was_disabled
+
+    assert resp.headers["location"] == "https://app.example/?auth=error"
+    assert "set-cookie" not in resp.headers
+    logged = "\n".join(records)
+    assert "invalid_client" in logged
+    assert "TokenExchangeError" in logged  # the traceback, not just the message

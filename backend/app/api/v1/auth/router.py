@@ -314,7 +314,9 @@ async def google_callback(
             await google_service.complete_login(db, redis, settings, code, state, session_metadata)
         )
     except google_service.GoogleAuthError:
-        logger.warning("google auth failed")
+        # without the cause this line says only that sign-in broke, which is how
+        # a callback failure stayed invisible behind a generic error redirect
+        logger.warning("google auth failed", exc_info=True)
         response = RedirectResponse(f"{base}/?auth=error", status_code=status.HTTP_303_SEE_OTHER)
         response.headers["Cache-Control"] = "no-store"
         return response

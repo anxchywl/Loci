@@ -19,6 +19,10 @@ _JWKS_TTL_SECONDS = 3600
 _jwks_cache: dict[str, object] = {"keys": None, "expires_at": 0.0}
 
 
+class TokenExchangeError(Exception):
+    """carries Google's own error code, which is the only useful diagnostic"""
+
+
 async def exchange_code(settings, code: str, code_verifier: str) -> dict:
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.post(
@@ -32,14 +36,22 @@ async def exchange_code(settings, code: str, code_verifier: str) -> dict:
                 "code_verifier": code_verifier,
             },
         )
-    resp.raise_for_status()
+    if resp.is_error:
+        # the body names the cause (invalid_client, invalid_grant, …); losing it
+        # turns every failure into the same unactionable "token exchange failed"
+        try:
+            body = resp.json()
+            detail = f"{body.get('error')}: {body.get('error_description')}"
+        except ValueError:
+            detail = resp.text[:200]
+        raise TokenExchangeError(f"{resp.status_code} {detail}")
     return resp.json()
 
 
-async def fetch_jwks() -> list[dict]:
+async def fetch_jwks(*, force_refresh: bool = False) -> list[dict]:
     now = time.time()
     cached = _jwks_cache.get("keys")
-    if cached is not None and float(_jwks_cache["expires_at"]) > now:
+    if not force_refresh and cached is not None and float(_jwks_cache["expires_at"]) > now:
         return cached  # type: ignore[return-value]
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.get(GOOGLE_JWKS_URI)
