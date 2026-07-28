@@ -33,7 +33,7 @@ import {
   revokeSession,
   unlinkIdentity,
 } from "@/features/auth/api";
-import { isTelegramWebApp, openTelegramLink } from "@/lib/telegram/init";
+import { openTelegramLink } from "@/lib/telegram/init";
 
 const now = "2026-07-24T00:00:00Z";
 
@@ -195,10 +195,32 @@ describe("AccountSettings", () => {
     expect(openTelegramLink).toHaveBeenCalledWith("https://t.me/loci_app_bot");
   });
 
-  it("does not render logout inside Telegram", () => {
-    vi.mocked(isTelegramWebApp).mockReturnValue(true);
+  it("requires confirmation before logging out from the profile action", () => {
     renderWithQuery(<LogoutIconButton />);
-    expect(screen.queryByRole("button", { name: "Log out" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+
+    expect(logout).not.toHaveBeenCalled();
+    expect(screen.getByText("You will need to sign in again on this device.")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("opens logout as a transitioned sheet view on mobile", () => {
+    const transition = vi.fn((apply: () => void) => apply());
+    const setView = vi.fn();
+    const onOpenChange = vi.fn();
+    renderWithQuery(
+      <LogoutIconButton
+        sheet={{ transition, setView }}
+        onOpenChange={onOpenChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+
+    expect(transition).toHaveBeenCalledOnce();
+    expect(onOpenChange).toHaveBeenCalledWith(true);
+    expect(setView).toHaveBeenCalledWith({ title: "Log out", onBack: expect.any(Function) });
   });
 
   it("requires the exact phrase before permanently deleting the account", async () => {

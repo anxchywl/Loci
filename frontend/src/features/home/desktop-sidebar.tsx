@@ -27,7 +27,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { SettingsSection } from "@/components/settings-section";
-import { AccountSettings, DeleteAccountIconButton, LogoutIconButton, type SettingsSheet } from "@/features/auth/account-settings";
+import { AccountSettings, DeleteAccountIconButton, LogoutConfirmation, LogoutIconButton, type SettingsSheet } from "@/features/auth/account-settings";
 import { AuthPanel } from "@/features/auth/auth-panel";
 import { ChangeNameButton, EditableName } from "@/features/auth/editable-name";
 import { useTelegramAuth } from "@/features/auth/hooks";
@@ -410,6 +410,26 @@ export function ProfilePanel({
   const t = useDict();
   const { user } = useTelegramAuth();
   const [authActive, setAuthActive] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
+
+  const closeMobileLogout = () => {
+    if (!authSheet) {
+      setLogoutOpen(false);
+      return;
+    }
+    authSheet.transition(() => {
+      setLogoutOpen(false);
+      authSheet.setView(null);
+    });
+  };
+
+  if (user && onSettingsClick && logoutOpen) {
+    return (
+      <div className="px-4 py-2 animate-fade-in">
+        <LogoutConfirmation onCancel={closeMobileLogout} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col gap-5 px-4 py-2">
@@ -430,19 +450,25 @@ export function ProfilePanel({
               <ShieldCheck size={18} />
             </Link>
           )}
-          {onSettingsClick && !authActive && (
-            <button
-              onClick={onSettingsClick}
-              aria-label={t.settings}
-              className="ml-auto flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:text-accent focus-visible:text-accent"
-            >
-              <Settings size={18} />
-            </button>
-          )}
-          <div className="flex shrink-0 items-center gap-1">
-            {!onSettingsClick && <ChangeNameButton user={user} iconOnly />}
-            <LogoutIconButton />
-            {!onSettingsClick && <DeleteAccountIconButton />}
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            {onSettingsClick && !authActive ? (
+              <>
+                <LogoutIconButton sheet={authSheet} onOpenChange={setLogoutOpen} />
+                <button
+                  onClick={onSettingsClick}
+                  aria-label={t.settings}
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:text-accent focus-visible:text-accent"
+                >
+                  <Settings size={18} />
+                </button>
+              </>
+            ) : !onSettingsClick ? (
+              <>
+                <ChangeNameButton user={user} iconOnly />
+                <LogoutIconButton />
+                <DeleteAccountIconButton />
+              </>
+            ) : null}
           </div>
         </div>
       ) : (

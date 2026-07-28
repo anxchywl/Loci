@@ -27,7 +27,7 @@ import { currentAuthRedirectTarget } from "@/features/auth/redirect";
 import { ApiError } from "@/lib/api";
 import type { AuthStrings } from "@/lib/i18n/dict";
 import { useDict } from "@/lib/i18n/use-dict";
-import { isTelegramWebApp, openTelegramLink } from "@/lib/telegram/init";
+import { openTelegramLink } from "@/lib/telegram/init";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUiStore } from "@/stores/ui-store";
 
@@ -115,7 +115,6 @@ function SessionRow({
 
 /** every step that leaves the list behind and takes over the panel */
 type Confirm =
-  | { kind: "log-out" }
   | { kind: "remove-device"; session: SessionSummary }
   | { kind: "remove-method"; provider: IdentitySummary["provider"] }
   | { kind: "add-method"; provider: IdentitySummary["provider"] };
@@ -128,34 +127,99 @@ export interface SettingsSheet {
   transition: (apply: () => void) => void;
 }
 
-export function LogoutIconButton() {
+export function LogoutIconButton({
+  sheet,
+  onOpenChange,
+}: {
+  sheet?: SettingsSheet;
+  onOpenChange?: (open: boolean) => void;
+} = {}) {
   const t = useDict().auth;
-  const showToast = useUiStore((state) => state.showToast);
+  const [open, setOpen] = useState(false);
+  const controlled = onOpenChange !== undefined;
+  const close = () => {
+    if (sheet) sheet.transition(() => {
+      onOpenChange?.(false);
+      sheet.setView(null);
+    });
+    else setOpen(false);
+  };
+  const begin = () => {
+    if (sheet) sheet.transition(() => {
+      onOpenChange?.(true);
+      sheet.setView({ title: t.logOut, onBack: close });
+    });
+    else setOpen(true);
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={begin}
+        aria-label={t.logOut}
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface hover:text-accent focus-visible:bg-surface focus-visible:text-accent"
+      >
+        <LogOut size={17} />
+      </button>
+      {!controlled && open && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="log-out-title">
+          <button type="button" aria-label={t.cancel} onClick={close} className="absolute inset-0 bg-black/30 motion-safe:animate-fade-in" />
+          <div className="relative w-full max-w-sm rounded-sheet border border-border bg-bg p-5 shadow-[0_12px_40px_rgba(0,0,0,0.18)] motion-safe:animate-dialog-in">
+            <h2 id="log-out-title" className="mb-4 text-[17px] font-semibold">{t.logOut}</h2>
+            <LogoutConfirmation onCancel={close} />
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+export function LogoutConfirmation({ onCancel }: { onCancel?: () => void }) {
+  const t = useDict().auth;
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  if (isTelegramWebApp()) return null;
-
-  const handleLogout = async () => {
+  async function submit() {
     setPending(true);
+    setError(null);
     try {
       await logout();
       signOutState();
       window.location.assign("/");
     } catch {
+      setError(t.accountActionError);
       setPending(false);
-      showToast(t.accountActionError);
     }
-  };
+  }
 
   return (
-    <button
-      onClick={() => void handleLogout()}
-      disabled={pending}
-      aria-label={t.logOut}
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-accent focus-visible:text-accent disabled:opacity-50"
-    >
-      {pending ? <Loader2 size={17} className="animate-spin" /> : <LogOut size={17} />}
-    </button>
+    <div className="flex flex-col gap-3">
+      <p className="text-[14px] leading-snug text-muted">{t.logOutConfirm}</p>
+      {error && <p role="alert" className="text-[13px] text-[var(--lm-danger,#dc2626)]">{error}</p>}
+      <div className="flex gap-2">
+        {onCancel && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={onCancel}
+            className="flex-1 rounded-xl border border-border px-3 py-2.5 text-[14px] disabled:opacity-50"
+          >
+            {t.cancel}
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => void submit()}
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--lm-danger,#dc2626)] px-3 py-2.5 text-[14px] font-semibold text-white disabled:opacity-50"
+        >
+          {pending && <Loader2 size={15} className="animate-spin" />}
+          {t.logOut}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -290,22 +354,6 @@ export function AccountSettings({
   const linked = new Map((identities.data ?? []).map((i) => [i.provider, i]));
   const activeSessions = (sessions.data ?? []).filter((s) => s.active);
 
-  async function runAccountAction(action: () => Promise<void>) {
-    setAccountActionPending(true);
-    setError(null);
-    setNotice(null);
-    setReturnNotice(null);
-    try {
-      await action();
-      signOutState();
-      window.location.assign("/");
-    } catch {
-      setError(t.accountActionError);
-    } finally {
-      setAccountActionPending(false);
-    }
-  }
-
   async function addGoogle() {
     setAccountActionPending(true);
     setError(null);
@@ -363,8 +411,7 @@ export function AccountSettings({
       onCancel={sheet ? undefined : closeConfirm}
       onConfirm={() => {
         setError(null);
-        if (confirm.step.kind === "log-out") void runAccountAction(logout);
-        else if (confirm.step.kind === "remove-device") revoke.mutate(confirm.step.session.id);
+        if (confirm.step.kind === "remove-device") revoke.mutate(confirm.step.session.id);
         else if (confirm.step.kind === "remove-method") unlink.mutate(confirm.step.provider);
         else if (confirm.step.kind === "add-method" && confirm.step.provider === "telegram") openTelegramLink("https://t.me/loci_app_bot");
         else if (confirm.step.kind === "add-method") void addGoogle();
@@ -513,16 +560,7 @@ export function AccountSettings({
         <SettingsSection title={t.dangerZone}>
           <SettingsRow>
             <div className="min-w-0 flex-1 text-[15px] font-medium">{t.deleteAccount}</div>
-            {!sheet && !isTelegramWebApp() && (
-              <button
-                type="button"
-                onClick={() => openConfirm({ kind: "log-out" }, t.logOut)}
-                aria-label={t.logOut}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-accent focus-visible:text-accent"
-              >
-                <LogOut size={17} />
-              </button>
-            )}
+            {!sheet && <LogoutIconButton />}
             <DeleteAccountIconButton sheet={sheet} onOpenChange={setDeleteOpen} />
           </SettingsRow>
         </SettingsSection>
@@ -605,22 +643,19 @@ function ConfirmStep({
   }
 
   const danger = confirm.kind !== "add-method";
-  const { body, item, action } =
-    confirm.kind === "log-out"
-      ? { body: t.logOutConfirm, item: null, action: t.logOut }
-      : confirm.kind === "remove-device"
-        ? {
-            body: t.removeDeviceConfirm,
-            item: deviceLines(confirm.session, t).device,
-            action: t.remove,
-          }
-        : confirm.kind === "remove-method"
-          ? {
-              body: t.removeMethodConfirm,
-              item: providerName(confirm.provider),
-              action: t.confirmRemove,
-            }
-          : { body: t.addGoogleBody, item: null, action: t.continueGoogle };
+  const { body, item, action } = confirm.kind === "remove-device"
+    ? {
+        body: t.removeDeviceConfirm,
+        item: deviceLines(confirm.session, t).device,
+        action: t.remove,
+      }
+    : confirm.kind === "remove-method"
+      ? {
+          body: t.removeMethodConfirm,
+          item: providerName(confirm.provider),
+          action: t.confirmRemove,
+        }
+      : { body: t.addGoogleBody, item: null, action: t.continueGoogle };
 
   return (
     <div className="flex flex-col gap-3">
