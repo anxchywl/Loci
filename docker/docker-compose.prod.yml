@@ -99,7 +99,6 @@ services:
       dockerfile: docker/frontend.Dockerfile
       args:
         NEXT_PUBLIC_API_URL: /api/v1
-        NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: ${NEXT_PUBLIC_TELEGRAM_BOT_USERNAME:-}
         NEXT_PUBLIC_SUPPORT_EMAIL: ${NEXT_PUBLIC_SUPPORT_EMAIL}
     init: true
     restart: unless-stopped

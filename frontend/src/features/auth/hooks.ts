@@ -74,15 +74,30 @@ function handleStartParam(launch: TelegramLaunch | null): void {
   }
 }
 
+/**
+ * Opens the story a link points at: `?story=<id>` from our own redirects, and
+ * `?s=<share_token>` from a shared web link, which has to be resolved first.
+ */
 function consumeStoryParam(): void {
   if (typeof window === "undefined") return;
   const params = new URLSearchParams(window.location.search);
   const storyId = params.get("story");
-  if (!storyId) return;
+  const shareToken = params.get("s");
+  if (!storyId && !shareToken) return;
   params.delete("story");
+  params.delete("s");
   const query = params.toString();
   window.history.replaceState(null, "", window.location.pathname + (query ? `?${query}` : "") + window.location.hash);
-  useUiStore.getState().openStory(storyId);
+
+  if (storyId) {
+    useUiStore.getState().openStory(storyId);
+    return;
+  }
+  import("@/features/stories/api").then(({ fetchStoryByToken }) => {
+    fetchStoryByToken(shareToken!)
+      .then((story) => useUiStore.getState().openStory(story.id))
+      .catch(() => {});
+  });
 }
 
 async function bootstrap(): Promise<void> {

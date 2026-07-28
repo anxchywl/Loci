@@ -45,10 +45,11 @@ import {
   useTrending,
 } from "@/features/stories/hooks";
 import { circularNeighbors } from "@/features/stories/proximity";
+import { shareStoryLink } from "@/features/stories/share";
 import { AppIcon } from "@/components/app-icon";
 import { type Locale, locales } from "@/lib/i18n/dict";
 import { useDict } from "@/lib/i18n/use-dict";
-import { openExternalLink, openTelegramLink } from "@/lib/telegram/init";
+import { openExternalLink } from "@/lib/telegram/init";
 import { DocView, docTitlesFrom } from "./doc-view";
 import { legalDocsFrom, type LegalDocId } from "./legal-content";
 import { type Theme, useUiStore } from "@/stores/ui-store";
@@ -181,12 +182,12 @@ function StoryPanel({
   };
 
   const share = async () => {
-    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME;
-    const link = botUsername ? `https://t.me/${botUsername}?startapp=${storyId}` : window.location.href;
-    if (!openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}`)) {
-      await navigator.clipboard.writeText(link);
-      showToast(t.linkCopied);
-    }
+    if (!story) return;
+    const copied = await shareStoryLink(story.share_token, {
+      title: story.title ?? undefined,
+      text: t.shareText,
+    });
+    if (copied) showToast(t.linkCopied);
   };
 
   // the panel slides in empty rather than flashing a loading label

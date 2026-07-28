@@ -15,8 +15,8 @@ import {
   useReportStory,
   useStory,
 } from "@/features/stories/hooks";
+import { shareStoryLink } from "@/features/stories/share";
 import { useDict } from "@/lib/i18n/use-dict";
-import { openTelegramLink, switchInlineQuery } from "@/lib/telegram/init";
 import { useUiStore } from "@/stores/ui-store";
 
 interface StorySheetProps {
@@ -127,20 +127,11 @@ export function StorySheet({ authenticated, onBackToSource }: StorySheetProps) {
 
   const share = async () => {
     if (!story) return;
-    
-    // Attempt native Telegram inline query share first
-    if (switchInlineQuery(story.share_token, ["users", "groups", "channels"])) {
-      return;
-    }
-    
-    // Fallback for browsers/desktop testing
-    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME;
-    const link = botUsername
-      ? `https://t.me/${botUsername}/app?startapp=${story.share_token}`
-      : window.location.href;
-      
-    await navigator.clipboard.writeText(`${t.shareText}\n${link}`);
-    showToast(t.linkCopied);
+    const copied = await shareStoryLink(story.share_token, {
+      title: story.title ?? undefined,
+      text: t.shareText,
+    });
+    if (copied) showToast(t.linkCopied);
   };
 
   return (
