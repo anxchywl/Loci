@@ -6,6 +6,7 @@ export interface TelegramLaunch {
 
 interface TelegramWebApp {
   initData: string;
+  platform?: string;
   initDataUnsafe?: {
     user?: { language_code?: string };
     start_param?: string;
@@ -86,7 +87,13 @@ export async function initTelegram(): Promise<TelegramLaunch | null> {
 
 /** true only inside a Telegram client, where the app runs in an embedded webview */
 export function isTelegramWebApp(): boolean {
-  return webApp() !== null;
+  const tg = webApp();
+  if (!tg) return false;
+  // telegram-web-app.js is loaded on every page, so the object existing proves
+  // nothing — a real Telegram client is marked by signed launch data or by the
+  // platform name the script reads from Telegram's launch parameters (a plain
+  // browser gets "unknown")
+  return Boolean(tg.initData) || (!!tg.platform && tg.platform !== "unknown");
 }
 
 export function openTelegramLink(url: string): boolean {
