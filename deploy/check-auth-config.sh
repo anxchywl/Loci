@@ -58,6 +58,16 @@ if [ -n "$GOOGLE_CLIENT_ID_VALUE" ] || [ -n "$GOOGLE_CLIENT_SECRET_VALUE" ] || [
   GOOGLE_CONFIGURED=true
 fi
 
+BOT_TOKEN_VALUE=$(env_value TELEGRAM_BOT_TOKEN)
+BOT_USERNAME_VALUE=$(env_value TELEGRAM_BOT_USERNAME)
+# account linking hands the user a t.me deep link, which needs the bot's @name
+if [ -n "$BOT_TOKEN_VALUE" ] && [ -z "$BOT_USERNAME_VALUE" ]; then
+  fail "TELEGRAM_BOT_USERNAME must be set for Telegram account linking"
+fi
+case "$BOT_USERNAME_VALUE" in
+  @*|*[!A-Za-z0-9_]*) fail "TELEGRAM_BOT_USERNAME must be the bare @-less bot name" ;;
+esac
+
 EMAIL_HOST_VALUE=$(env_value EMAIL_HOST)
 EMAIL_PORT_VALUE=$(env_value EMAIL_PORT)
 EMAIL_PORT_VALUE=${EMAIL_PORT_VALUE:-587}

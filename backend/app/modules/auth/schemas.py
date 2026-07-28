@@ -128,3 +128,10 @@ class RefreshResponse(BaseModel):
 
 class GoogleStartResponse(BaseModel):
     authorization_url: str
+
+
+class TelegramLinkStartResponse(BaseModel):
+    """The bot deep link to open, and how long its one-time token stays valid."""
+
+    url: str
+    expires_in: int

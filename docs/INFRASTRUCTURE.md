@@ -69,6 +69,7 @@ injects everything; the backend reads them via `pydantic-settings`
 |---|---|
 | `APP_ENV` | `development` / `production`; production enforces secure values at startup |
 | `TELEGRAM_BOT_TOKEN` | bot token; also the HMAC key for initData validation |
+| `TELEGRAM_BOT_USERNAME` | the bot's `@`-less name; account linking hands the user a `t.me/<name>?start=<one-time token>` deep link, and the endpoint 404s without it |
 | `TELEGRAM_INIT_DATA_MAX_AGE_SECONDS` | staleness bound, keep ≤300 in prod |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` | Google OIDC login; set all three to enable, leave empty to disable. Redirect URI must be HTTPS in production. Startup rejects partial configuration |
 | `EMAIL_CODE_SECRET` | keys the HMAC over 6-digit email codes; ≥24 chars enforced in production. Leaking it does not reveal codes without the stored hashes, but rotate on suspicion |
@@ -139,7 +140,6 @@ environment, backup, and recovery details.
    - `CADDY_DOMAIN` to the public hostname
    - `TELEGRAM_MINI_APP_URL=https://<CADDY_DOMAIN>`
    - `ALLOWED_ORIGINS=["https://<CADDY_DOMAIN>"]`
-   - `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME` to the bot username without `@`
    - `NEXT_PUBLIC_SUPPORT_EMAIL` to a monitored address used for privacy and
      account-deletion requests; example-domain addresses are rejected
    - `EMAIL_CODE_SECRET` to a new independent secret of at least 24 characters

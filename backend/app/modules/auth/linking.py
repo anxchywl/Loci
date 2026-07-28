@@ -11,10 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security.codes import generate_code, hmac_code, verify_code
 from app.core.security.password import hash_password, validate_password
+from app.core.security.telegram import TelegramUserData
 from app.db.repositories import audit as audit_repo
 from app.db.repositories import credentials as credentials_repo
 from app.db.repositories import email_challenges as challenges_repo
 from app.db.repositories import identities as identities_repo
+from app.db.repositories import users as users_repo
 from app.integrations import email as email_integ
 from app.modules.auth.email import _expiry, _screen_password, normalize_email
 from app.modules.auth.schemas import IdentitySummary
@@ -58,6 +60,45 @@ async def unlink(db: AsyncSession, user_id: int, provider: str, ip_hash: str | N
     if provider == "email":
         await credentials_repo.delete(db, user_id)
     await audit_repo.record(db, user_id, "identity_unlinked", provider=provider, ip_hash=ip_hash)
+    await db.commit()
+
+
+async def ensure_telegram_linkable(db: AsyncSession, user_id: int) -> None:
+    """Fail before a link token is minted when the account cannot take one."""
+    if await identities_repo.get_for_user_provider(db, user_id, "telegram") is not None:
+        raise LinkError("This account already has a Telegram sign-in", status_code=409)
+
+
+async def link_telegram(
+    db: AsyncSession, user_id: int, telegram_user: TelegramUserData, ip_hash: str | None = None
+) -> None:
+    """Attach a telegram identity to an already-authenticated Loci account.
+
+    Called by the bot once it has redeemed a one-time link token, so the caller
+    has already proved which account asked for the link; this function only has
+    to prove that neither side is already spoken for.
+    """
+    subject = str(telegram_user.telegram_id)
+    existing = await identities_repo.get_by_provider_subject(db, "telegram", subject)
+    if existing is not None:
+        # pressing Start twice must read as success, not as a conflict
+        if existing.user_id == user_id:
+            return
+        raise LinkError("That Telegram account already signs in to another Loci account")
+    await ensure_telegram_linkable(db, user_id)
+
+    user = await users_repo.get_by_id(db, user_id)
+    if user is None or user.is_blocked or user.deleted_at is not None:
+        raise LinkError("That account is unavailable", status_code=403)
+    # notifications address a user by users.telegram_id, so the link has to fill
+    # it in; the column is unique and the identity check above proved this id is
+    # unclaimed, but a legacy row could still hold it without an identity
+    if user.telegram_id is None:
+        if await users_repo.get_by_telegram_id(db, telegram_user.telegram_id) is not None:
+            raise LinkError("That Telegram account already signs in to another Loci account")
+        user.telegram_id = telegram_user.telegram_id
+    await identities_repo.ensure_telegram_identity(db, user_id, telegram_user.telegram_id)
+    await audit_repo.record(db, user_id, "identity_linked", provider="telegram", ip_hash=ip_hash)
     await db.commit()
 
 

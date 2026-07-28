@@ -19,6 +19,8 @@ os.environ["GOOGLE_CLIENT_ID"] = "test-google-client-id.apps.googleusercontent.c
 os.environ["GOOGLE_CLIENT_SECRET"] = "test-google-client-secret"
 os.environ["GOOGLE_REDIRECT_URI"] = "https://app.example/api/v1/auth/google/callback"
 os.environ["TELEGRAM_MINI_APP_URL"] = "https://app.example"
+# the bot's @name is what account-link deep links are built from
+os.environ["TELEGRAM_BOT_USERNAME"] = "loci_app_bot"
 
 import pytest
 from alembic import command

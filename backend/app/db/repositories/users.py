@@ -1,4 +1,4 @@
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as postgres_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -74,3 +74,8 @@ async def set_display_name(db: AsyncSession, user: User, display_name: str) -> N
 
 async def get_by_id(db: AsyncSession, user_id: int) -> User | None:
     return await db.get(User, user_id)
+
+
+async def get_by_telegram_id(db: AsyncSession, telegram_id: int) -> User | None:
+    stmt = select(User).where(User.telegram_id == telegram_id)
+    return (await db.execute(stmt)).scalar_one_or_none()
