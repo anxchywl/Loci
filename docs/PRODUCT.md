@@ -307,3 +307,5 @@ Admin-only (`is_admin`), all writing an immutable audit log:
   simple bounding box.
 - Backdated stories (`happened_on` in the past): displayed on the timeline at
   their event date, but sorted in the feed by `created_at` to prevent spam.
+- Story with photos where all photos are deleted: story remains visible with
+  text only; the "has photos" indicator is removed client-side.
