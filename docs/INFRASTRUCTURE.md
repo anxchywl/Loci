@@ -406,3 +406,9 @@ Presigned PUT URLs are single-key-scoped and expire in 10 minutes.
 
 PostgreSQL is backed up daily via `pg_dump` to a separate R2 bucket with
 30-day retention. Redis is ephemeral (cache + sessions only) and is not backed up.
+
+## Health checks
+
+Each service exposes `GET /healthz` returning `{"status":"ok"}`. The compose
+file uses this for `healthcheck` so dependent services only start after the
+API is ready to accept connections.
