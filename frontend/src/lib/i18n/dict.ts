@@ -261,6 +261,7 @@ export interface AuthStrings {
   signInLink: string;
   continueGoogle: string;
   continueTelegram: string;
+  googleUnavailable: string;
   continueEmail: string;
   email: string;
   password: string;
@@ -410,7 +411,7 @@ export const dict: Record<Locale, Dict> = {
     auth: {
       signIn: "Sign in",
       signInToLoci: "Sign in to Loci",
-      subtitle: "Sign in to add stories, save places, and manage your profile.",
+      subtitle: "Add stories, save places and manage your profile.",
       emailAddress: "Email address",
       orContinueWith: "or continue with",
       noAccount: "Don't have an account?",
@@ -418,6 +419,7 @@ export const dict: Record<Locale, Dict> = {
       signInLink: "Sign in",
       continueGoogle: "Continue with Google",
       continueTelegram: "Continue with Telegram",
+      googleUnavailable: "Google sign-in isn't available right now.",
       continueEmail: "Continue with email",
       email: "Email",
       password: "Password",
@@ -756,7 +758,7 @@ export const dict: Record<Locale, Dict> = {
     auth: {
       signIn: "Кіру",
       signInToLoci: "Loci-ге кіріңіз",
-      subtitle: "Оқиға қосу, орындарды сақтау және профильді басқару үшін кіріңіз.",
+      subtitle: "Оқиға қосу, орындарды сақтау және профильді басқару.",
       emailAddress: "Email мекенжайы",
       orContinueWith: "немесе жалғастыру",
       noAccount: "Тіркелгіңіз жоқ па?",
@@ -764,6 +766,7 @@ export const dict: Record<Locale, Dict> = {
       signInLink: "Кіру",
       continueGoogle: "Google арқылы жалғастыру",
       continueTelegram: "Telegram арқылы жалғастыру",
+      googleUnavailable: "Google арқылы кіру қазір қолжетімді емес.",
       continueEmail: "Email арқылы жалғастыру",
       email: "Email",
       password: "Құпиясөз",
@@ -1102,7 +1105,7 @@ export const dict: Record<Locale, Dict> = {
     auth: {
       signIn: "Вход",
       signInToLoci: "Войти в Loci",
-      subtitle: "Войдите, чтобы добавлять истории, сохранять места и управлять профилем.",
+      subtitle: "Добавляйте истории, сохраняйте места и управляйте профилем.",
       emailAddress: "Адрес email",
       orContinueWith: "или продолжить с",
       noAccount: "Нет аккаунта?",
@@ -1110,6 +1113,7 @@ export const dict: Record<Locale, Dict> = {
       signInLink: "Войти",
       continueGoogle: "Продолжить с Google",
       continueTelegram: "Продолжить с Telegram",
+      googleUnavailable: "Вход через Google сейчас недоступен.",
       continueEmail: "Продолжить с email",
       email: "Email",
       password: "Пароль",

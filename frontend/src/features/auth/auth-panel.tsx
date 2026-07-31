@@ -135,6 +135,10 @@ export function AuthPanel({
   const onGoogle = () => {
     setError(null);
     setReturnNotice(null);
+    if (!providers.data?.google) {
+      setError(t.googleUnavailable);
+      return;
+    }
     if (startGoogleLogin(currentAuthRedirectTarget()) === "external") {
       setNotice(t.continueInBrowser);
     }
@@ -359,20 +363,20 @@ export function AuthPanel({
         <div className="flex flex-col gap-3">
           <div className="text-center">
             <h2 className="text-[19px] font-semibold">{t.signInToLoci}</h2>
-            <p className="mt-1 text-[14px] text-muted">{t.subtitle}</p>
+            <p className="mt-1 whitespace-nowrap text-[12px] text-muted">{t.subtitle}</p>
           </div>
           {chooserEmail}
           <div className="auth-divider my-1 flex items-center gap-3 text-[12px] text-muted">
             <span className="h-px flex-1 bg-border" /><span>{t.orContinueWith}</span><span className="h-px flex-1 bg-border" />
           </div>
-          <div className="flex flex-col gap-3">
-            {providers.data?.google && <button type="button" onClick={onGoogle} disabled={pending} className={`${secondary} justify-start`}>
-              <span className="flex h-7 w-7 items-center justify-center"><Image src="/gmail.svg" alt="" width={18} height={18} unoptimized /></span>
-              <span>{t.continueGoogle}</span>
-            </button>}
-            <button type="button" onClick={onTelegram} disabled={pending} className={`${secondary} justify-start`}>
-              <span className="flex h-7 w-7 items-center justify-center"><Image src="/telegram.svg" alt="" width={18} height={18} unoptimized /></span>
-              <span>{t.continueTelegram}</span>
+          <div className="grid grid-cols-2 gap-3">
+            <button type="button" onClick={onGoogle} disabled={pending} className={secondary}>
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center"><Image src="/google.svg" alt="" width={18} height={18} unoptimized /></span>
+              <span>Google</span>
+            </button>
+            <button type="button" onClick={onTelegram} disabled={pending} className={secondary}>
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center"><Image src="/telegram.svg" alt="" width={18} height={18} unoptimized /></span>
+              <span>Telegram</span>
             </button>
           </div>
           <p className="text-center text-[13px] text-muted">{t.noAccount}{" "}

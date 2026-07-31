@@ -473,20 +473,18 @@ export function ProfilePanel({
           </div>
         </div>
       ) : (
-        <div className="flex flex-1 flex-col justify-center px-1 py-6">
-          <AuthPanel useDialogForEmail sheet={authSheet} onViewChange={setAuthActive} />
-          {onSettingsClick && (
-            <div className="mt-5 border-t border-border pt-2">
-              <button
-                onClick={onSettingsClick}
-                className="group flex w-full items-center gap-3 rounded-lg px-1 py-2.5 text-left text-[14px] font-medium text-text transition-colors duration-150 active:scale-[0.99]"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center text-muted transition-colors group-hover:text-[var(--lm-accent-soft)]">
-                  <Settings size={18} />
-                </span>
-                <span className="transition-colors group-hover:text-[var(--lm-accent-soft)]">{t.settings}</span>
-              </button>
-            </div>
+        <div className="flex flex-1 flex-col px-1">
+          <div className="flex flex-1 items-center py-4">
+            <AuthPanel useDialogForEmail sheet={authSheet} onViewChange={setAuthActive} />
+          </div>
+          {onSettingsClick && !authActive && (
+            <button
+              onClick={onSettingsClick}
+              className="mx-auto mb-4 flex items-center gap-2 px-6 py-2 text-[13px] text-muted transition-colors duration-150 hover:text-accent focus-visible:text-accent"
+            >
+              <Settings size={14} />
+              {t.settings}
+            </button>
           )}
         </div>
       )}
