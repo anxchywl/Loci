@@ -628,7 +628,7 @@ export function AccountSettings({
         <SettingsSection title={t.dangerZone}>
           <SettingsRow>
             <div className="min-w-0 flex-1 text-[15px] font-medium">{t.deleteAccount}</div>
-            {!sheet && <LogoutIconButton />}
+            {!sheet && !isTelegramWebApp() && <LogoutIconButton />}
             <DeleteAccountIconButton sheet={sheet} onOpenChange={setDeleteOpen} />
           </SettingsRow>
         </SettingsSection>
