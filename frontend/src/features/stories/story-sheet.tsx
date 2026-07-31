@@ -165,6 +165,29 @@ export function StorySheet({ authenticated, onBackToSource }: StorySheetProps) {
                 <button onClick={confirmAction} disabled={deleteStory.isPending} className="flex-1 rounded bg-[#E5484D] py-2.5 text-[14px] font-semibold text-white transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50">{deleteStory.isPending ? t.deleting : t.deleteStory}</button>
               </div>
             </div>
+          ) : confirming === "report" ? (
+            <div className="flex flex-col gap-4 rounded-sheet border border-border bg-surface p-5 py-6">
+              <div className="text-center">
+                <div className="text-[17px] font-semibold">{t.confirmReportTitle}</div>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-muted">{t.confirmReportBody}</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setConfirming(null)}
+                  disabled={report.isPending}
+                  className="flex-1 rounded border border-border py-2.5 text-[14px] font-medium text-muted transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50"
+                >
+                  {t.cancel}
+                </button>
+                <button
+                  onClick={confirmAction}
+                  disabled={report.isPending}
+                  className="flex-1 rounded bg-accent py-2.5 text-[14px] font-semibold text-accent-text transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50"
+                >
+                  {t.report}
+                </button>
+              </div>
+            </div>
           ) : (
           <>
           <div className="flex items-center justify-between gap-2 border-b border-border pb-3 text-[13px] text-muted">
@@ -218,33 +241,23 @@ export function StorySheet({ authenticated, onBackToSource }: StorySheetProps) {
 
           <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{story.body}</p>
 
-          {confirming === "report" ? (
-            <div className="space-y-3 rounded-sheet border border-border p-3">
-              <div className="text-[15px] font-semibold">
-                {t.confirmReportTitle}
+          {story.viewer_is_owner && story.moderation_status !== "approved" && (
+            <div
+              className={[
+                "rounded-xl px-4 py-3 text-[13px]",
+                story.moderation_status === "rejected"
+                  ? "bg-[#fef2f2] text-[#b91c1c] dark:bg-[#2d1010] dark:text-[#fca5a5]"
+                  : "bg-surface text-muted",
+              ].join(" ")}
+            >
+              <div className="font-semibold">
+                {story.moderation_status === "rejected" ? t.statusRejected : t.statusPending}
               </div>
-              <p className="text-[13px] text-muted">
-                {t.confirmReportBody}
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setConfirming(null)}
-                  disabled={report.isPending}
-                  className="flex-1 rounded border border-border py-2 text-[14px] font-medium text-muted transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50"
-                >
-                  {t.cancel}
-                </button>
-                <button
-                  onClick={confirmAction}
-                  disabled={report.isPending}
-                  className="flex-1 rounded bg-accent py-2 text-[14px] font-semibold text-accent-text transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50"
-                >
-                  {t.report}
-                </button>
-              </div>
+              <div className="mt-0.5 leading-snug opacity-80">{t.pendingHint}</div>
             </div>
-          ) : (
-            <div className="flex items-center gap-2">
+          )}
+
+          <div className="flex items-center gap-2">
               <ReactionButton
                 storyId={story.id}
                 reacted={story.viewer_reacted}
@@ -290,7 +303,6 @@ export function StorySheet({ authenticated, onBackToSource }: StorySheetProps) {
                 )}
               </div>
             </div>
-          )}
 
           </>
           )}

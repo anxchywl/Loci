@@ -33,6 +33,7 @@ import { legalDocsFrom, type LegalDocId } from "@/features/home/legal-content";
 import { LaunchOverlay } from "@/features/launch/launch-overlay";
 import { MapErrorBoundary } from "@/features/map/map-error-boundary";
 import { MapView, type MapBounds, type MapViewHandle } from "@/features/map/map-view";
+import { useMyStories } from "@/features/profile/hooks";
 import { AddStorySheet } from "@/features/stories/add-story-sheet";
 import { BottomSheet } from "@/features/stories/components/bottom-sheet";
 import { CategoryChip } from "@/features/stories/components/category-chip";
@@ -135,6 +136,7 @@ export function HomeManager() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mapViewRef = useRef<MapViewHandle>(null);
 
+  const { data: myStories } = useMyStories(authenticated);
   const { data: categories = [] } = useCategories();
   // below the threshold the backend aggregates markers into grid clusters —
   // correct counts at any story volume; above it, individual pins with
@@ -196,6 +198,15 @@ export function HomeManager() {
       setAdjacentPins([]);
       return;
     }
+    // when browsing own stories, constrain navigation to just those stories
+    if (storySource === "my-stories" && myStories) {
+      const currentPin = myStories.find((s) => s.id === openStoryId);
+      const anchor = navAnchor ?? (currentPin ? { lat: currentPin.lat, lon: currentPin.lon } : null);
+      if (!anchor) { setAdjacentPins([]); return; }
+      if (!navAnchor) setNavAnchor(anchor);
+      setAdjacentPins(currentPin ? sortPinsByAnchor(myStories, anchor) : []);
+      return;
+    }
     const tourPins = [...pins, ...worldPins.filter((worldPin) => !pins.some((pin) => pin.id === worldPin.id))];
     const currentPin = tourPins.find((p) => p.id === openStoryId);
     // anchor the tour on the story the user first opened. When it was opened
@@ -211,7 +222,7 @@ export function HomeManager() {
     // not (opened off-screen / clustered), clear rather than show stale
     // neighbours — it self-heals once the pan loads pins around it
     setAdjacentPins(currentPin ? sortPinsByAnchor(tourPins, anchor) : []);
-  }, [openStoryId, pins, worldPins, navAnchor, setNavAnchor, setAdjacentPins]);
+  }, [openStoryId, storySource, myStories, pins, worldPins, navAnchor, setNavAnchor, setAdjacentPins]);
 
   const locateMe = async () => {
     if (locating) return;
