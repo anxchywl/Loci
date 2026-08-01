@@ -18,10 +18,11 @@ import {
   verifyEmail,
 } from "@/features/auth/api";
 import type { SettingsSheet } from "@/features/auth/account-settings";
-import { applySession } from "@/features/auth/hooks";
+import { applySession, continueWithBrowserSession } from "@/features/auth/hooks";
 import { cleanEmailInput, cleanPasswordInput } from "@/features/auth/input";
 import { currentAuthRedirectTarget } from "@/features/auth/redirect";
 import { ApiError } from "@/lib/api";
+import { queryKeys } from "@/lib/query/cache-policy";
 import { useDict } from "@/lib/i18n/use-dict";
 import { openExternalLink, openTelegramLink } from "@/lib/telegram/init";
 import { useAuthStore } from "@/stores/auth-store";
@@ -49,7 +50,7 @@ export function AuthPanel({
   const returnNotice = useAuthStore((state) => state.returnNotice);
   const setReturnNotice = useAuthStore((state) => state.setReturnNotice);
   const providers = useQuery({
-    queryKey: ["auth-providers"],
+    queryKey: queryKeys.authProviders,
     queryFn: fetchAuthProviders,
     staleTime: 5 * 60 * 1000,
   });
@@ -214,12 +215,26 @@ export function AuthPanel({
   );
 
   const Feedback = () => {
-    const visibleError = error ?? (returnNotice === "error" ? t.genericError : null);
+    const telegramFailed = returnNotice === "telegram-failed";
+    const visibleError =
+      error ?? (returnNotice === "error" ? t.genericError : telegramFailed ? t.telegramAuthFailed : null);
     const visibleNotice = notice ?? (returnNotice === "cancelled" ? t.cancelled : null);
     return (
       <>
         {visibleError && <p role="alert" className="text-[13px] text-[var(--lm-danger,#dc2626)]">{visibleError}</p>}
         {visibleNotice && !visibleError && <p role="status" className="text-[13px] text-muted">{visibleNotice}</p>}
+        {/* restoring the browser session has to be the user's call: it may
+            belong to a different account than the one launching the mini app */}
+        {telegramFailed && !error && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => void continueWithBrowserSession()}
+            className="self-start text-[13px] font-semibold text-accent disabled:opacity-60"
+          >
+            {t.useExistingSession}
+          </button>
+        )}
       </>
     );
   };

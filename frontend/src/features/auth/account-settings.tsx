@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, LogOut, Monitor, Smartphone, Tablet, Trash2 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
@@ -26,11 +26,13 @@ import { signOutState } from "@/features/auth/hooks";
 import { cleanEmailInput, cleanPasswordInput } from "@/features/auth/input";
 import { currentAuthRedirectTarget } from "@/features/auth/redirect";
 import { ApiError } from "@/lib/api";
+import { queryKeys } from "@/lib/query/cache-policy";
 import type { AuthStrings } from "@/lib/i18n/dict";
 import { useDict } from "@/lib/i18n/use-dict";
 import { isTelegramWebApp, openTelegramLink } from "@/lib/telegram/init";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUiStore } from "@/stores/ui-store";
+import { useAccountMutation } from "@/lib/query/account-mutation";
 
 const PROVIDERS: IdentitySummary["provider"][] = ["telegram", "google", "email"];
 const ACCOUNT_ERASURE_PHRASE = "DELETE MY ACCOUNT";
@@ -306,15 +308,15 @@ export function AccountSettings({
   const user = useAuthStore((state) => state.user);
 
   const identities = useQuery({
-    queryKey: ["identities"],
+    queryKey: queryKeys.identities,
     queryFn: listIdentities,
     refetchInterval: telegramPending ? 2000 : false,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: telegramPending,
   });
-  const sessions = useQuery({ queryKey: ["sessions"], queryFn: listSessions });
+  const sessions = useQuery({ queryKey: queryKeys.sessions, queryFn: listSessions });
   const providers = useQuery({
-    queryKey: ["auth-providers"],
+    queryKey: queryKeys.authProviders,
     queryFn: fetchAuthProviders,
     staleTime: 5 * 60 * 1000,
   });
@@ -340,24 +342,27 @@ export function AccountSettings({
       sheet?.setView({ title, onBack: closeConfirm });
     });
 
-  const unlink = useMutation({
-    mutationFn: unlinkIdentity,
+  const unlink = useAccountMutation({
+    mutationFn: (provider: IdentitySummary["provider"]) => unlinkIdentity(provider),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["identities"] });
+      await qc.invalidateQueries({ queryKey: queryKeys.identities });
       closeConfirm();
     },
     onError: (err) => {
       if (err instanceof ApiError && err.status === 403) setError(t.reauthNeeded);
-      else if (err instanceof ApiError && err.status === 400) setError(t.lastMethod);
+      // the server returns 400 for the only two methods it refuses to remove:
+      // the last one left, and the one the account was created with
+      else if (err instanceof ApiError && err.status === 400)
+        setError((identities.data?.length ?? 0) <= 1 ? t.lastMethod : t.primaryMethodHint);
       else if (err instanceof ApiError && err.status === 409) setError(t.providerConflict);
       else setError(t.genericError);
     },
   });
 
-  const revoke = useMutation({
+  const revoke = useAccountMutation({
     mutationFn: revokeSession,
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["sessions"] });
+      await qc.invalidateQueries({ queryKey: queryKeys.sessions });
       closeConfirm();
     },
     onError: () => setError(t.accountActionError),
@@ -473,7 +478,7 @@ export function AccountSettings({
         else if (confirm.step.kind === "remove-method") unlink.mutate(confirm.step.provider);
       }}
       onEmailLinked={() => {
-        void qc.invalidateQueries({ queryKey: ["identities"] });
+        void qc.invalidateQueries({ queryKey: queryKeys.identities });
         closeConfirm();
       }}
     />
@@ -555,7 +560,9 @@ export function AccountSettings({
                 </div>
                 <div className="ml-auto">
                   {identity ? (
-                    (identities.data?.length ?? 0) > 1 ? (
+                    // the account-creating provider is permanent, and the last
+                    // remaining method can't go either
+                    !identity.is_primary && (identities.data?.length ?? 0) > 1 ? (
                       <button
                         onClick={() =>
                           openConfirm({ kind: "remove-method", provider }, t.removeMethodTitle)
@@ -565,7 +572,9 @@ export function AccountSettings({
                         {t.remove}
                       </button>
                     ) : (
-                      <span className="text-[13px] text-muted">{t.connected}</span>
+                      <span className="text-[13px] text-muted">
+                        {identity.is_primary ? t.primaryMethod : t.connected}
+                      </span>
                     )
                   ) : (
                     // google and telegram start their hand-off on this click;

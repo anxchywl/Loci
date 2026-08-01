@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, Pencil } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
@@ -9,6 +9,8 @@ import { resolveUserName, updateDisplayName, type AuthUser } from "@/features/au
 import { ApiError } from "@/lib/api";
 import { useDict } from "@/lib/i18n/use-dict";
 import { useAuthStore } from "@/stores/auth-store";
+import { queryKeys } from "@/lib/query/cache-policy";
+import { useAccountMutation } from "@/lib/query/account-mutation";
 
 const UNSAFE_INPUT_RE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g;
 
@@ -32,13 +34,13 @@ export function NameEditor({ user, onClose, inline = false }: { user: AuthUser; 
 
   useEffect(() => inputRef.current?.select(), []);
 
-  const save = useMutation({
+  const save = useAccountMutation({
     mutationFn: (next: string) => updateDisplayName(next),
     onSuccess: (updated) => {
       updateUser(updated);
       onClose();
-      void qc.invalidateQueries({ queryKey: ["profile"] });
-      void qc.invalidateQueries({ queryKey: ["stories"] });
+      void qc.invalidateQueries({ queryKey: queryKeys.profile.root });
+      void qc.invalidateQueries({ queryKey: queryKeys.stories.root });
     },
     onError: (err) => setError(!(err instanceof ApiError && err.status === 422)),
   });

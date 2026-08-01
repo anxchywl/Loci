@@ -46,8 +46,8 @@ describe("AccountSettings", () => {
     useAuthStore.setState({ returnNotice: null });
     vi.mocked(fetchAuthProviders).mockResolvedValue({ google: true, email: true });
     vi.mocked(listIdentities).mockResolvedValue([
-      { provider: "google", email: "person@example.com", created_at: now, last_used_at: now },
-      { provider: "email", email: "person@example.com", created_at: now, last_used_at: now },
+      { provider: "google", email: "person@example.com", created_at: now, last_used_at: now , is_primary: false },
+      { provider: "email", email: "person@example.com", created_at: now, last_used_at: now , is_primary: false },
     ]);
     vi.mocked(listSessions).mockResolvedValue([
       {
@@ -222,9 +222,9 @@ describe("AccountSettings", () => {
 
     // the bot's side of the link lands between polls; nothing is clicked here
     vi.mocked(listIdentities).mockResolvedValue([
-      { provider: "google", email: "person@example.com", created_at: now, last_used_at: now },
-      { provider: "email", email: "person@example.com", created_at: now, last_used_at: now },
-      { provider: "telegram", email: null, created_at: now, last_used_at: now },
+      { provider: "google", email: "person@example.com", created_at: now, last_used_at: now , is_primary: false },
+      { provider: "email", email: "person@example.com", created_at: now, last_used_at: now , is_primary: false },
+      { provider: "telegram", email: null, created_at: now, last_used_at: now , is_primary: false },
     ]);
 
     expect(await screen.findByText("Telegram connected.", {}, { timeout: 5000 })).toBeInTheDocument();
@@ -233,7 +233,7 @@ describe("AccountSettings", () => {
 
   it("starts the Google hand-off without a confirmation step", async () => {
     vi.mocked(listIdentities).mockResolvedValue([
-      { provider: "email", email: "person@example.com", created_at: now, last_used_at: now },
+      { provider: "email", email: "person@example.com", created_at: now, last_used_at: now , is_primary: false },
     ]);
     vi.mocked(startGoogleLink).mockResolvedValue("same-tab");
     renderWithQuery(<AccountSettings />);
@@ -292,5 +292,63 @@ describe("AccountSettings", () => {
     vi.useRealTimers();
 
     await waitFor(() => expect(eraseAccount).toHaveBeenCalledWith("DELETE MY ACCOUNT"));
+  });
+  it("offers no Remove control for the account's primary method", async () => {
+    vi.mocked(listIdentities).mockResolvedValue([
+      { provider: "telegram", email: null, created_at: now, last_used_at: now, is_primary: true },
+      { provider: "google", email: "person@example.com", created_at: now, last_used_at: now, is_primary: false },
+    ]);
+    renderWithQuery(<AccountSettings />);
+
+    const telegramRow = (await screen.findByText("Telegram")).closest<HTMLElement>("div.flex.items-center");
+    if (!telegramRow) throw new Error("telegram identity row missing");
+    expect(within(telegramRow).queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+    expect(within(telegramRow).getByText("Primary")).toBeInTheDocument();
+
+    // the secondary method is still removable
+    const googleRow = screen.getByText("Google").closest<HTMLElement>("div.flex.items-center");
+    if (!googleRow) throw new Error("google identity row missing");
+    expect(within(googleRow).getByRole("button", { name: "Remove" })).toBeInTheDocument();
+  });
+
+  it("explains the refusal when the server rejects unlinking a primary method", async () => {
+    // the rendered list is stale: the server is the one that decides
+    const { ApiError } = await import("@/lib/api");
+    vi.mocked(unlinkIdentity).mockRejectedValue(new ApiError(400, "nope"));
+
+    renderWithQuery(<AccountSettings />);
+    const googleRow = (await screen.findByText("Google")).closest<HTMLElement>("div.flex.items-center");
+    if (!googleRow) throw new Error("google identity row missing");
+    fireEvent.click(within(googleRow).getByRole("button", { name: "Remove" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Remove" }).at(-1)!);
+
+    await waitFor(() => expect(unlinkIdentity).toHaveBeenCalledOnce());
+    const alerts = await screen.findAllByRole("alert");
+    expect(alerts.some((node) =>
+      node.textContent?.includes("You can't remove the sign-in method your account was created with."),
+    )).toBe(true);
+  });
+
+  it("reflects the server list after a successful unlink", async () => {
+    vi.mocked(listIdentities)
+      .mockResolvedValueOnce([
+        { provider: "telegram", email: null, created_at: now, last_used_at: now, is_primary: true },
+        { provider: "google", email: "person@example.com", created_at: now, last_used_at: now, is_primary: false },
+      ])
+      .mockResolvedValue([
+        { provider: "telegram", email: null, created_at: now, last_used_at: now, is_primary: true },
+      ]);
+    renderWithQuery(<AccountSettings />);
+
+    const googleRow = (await screen.findByText("Google")).closest<HTMLElement>("div.flex.items-center");
+    if (!googleRow) throw new Error("google identity row missing");
+    fireEvent.click(within(googleRow).getByRole("button", { name: "Remove" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+
+    await waitFor(() => expect(unlinkIdentity).toHaveBeenCalledOnce());
+    // google falls back to an Add action once the refetched list drops it
+    const refreshed = await screen.findByText("Google");
+    const row = refreshed.closest<HTMLElement>("div.flex.items-center");
+    await waitFor(() => expect(within(row!).getByRole("button", { name: "Add" })).toBeInTheDocument());
   });
 });

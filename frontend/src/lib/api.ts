@@ -13,6 +13,31 @@ export function apiUrl(path: string): string {
 
 let accessToken: string | null = null;
 let refreshPromise: Promise<boolean> | null = null;
+let authEpoch = 0;
+
+/**
+ * Bumped whenever the resolved account changes (a different `users.id`, or a
+ * different Telegram identity launching the mini app). Requests carry the epoch
+ * they started under, so a reply to the previous account can never be read as if
+ * it belonged to the new one.
+ */
+export function bumpAuthEpoch(): number {
+  accessToken = null;
+  // a refresh already in flight was started for the previous account
+  refreshPromise = null;
+  return ++authEpoch;
+}
+
+export function getAuthEpoch(): number {
+  return authEpoch;
+}
+
+/** the account changed while this request was in flight; its result is discarded */
+export class StaleSessionError extends Error {
+  constructor() {
+    super("session changed while the request was in flight");
+  }
+}
 
 function csrfToken(): string | null {
   if (typeof document === "undefined") return null;
@@ -46,6 +71,7 @@ export class ApiError extends Error {
 
 export async function refreshAccessToken(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
+  const epoch = authEpoch;
   refreshPromise = (async () => {
     try {
       const response = await fetch(`${BASE_URL}/auth/refresh`, {
@@ -53,6 +79,8 @@ export async function refreshAccessToken(): Promise<boolean> {
         credentials: "include",
         headers: csrfHeaders(),
       });
+      // a token minted for the previous account must never become the current one
+      if (authEpoch !== epoch) return false;
       if (!response.ok) {
         accessToken = null;
         return false;
@@ -61,7 +89,7 @@ export async function refreshAccessToken(): Promise<boolean> {
       accessToken = body.access_token;
       return true;
     } catch {
-      accessToken = null;
+      if (authEpoch === epoch) accessToken = null;
       return false;
     }
   })();
@@ -73,6 +101,7 @@ export async function refreshAccessToken(): Promise<boolean> {
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const epoch = authEpoch;
   const request = (): Promise<Response> =>
     fetch(`${BASE_URL}${path}`, {
       ...init,
@@ -86,9 +115,15 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     });
 
   let response = await request();
+  if (authEpoch !== epoch) throw new StaleSessionError();
   if (response.status === 401 && accessToken) {
-    if (await refreshAccessToken()) {
+    // avoid replaying a late previous-account request with the new token
+    if (authEpoch !== epoch) throw new StaleSessionError();
+    const refreshed = await refreshAccessToken();
+    if (authEpoch !== epoch) throw new StaleSessionError();
+    if (refreshed) {
       response = await request();
+      if (authEpoch !== epoch) throw new StaleSessionError();
     }
   }
 

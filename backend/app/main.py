@@ -9,6 +9,7 @@ from app.api.v1.router import api_v1_router
 from app.core.config import get_settings
 from app.core.errors import register_error_handlers
 from app.core.observability import MetricsMiddleware, render_metrics
+from app.core.security.cache_headers import PrivateCacheMiddleware
 from app.core.operational_metrics import render_operational_metrics
 from app.db.session import dispose_db
 from app.integrations import storage
@@ -96,6 +97,7 @@ def create_app() -> FastAPI:
     )
     register_error_handlers(app)
     app.add_middleware(MetricsMiddleware)
+    app.add_middleware(PrivateCacheMiddleware)
 
     if settings.allowed_origins:
         app.add_middleware(

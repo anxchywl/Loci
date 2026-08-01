@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useMutation,
   useQuery,
   useQueryClient,
   type QueryKey,
@@ -37,6 +36,7 @@ import {
   type UpdateStoryInput,
 } from "@/features/stories/api";
 import { cachePolicy, queryKeys } from "@/lib/query/cache-policy";
+import { useAccountMutation } from "@/lib/query/account-mutation";
 
 export function useCategories() {
   return useQuery({ queryKey: queryKeys.categories, queryFn: fetchCategories, ...cachePolicy.categories });
@@ -44,7 +44,7 @@ export function useCategories() {
 
 export function useBboxStories(params: BboxParams | null) {
   return useQuery({
-    queryKey: params ? queryKeys.stories.bbox(params) : ["stories", "bbox", null],
+    queryKey: queryKeys.stories.bbox(params),
     queryFn: ({ signal }) => fetchBboxStories(params!, signal),
     enabled: params !== null,
     ...cachePolicy.discovery,
@@ -97,7 +97,7 @@ export function useMapPins(params: BboxParams | null) {
   return useQuery({
     // quantized bounds make consecutive small pans hit the cache instead of the
     // network; the abort signal cancels superseded requests during fast panning
-    queryKey: quantized ? queryKeys.stories.map(quantized) : ["stories", "map", null],
+    queryKey: queryKeys.stories.map(quantized),
     queryFn: ({ signal }) => fetchMapPins(quantized!, signal),
     enabled: quantized !== null,
     ...cachePolicy.map,
@@ -118,7 +118,7 @@ export function useWorldMapPins(enabled: boolean, categoryId: number | null) {
 export function useMapClusters(params: ClusterParams | null) {
   const quantized = params && { ...quantizeBounds(params), zoom: Math.round(params.zoom) };
   return useQuery({
-    queryKey: quantized ? queryKeys.stories.clusters(quantized) : ["stories", "map-clusters", null],
+    queryKey: queryKeys.stories.clusters(quantized),
     queryFn: ({ signal }) => fetchMapClusters(quantized!, signal),
     enabled: quantized !== null,
     // server-side cache is 60s; matching staleTime avoids pointless refetches
@@ -144,7 +144,7 @@ export function useNearbyStories(
 ) {
   const params = location ? { lat: location.lat, lon: location.lon, radiusMeters } : null;
   return useQuery({
-    queryKey: params ? queryKeys.stories.nearby(params) : ["stories", "nearby", null],
+    queryKey: queryKeys.stories.nearby(params),
     queryFn: ({ signal }) => fetchNearbyStories(params!, signal),
     enabled: params !== null,
     // keep the narrower ring on screen while the wider one loads
@@ -168,7 +168,7 @@ export function useSearch(query: string) {
 
 export function useStory(id: string | null) {
   return useQuery({
-    queryKey: id ? queryKeys.story(id) : ["story", null],
+    queryKey: queryKeys.story(id),
     queryFn: () => fetchStory(id!),
     enabled: id !== null,
   });
@@ -176,7 +176,7 @@ export function useStory(id: string | null) {
 
 export function useComments(storyId: string | null) {
   return useQuery({
-    queryKey: storyId ? queryKeys.comments(storyId) : ["comments", null],
+    queryKey: queryKeys.comments(storyId),
     queryFn: () => fetchComments(storyId!),
     ...cachePolicy.comments,
     enabled: storyId !== null,
@@ -185,7 +185,7 @@ export function useComments(storyId: string | null) {
 
 export function useCreateStory() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useAccountMutation({
     mutationFn: async (input: CreateStoryInput & { photos: File[]; onUploadProgress?: (progress: number) => void }) => {
       const { photos, onUploadProgress, ...payload } = input;
       const story = await createStory(payload);
@@ -211,13 +211,13 @@ export function useCreateStory() {
 
 export function useDeleteStory() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useAccountMutation({
     mutationFn: deleteStory,
     onMutate: async (storyId) => {
-      await queryClient.cancelQueries({ queryKey: ["stories"] });
-      await queryClient.cancelQueries({ queryKey: ["profile", "stories"] });
-      const listSnapshots = queryClient.getQueriesData<Story[]>({ queryKey: ["stories"] });
-      const profileSnapshots = queryClient.getQueriesData<Story[]>({ queryKey: ["profile", "stories"] });
+      await queryClient.cancelQueries({ queryKey: queryKeys.stories.root });
+      await queryClient.cancelQueries({ queryKey: queryKeys.profile.stories });
+      const listSnapshots = queryClient.getQueriesData<Story[]>({ queryKey: queryKeys.stories.root });
+      const profileSnapshots = queryClient.getQueriesData<Story[]>({ queryKey: queryKeys.profile.stories });
       const remove = (stories: Story[] | undefined) => stories?.filter((story) => story.id !== storyId);
       for (const [key, stories] of listSnapshots) queryClient.setQueryData(key, remove(stories));
       for (const [key, stories] of profileSnapshots) queryClient.setQueryData(key, remove(stories));
@@ -230,7 +230,7 @@ export function useDeleteStory() {
     onSuccess: (_data, storyId) => {
       // drop the detail cache and refresh the map + both profile lists so a
       // deleted story can't linger anywhere or leave an orphaned view
-      queryClient.removeQueries({ queryKey: ["story", storyId] });
+      queryClient.removeQueries({ queryKey: queryKeys.story(storyId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.stories.root });
       void queryClient.invalidateQueries({ queryKey: queryKeys.profile.root });
       void queryClient.invalidateQueries({ queryKey: queryKeys.stories.trending });
@@ -240,7 +240,7 @@ export function useDeleteStory() {
 
 export function useDeleteStoryPhoto(storyId: string) {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useAccountMutation({
     mutationFn: (photoId: string) => deleteStoryPhoto(storyId, photoId),
     onMutate: async (photoId) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.story(storyId) });
@@ -266,7 +266,7 @@ export function useDeleteStoryPhoto(storyId: string) {
 
 export function useUpdateStory() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useAccountMutation({
     mutationFn: ({ id, input }: { id: string; input: UpdateStoryInput }) =>
       updateStory(id, input),
     onSuccess: (story) => {
@@ -280,7 +280,7 @@ export function useUpdateStory() {
 
 export function useResubmitStory() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useAccountMutation({
     mutationFn: resubmitStory,
     onSuccess: (story) => {
       queryClient.setQueryData(["story", story.id], story);
@@ -344,7 +344,7 @@ function rollbackStoryMutation(
 
 export function useReaction(storyId: string) {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useAccountMutation({
     mutationFn: (reacted: boolean) =>
       reacted ? removeReaction(storyId) : addReaction(storyId),
     onMutate: (reacted: boolean) => {
@@ -364,7 +364,7 @@ export function useReaction(storyId: string) {
 
 export function useBookmark(storyId: string) {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useAccountMutation({
     mutationFn: (bookmarked: boolean) =>
       bookmarked ? removeBookmark(storyId) : addBookmark(storyId),
     onMutate: (bookmarked: boolean) => {
@@ -386,7 +386,7 @@ export function useBookmark(storyId: string) {
 
 export function usePostComment(storyId: string) {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useAccountMutation({
     mutationFn: (body: string) => postComment(storyId, body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.comments(storyId) });
@@ -396,5 +396,5 @@ export function usePostComment(storyId: string) {
 }
 
 export function useReportStory(storyId: string) {
-  return useMutation({ mutationFn: (reason: string | null) => reportStory(storyId, reason) });
+  return useAccountMutation({ mutationFn: (reason: string | null) => reportStory(storyId, reason) });
 }

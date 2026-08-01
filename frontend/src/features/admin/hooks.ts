@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -11,6 +11,8 @@ import {
 } from "@/features/admin/api";
 import { deleteAdminStory, fetchAdminAuditLogs, fetchAdminDashboard, fetchAdminUser, fetchAdminUserStories, fetchAdminUsers, fetchReportedStories, fetchReportedStory, moderateAdminUser, resolveReports, setAdminUserDeleted, type ResolutionAction } from "@/features/admin/api";
 import { ApiError } from "@/lib/api";
+import { queryKeys } from "@/lib/query/cache-policy";
+import { useAccountMutation } from "@/lib/query/account-mutation";
 
 interface QueueState {
   items: ModerationQueueItem[];
@@ -73,10 +75,10 @@ export function useModerationQueue(enabled = true): QueueState {
 export function useModerate(onDone: (storyId: string) => void) {
   const queryClient = useQueryClient();
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ["stories"] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.stories.root });
   };
 
-  const approve = useMutation({
+  const approve = useAccountMutation({
     mutationFn: approveStory,
     onSuccess: (_data, storyId) => {
       invalidate();
@@ -84,7 +86,7 @@ export function useModerate(onDone: (storyId: string) => void) {
     },
   });
 
-  const reject = useMutation({
+  const reject = useAccountMutation({
     mutationFn: ({ storyId, reason }: { storyId: string; reason: string | null }) =>
       rejectStory(storyId, reason),
     onSuccess: (_data, { storyId }) => {
@@ -97,60 +99,60 @@ export function useModerate(onDone: (storyId: string) => void) {
 }
 
 export function useAdminDashboard(from?: string, to?: string) {
-  return useQuery({ queryKey: ["admin", "dashboard", from, to], queryFn: () => fetchAdminDashboard(from, to), staleTime: 30_000 });
+  return useQuery({ queryKey: queryKeys.adminSection("dashboard", from, to), queryFn: () => fetchAdminDashboard(from, to), staleTime: 30_000 });
 }
 
 export function useAdminUsers(params: { q: string; status: string; sortBy: string; sortOrder: string; limit: number; offset: number }) {
-  return useQuery({ queryKey: ["admin", "users", params], queryFn: () => fetchAdminUsers(params), placeholderData: (previous) => previous });
+  return useQuery({ queryKey: queryKeys.adminSection("users", params), queryFn: () => fetchAdminUsers(params), placeholderData: (previous) => previous });
 }
 
 export function useAdminUser(userId: number | null) {
-  return useQuery({ queryKey: ["admin", "user", userId], queryFn: () => fetchAdminUser(userId!), enabled: userId !== null });
+  return useQuery({ queryKey: queryKeys.adminSection("user", userId), queryFn: () => fetchAdminUser(userId!), enabled: userId !== null });
 }
 
 export function useAdminUserAction() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useAccountMutation({
     mutationFn: ({ userId, action, reason }: { userId: number; action: "block" | "unblock" | "warning"; reason: string }) => moderateAdminUser(userId, action, reason),
-    onSuccess: (_data, variables) => { void queryClient.invalidateQueries({ queryKey: ["admin"] }); void queryClient.invalidateQueries({ queryKey: ["admin", "user", variables.userId] }); },
+    onSuccess: (_data, variables) => { void queryClient.invalidateQueries({ queryKey: queryKeys.admin }); void queryClient.invalidateQueries({ queryKey: queryKeys.adminSection("user", variables.userId) }); },
   });
 }
 
 export function useAdminUserDeletion() {
   const queryClient = useQueryClient();
-  return useMutation({ mutationFn: ({ userId, deleted, reason }: { userId: number; deleted: boolean; reason: string }) => setAdminUserDeleted(userId, deleted, reason), onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["admin"] }); } });
+  return useAccountMutation({ mutationFn: ({ userId, deleted, reason }: { userId: number; deleted: boolean; reason: string }) => setAdminUserDeleted(userId, deleted, reason), onSuccess: () => { void queryClient.invalidateQueries({ queryKey: queryKeys.admin }); } });
 }
 
 export function useAdminAuditLogs(limit = 50, offset = 0) {
-  return useQuery({ queryKey: ["admin", "audit-logs", limit, offset], queryFn: () => fetchAdminAuditLogs(limit, offset) });
+  return useQuery({ queryKey: queryKeys.adminSection("audit-logs", limit, offset), queryFn: () => fetchAdminAuditLogs(limit, offset) });
 }
 
 export function useAdminUserStories(userId: number | null, status?: string) {
-  return useQuery({ queryKey: ["admin", "user-stories", userId, status], queryFn: () => fetchAdminUserStories(userId!, status), enabled: userId !== null });
+  return useQuery({ queryKey: queryKeys.adminSection("user-stories", userId, status), queryFn: () => fetchAdminUserStories(userId!, status), enabled: userId !== null });
 }
 
 export function useReportedStories(params: { q: string; filter: string; sort: string; limit: number; offset: number }) {
-  return useQuery({ queryKey: ["admin", "reports", params], queryFn: () => fetchReportedStories(params), placeholderData: (previous) => previous });
+  return useQuery({ queryKey: queryKeys.adminSection("reports", params), queryFn: () => fetchReportedStories(params), placeholderData: (previous) => previous });
 }
 
 export function useReportedStory(storyId: string | null) {
-  return useQuery({ queryKey: ["admin", "report", storyId], queryFn: () => fetchReportedStory(storyId!), enabled: storyId !== null });
+  return useQuery({ queryKey: queryKeys.adminSection("report", storyId), queryFn: () => fetchReportedStory(storyId!), enabled: storyId !== null });
 }
 
 export function useResolveReports() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useAccountMutation({
     mutationFn: ({ storyId, action, reason }: { storyId: string; action: ResolutionAction; reason?: string }) => resolveReports(storyId, action, reason),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["admin", "reports"] });
-      void queryClient.invalidateQueries({ queryKey: ["admin", "report"] });
-      void queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
-      void queryClient.invalidateQueries({ queryKey: ["stories"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminSection("reports") });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminSection("report") });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminSection("dashboard") });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.stories.root });
     },
   });
 }
 
 export function useAdminStoryDeletion() {
   const queryClient = useQueryClient();
-  return useMutation({ mutationFn: ({ storyId, reason }: { storyId: string; reason: string }) => deleteAdminStory(storyId, reason), onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["admin", "user-stories"] }); void queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] }); } });
+  return useAccountMutation({ mutationFn: ({ storyId, reason }: { storyId: string; reason: string }) => deleteAdminStory(storyId, reason), onSuccess: () => { void queryClient.invalidateQueries({ queryKey: queryKeys.adminSection("user-stories") }); void queryClient.invalidateQueries({ queryKey: queryKeys.adminSection("dashboard") }); } });
 }

@@ -75,6 +75,13 @@ interface UiState {
   clearToast: () => void;
   requestPanTo: (lat: number, lon: number, zoom?: number, paddingBottom?: number) => void;
   hydratePreferences: () => void;
+  /**
+   * Drops everything tied to the signed-in account — open story, browsing
+   * history, remembered coords, an unfinished compose — on an account switch.
+   * Device preferences (locale, theme, map style, pin mode) are deliberately
+   * kept: they belong to the device, not the account.
+   */
+  resetAccountState: () => void;
 }
 
 function loadPref<T>(key: string, fallback: T): T {
@@ -112,6 +119,22 @@ export const useUiStore = create<UiState>((set) => ({
       locale: loadPref("loci_locale", defaultLocale) as Locale,
       theme: loadPref("loci_theme", "auto") as Theme,
       mapStyle: loadPref<MapStyle>("loci_map_style", "clean") === "bright" ? "bright" : "clean",
+    }),
+  resetAccountState: () =>
+    set({
+      mode: "browse",
+      pickedLocation: null,
+      openStoryId: null,
+      storySource: null,
+      storyHistory: [],
+      adjacentPins: [],
+      navAnchor: null,
+      storyCoords: {},
+      trendingOpen: false,
+      categoryFilter: null,
+      mapViewOpen: false,
+      toast: null,
+      panRequest: null,
     }),
   startPickLocation: () =>
     set({ mode: "pick-location", openStoryId: null, trendingOpen: false, storyHistory: [], navAnchor: null, adjacentPins: [] }),

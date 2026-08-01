@@ -44,6 +44,7 @@ async def create_for_google(db: AsyncSession, claims: dict) -> User:
         last_name=claims.get("family_name"),
         photo_url=claims.get("picture"),
         language_code=claims.get("locale"),
+        primary_provider="google",
     )
     db.add(user)
     await db.flush()
@@ -52,10 +53,20 @@ async def create_for_google(db: AsyncSession, claims: dict) -> User:
 
 async def create_for_email(db: AsyncSession) -> User:
     """create a telegram-less account for an email/password registration"""
-    user = User(telegram_id=None)
+    user = User(telegram_id=None, primary_provider="email")
     db.add(user)
     await db.flush()
     return user
+
+
+def claim_primary_provider(user: User, provider: str) -> None:
+    """Record the creation provider the first time an account gains an identity.
+
+    Never overwrites: linking a second method must not move the protected primary,
+    and a legacy row that predates the column keeps whatever the backfill derived.
+    """
+    if user.primary_provider is None:
+        user.primary_provider = provider
 
 
 def apply_telegram_profile(user: User, data: TelegramUserData) -> None:

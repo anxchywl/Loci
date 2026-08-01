@@ -31,6 +31,8 @@ export interface IdentitySummary {
   email: string | null;
   created_at: string;
   last_used_at: string;
+  /** the provider the account was created with; permanent, never unlinkable */
+  is_primary: boolean;
 }
 
 export interface SessionSummary {

@@ -313,6 +313,10 @@ export interface AuthStrings {
   telegramWaiting: string;
   telegramConnected: string;
   lastMethod: string;
+  primaryMethod: string;
+  telegramAuthFailed: string;
+  useExistingSession: string;
+  primaryMethodHint: string;
   continueInBrowser: string;
   reauthNeeded: string;
   reauthAction: string;
@@ -471,6 +475,10 @@ export const dict: Record<Locale, Dict> = {
       telegramWaiting: "Tap Start in Telegram — this connects on its own.",
       telegramConnected: "Telegram connected.",
       lastMethod: "You can't remove your only sign-in method.",
+      primaryMethod: "Primary",
+      telegramAuthFailed: "Could not confirm your Telegram account. Sign in again to continue.",
+      useExistingSession: "Continue with the session on this device",
+      primaryMethodHint: "You can't remove the sign-in method your account was created with.",
       continueInBrowser: "Continue in the browser that just opened, then come back here.",
       reauthNeeded: "Please sign in again to make this change.",
       reauthAction: "Sign in again",
@@ -818,6 +826,10 @@ export const dict: Record<Locale, Dict> = {
       telegramWaiting: "Telegram-да Start басыңыз — қалғаны өздігінен қосылады.",
       telegramConnected: "Telegram қосылды.",
       lastMethod: "Жалғыз кіру әдісін жоя алмайсыз.",
+      primaryMethod: "Негізгі",
+      telegramAuthFailed: "Telegram тіркелгіңізді растау мүмкін болмады. Жалғастыру үшін қайта кіріңіз.",
+      useExistingSession: "Осы құрылғыдағы сеанспен жалғастыру",
+      primaryMethodHint: "Тіркелгі құрылған кіру әдісін жоя алмайсыз.",
       continueInBrowser: "Ашылған браузерде жалғастырып, осында қайтыңыз.",
       reauthNeeded: "Бұл өзгерісті енгізу үшін қайта кіріңіз.",
       reauthAction: "Қайта кіру",
@@ -1165,6 +1177,10 @@ export const dict: Record<Locale, Dict> = {
       telegramWaiting: "Нажмите «Start» в Telegram — дальше всё подключится само.",
       telegramConnected: "Telegram подключён.",
       lastMethod: "Нельзя удалить единственный способ входа.",
+      primaryMethod: "Основной",
+      telegramAuthFailed: "Не удалось подтвердить ваш аккаунт Telegram. Войдите снова, чтобы продолжить.",
+      useExistingSession: "Продолжить с сеансом на этом устройстве",
+      primaryMethodHint: "Нельзя удалить способ входа, которым был создан аккаунт.",
       continueInBrowser: "Продолжите в открывшемся браузере и вернитесь сюда.",
       reauthNeeded: "Войдите снова, чтобы выполнить это действие.",
       reauthAction: "Войти снова",

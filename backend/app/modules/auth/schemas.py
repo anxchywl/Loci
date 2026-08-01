@@ -82,6 +82,8 @@ class IdentitySummary(BaseModel):
     email: str | None
     created_at: datetime
     last_used_at: datetime
+    # the provider the account was created with; the client hides its unlink control
+    is_primary: bool = False
 
 
 class SessionSummary(BaseModel):

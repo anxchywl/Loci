@@ -4,6 +4,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { ThemeProvider } from "@/components/theme-provider";
+import { applyAccountSignal } from "@/features/auth/hooks";
+import { subscribeToAccountSignals } from "@/lib/auth/cross-tab";
+import { useAuthStore } from "@/stores/auth-store";
+import { useUiStore } from "@/stores/ui-store";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -25,6 +29,25 @@ export function Providers({ children }: { children: ReactNode }) {
         },
       }),
   );
+  // the query cache is account-scoped state: a switch has to leave nothing of the
+  // previous account behind, including replies still in flight for it
+  useEffect(() => {
+    let seen = useAuthStore.getState().accountEpoch;
+    return useAuthStore.subscribe((state) => {
+      if (state.accountEpoch === seen) return;
+      seen = state.accountEpoch;
+      void queryClient.cancelQueries();
+      queryClient.clear();
+      useUiStore.getState().resetAccountState();
+    });
+  }, [queryClient]);
+
+  // a sibling tab switched accounts, logged out, or had its session revoked
+  useEffect(
+    () => subscribeToAccountSignals((signal) => void applyAccountSignal(signal)),
+    [],
+  );
+
   useEffect(() => {
     const revalidate = () => {
       if (document.visibilityState === "visible" && navigator.onLine) {

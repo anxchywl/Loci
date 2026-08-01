@@ -38,12 +38,15 @@ def _identity_email(identity) -> str | None:
 
 async def list_identities(db: AsyncSession, user_id: int) -> list[IdentitySummary]:
     rows = await identities_repo.list_for_user(db, user_id)
+    user = await users_repo.get_by_id(db, user_id)
+    primary = user.primary_provider if user is not None else None
     return [
         IdentitySummary(
             provider=r.provider,
             email=_identity_email(r),
             created_at=r.created_at,
             last_used_at=r.last_used_at,
+            is_primary=r.provider == primary,
         )
         for r in rows
     ]
@@ -53,6 +56,12 @@ async def unlink(db: AsyncSession, user_id: int, provider: str, ip_hash: str | N
     identity = await identities_repo.get_for_user_provider(db, user_id, provider)
     if identity is None:
         raise LinkError("That sign-in method is not linked", status_code=404)
+    user = await users_repo.get_by_id(db, user_id)
+    if user is not None and user.primary_provider == provider:
+        raise LinkError(
+            "You can't remove the sign-in method your account was created with",
+            status_code=400,
+        )
     if await identities_repo.count_for_user(db, user_id) <= 1:
         raise LinkError("You can't remove your only sign-in method", status_code=400)
 

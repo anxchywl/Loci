@@ -1,6 +1,16 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Text, func, text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -21,6 +31,9 @@ class User(Base):
     display_name: Mapped[str | None] = mapped_column(Text)
     language_code: Mapped[str | None] = mapped_column(Text)
     photo_url: Mapped[str | None] = mapped_column(Text)
+    # provider the account was created with; protected from unlinking. null only
+    # for users with no identity at all, where there is nothing to protect
+    primary_provider: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -37,6 +50,10 @@ class User(Base):
     erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
     __table_args__ = (
+        CheckConstraint(
+            "primary_provider IS NULL OR primary_provider IN ('telegram', 'google', 'email')",
+            name="primary_provider_known",
+        ),
         Index("ix_users_username_lower", func.lower(username)),
         Index("ix_users_first_name_lower", func.lower(first_name)),
         Index("ix_users_last_name_lower", func.lower(last_name)),

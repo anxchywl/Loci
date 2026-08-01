@@ -43,6 +43,7 @@ async def authenticate_telegram_user(
         user = await users_repo.upsert_from_telegram(db, telegram_user)
         if user.is_blocked or user.deleted_at is not None:
             raise AuthError("account is blocked")
+        users_repo.claim_primary_provider(user, "telegram")
         await identities_repo.ensure_telegram_identity(db, user.id, telegram_user.telegram_id)
     user.last_active_at = datetime.now(UTC)
 

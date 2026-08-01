@@ -164,7 +164,7 @@ Reject a design if it has any of these:
 - Card-with-shadow-on-everything
 - Overuse of rounded-full pill shapes for things that aren't pills
 - Centered-everything layouts with no clear visual hierarchy
-- Excessive micro-copy ("Oops! 🙈 Looks like something went sideways!")
+- Excessive micro-copy ("Oops! Looks like something went sideways!")
 - Glassmorphism / frosted blur panels as a default surface treatment
 - Stock-photo-style or AI-generated-illustration empty states
 
@@ -286,7 +286,7 @@ genuinely surprise a reader. Default to no comment.
 
 ## Phased delivery
 
-- **Phase 0** — Plan & clarify. ✅ Decisions: Lucide icons, Telegram-native
+- **Phase 0** — Plan & clarify. Decided: Lucide icons, Telegram-native
   palette, locales en/kk/ru, ~500 m fuzzing (250–750 m ring, deterministic
   per story). Policy defaults recorded in `docs/PRODUCT.md`.
 - **Phase 1** — Repo scaffold. Monorepo layout, dev + prod compose,
