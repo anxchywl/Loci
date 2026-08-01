@@ -119,7 +119,7 @@ describe("AuthPanel", () => {
     };
     renderWithQuery(<AuthPanel useDialogForEmail sheet={sheet} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Continue with Google" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Google" }));
 
     expect(startGoogleLogin).toHaveBeenCalledOnce();
     expect(sheet.setView).not.toHaveBeenCalled();
@@ -131,7 +131,7 @@ describe("AuthPanel", () => {
     window.history.replaceState(null, "", "/profile?lang=en&auth=cancelled#account");
     useUiStore.setState({ openStoryId: "story-1" });
     renderWithQuery(<AuthPanel />);
-    fireEvent.click(await screen.findByRole("button", { name: "Continue with Google" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Google" }));
 
     await waitFor(() =>
       expect(startGoogleLogin).toHaveBeenCalledWith("/profile?lang=en&story=story-1"),
@@ -185,14 +185,14 @@ describe("AuthPanel", () => {
     renderWithQuery(<AuthPanel />);
 
     expect(await screen.findByRole("button", { name: "Continue with email" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Continue with Google" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Google" })).not.toBeInTheDocument();
   });
 
   it("opens Telegram @loci_app_bot when clicking Continue with Telegram", async () => {
     vi.mocked(openTelegramLink).mockReturnValue(false);
     renderWithQuery(<AuthPanel />);
 
-    const button = await screen.findByRole("button", { name: "Continue with Telegram" });
+    const button = await screen.findByRole("button", { name: "Telegram" });
     expect(button).toBeInTheDocument();
     fireEvent.click(button);
 
@@ -203,10 +203,10 @@ describe("AuthPanel", () => {
   it("uses the supplied provider assets on the chooser", async () => {
     renderWithQuery(<AuthPanel />);
 
-    await screen.findByRole("button", { name: "Continue with Google" });
-    await screen.findByRole("button", { name: "Continue with Telegram" });
+    await screen.findByRole("button", { name: "Google" });
+    await screen.findByRole("button", { name: "Telegram" });
     const providerImages = screen.getAllByRole("presentation");
-    expect(providerImages[0]).toHaveAttribute("src", "/gmail.svg");
+    expect(providerImages[0]).toHaveAttribute("src", "/google.svg");
     expect(providerImages[1]).toHaveAttribute("src", "/telegram.svg");
   });
 });

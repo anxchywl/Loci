@@ -370,10 +370,12 @@ export function AuthPanel({
             <span className="h-px flex-1 bg-border" /><span>{t.orContinueWith}</span><span className="h-px flex-1 bg-border" />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <button type="button" onClick={onGoogle} disabled={pending} className={secondary}>
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center"><Image src="/google.svg" alt="" width={18} height={18} unoptimized /></span>
-              <span>Google</span>
-            </button>
+            {providers.data?.google && (
+              <button type="button" onClick={onGoogle} disabled={pending} className={secondary}>
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center"><Image src="/google.svg" alt="" width={18} height={18} unoptimized /></span>
+                <span>Google</span>
+              </button>
+            )}
             <button type="button" onClick={onTelegram} disabled={pending} className={secondary}>
               <span className="flex h-5 w-5 shrink-0 items-center justify-center"><Image src="/telegram.svg" alt="" width={18} height={18} unoptimized /></span>
               <span>Telegram</span>
