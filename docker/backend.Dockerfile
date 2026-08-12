@@ -10,7 +10,9 @@ RUN pip install --no-cache-dir --upgrade pip
 COPY backend/pyproject.toml ./
 RUN pip install --no-cache-dir ".[dev]"
 
+COPY backend/alembic.ini ./
 COPY backend/app ./app
+COPY backend/scripts ./scripts
 
 EXPOSE 8000
 

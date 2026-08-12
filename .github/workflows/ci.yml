@@ -248,16 +248,31 @@ jobs:
     timeout-minutes: 20
 
     steps:
+      - uses: actions/checkout@v6
+
+      - name: Check SSH deployment configuration
+        id: check_ssh
+        run: |
+          if [ -z "${{ secrets.SSH_HOST }}" ]; then
+            echo "::notice::SSH_HOST secret is unconfigured. Skipping deployment."
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup SSH keys
+        if: steps.check_ssh.outputs.skip != 'true'
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
       - name: Deploy to production server
-        uses: appleboy/ssh-action@v1.2.0
+        if: steps.check_ssh.outputs.skip != 'true'
         env:
           ENV_FILE_CONTENT: ${{ secrets.ENV_FILE }}
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: ENV_FILE_CONTENT
-          script: |
+        run: |
+          ssh -o StrictHostKeyChecking=no "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "ENV_FILE_CONTENT='${ENV_FILE_CONTENT}' GITHUB_TOKEN='${{ secrets.GITHUB_TOKEN }}' GITHUB_ACTOR='${{ github.actor }}' bash -s" << 'EOF'
             set -euo pipefail
             REPO="${{ secrets.SSH_PATH }}"
             if [ ! -d "$REPO/.git" ]; then
@@ -278,5 +293,6 @@ jobs:
               exit 1
             fi
             chmod 600 .env
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
             DEPLOYMENT_TARGET=shared-host DEPLOY_USE_PREBUILT=true deploy/deploy.sh
+          EOF

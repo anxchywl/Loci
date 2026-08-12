@@ -138,53 +138,63 @@ export function StorySheet({ authenticated, onBackToSource }: StorySheetProps) {
     <BottomSheet
       open
       onClose={goBack}
-      onBack={storySource ? goBack : undefined}
-      title={confirming === "delete" ? undefined : story?.title}
-      subtitle={story ? authorLabel(story.author) ?? undefined : undefined}
-      titleColor={category?.color}
+      onBack={confirming ? () => setConfirming(null) : storySource ? goBack : undefined}
+      title={confirming === "report" ? t.confirmReportTitle : confirming === "delete" ? t.confirmDeleteTitle : story?.title}
+      subtitle={confirming ? undefined : story ? authorLabel(story.author) ?? undefined : undefined}
+      titleColor={confirming ? undefined : category?.color}
       onPrev={prevPin && !confirming ? () => goTo("prev") : undefined}
       onNext={nextPin && !confirming ? () => goTo("next") : undefined}
       prevLabel={t.previousStory}
       nextLabel={t.nextStory}
       onHeightChange={setSheetHeight}
-      navigationAtBottom
+      navigationAtBottom={!confirming}
     >
       {story ? (
         <div
           key={`${storyId}-${confirming ?? "story"}`}
           className="space-y-4 motion-safe:animate-story-state"
         >
-          {confirming === "delete" ? (
-            <div className="space-y-4 rounded-sheet border border-border bg-surface p-4 py-5">
-              <div className="text-center">
-                <div className="text-[17px] font-semibold">{t.confirmDeleteTitle}</div>
-                <p className="mt-1 text-[13px] leading-relaxed text-muted">{t.confirmDeleteBody}</p>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => setConfirming(null)} disabled={deleteStory.isPending} className="flex-1 rounded border border-border py-2.5 text-[14px] font-medium text-muted transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50">{t.cancel}</button>
-                <button onClick={confirmAction} disabled={deleteStory.isPending} className="flex-1 rounded bg-[#E5484D] py-2.5 text-[14px] font-semibold text-white transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50">{deleteStory.isPending ? t.deleting : t.deleteStory}</button>
-              </div>
-            </div>
-          ) : confirming === "report" ? (
-            <div className="flex flex-col gap-4 rounded-sheet border border-border bg-surface p-5 py-6">
-              <div className="text-center">
-                <div className="text-[17px] font-semibold">{t.confirmReportTitle}</div>
-                <p className="mt-1.5 text-[13px] leading-relaxed text-muted">{t.confirmReportBody}</p>
-              </div>
-              <div className="flex gap-2">
+          {confirming === "report" ? (
+            <div className="flex flex-col gap-4 py-2">
+              <p className="text-[14px] leading-relaxed text-muted">{t.confirmReportBody}</p>
+              <div className="flex gap-2 pt-1">
                 <button
+                  type="button"
                   onClick={() => setConfirming(null)}
                   disabled={report.isPending}
-                  className="flex-1 rounded border border-border py-2.5 text-[14px] font-medium text-muted transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50"
+                  className="flex-1 rounded-xl border border-border py-2.5 text-[14px] font-medium text-muted transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50"
                 >
                   {t.cancel}
                 </button>
                 <button
+                  type="button"
                   onClick={confirmAction}
                   disabled={report.isPending}
-                  className="flex-1 rounded bg-accent py-2.5 text-[14px] font-semibold text-accent-text transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50"
+                  className="flex-1 rounded-xl bg-accent py-2.5 text-[14px] font-semibold text-accent-text transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50"
                 >
                   {t.report}
+                </button>
+              </div>
+            </div>
+          ) : confirming === "delete" ? (
+            <div className="flex flex-col gap-4 py-2">
+              <p className="text-[14px] leading-relaxed text-muted">{t.confirmDeleteBody}</p>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setConfirming(null)}
+                  disabled={deleteStory.isPending}
+                  className="flex-1 rounded-xl border border-border py-2.5 text-[14px] font-medium text-muted transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50"
+                >
+                  {t.cancel}
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmAction}
+                  disabled={deleteStory.isPending}
+                  className="flex-1 rounded-xl bg-[#E5484D] py-2.5 text-[14px] font-semibold text-white transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50"
+                >
+                  {deleteStory.isPending ? t.deleting : t.deleteStory}
                 </button>
               </div>
             </div>

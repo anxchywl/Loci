@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { SettingsSection } from "@/components/settings-section";
 import { AccountSettings, DeleteAccountIconButton, LogoutConfirmation, LogoutIconButton, type SettingsSheet } from "@/features/auth/account-settings";
@@ -239,63 +240,73 @@ function StoryPanel({
 
       <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{story.body}</p>
 
-      {confirming ? (
-        <div className="space-y-3 rounded-sheet border border-border bg-surface p-4">
-          <div className="text-center text-[15px] font-semibold">
-            {confirming === "delete" ? t.confirmDeleteTitle : t.confirmReportTitle}
-          </div>
-          <p className="text-[13px] text-muted">
-            {confirming === "delete" ? t.confirmDeleteBody : t.confirmReportBody}
-          </p>
-          <div className="flex gap-2">
-            <button onClick={() => setConfirming(null)}
-              disabled={deleteStory.isPending || report.isPending}
-              className="flex-1 rounded border border-border py-2 text-[14px] font-medium text-muted transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50">
-              {t.cancel}
+      <div className="flex items-center gap-2">
+        <ReactionButton storyId={story.id} reacted={story.viewer_reacted}
+          count={story.reaction_count} disabled={!authenticated || !canInteract} />
+        <button aria-label={story.viewer_bookmarked ? t.saved : t.save}
+          disabled={!authenticated || !canInteract}
+          onClick={() => bookmark.mutate(story.viewer_bookmarked)}
+          className="rounded-full border border-border p-2 transition-transform duration-150 ease-lm active:scale-95 disabled:opacity-50">
+          <Bookmark size={16} fill={story.viewer_bookmarked ? "currentColor" : "none"} />
+        </button>
+        <button aria-label={t.share} onClick={share}
+          className="rounded-full border border-border p-2 transition-transform duration-150 ease-lm active:scale-95">
+          <Share2 size={16} />
+        </button>
+        <div className="ml-auto flex items-center gap-2">
+          {story.viewer_is_owner ? (
+            <button aria-label={t.deleteStory} onClick={() => setConfirming("delete")}
+              className="rounded-full border border-border p-2 text-[#E5484D] transition-transform duration-150 ease-lm active:scale-95">
+              <Trash2 size={16} />
             </button>
-            <button onClick={confirmAction}
-              disabled={deleteStory.isPending || report.isPending}
-              className={`flex-1 rounded py-2 text-[14px] font-semibold text-white transition-transform duration-150 ease-lm active:scale-[0.98] disabled:opacity-50 ${confirming === "delete" ? "bg-[#E5484D]" : "bg-accent text-accent-text"}`}>
-              {confirming === "delete" ? (deleteStory.isPending ? t.deleting : t.deleteStory) : t.report}
+          ) : (
+            <button aria-label={t.report} disabled={!authenticated || report.isSuccess}
+              onClick={() => setConfirming("report")}
+              className="rounded-full border border-border p-2 text-muted transition-transform duration-150 ease-lm active:scale-95 disabled:opacity-50">
+              <Flag size={16} />
             </button>
-          </div>
+          )}
         </div>
-      ) : (
-        <div className="flex items-center gap-2">
-          <ReactionButton storyId={story.id} reacted={story.viewer_reacted}
-            count={story.reaction_count} disabled={!authenticated || !canInteract} />
-          <button aria-label={story.viewer_bookmarked ? t.saved : t.save}
-            disabled={!authenticated || !canInteract}
-            onClick={() => bookmark.mutate(story.viewer_bookmarked)}
-            className="rounded-full border border-border p-2 transition-transform duration-150 ease-lm active:scale-95 disabled:opacity-50">
-            <Bookmark size={16} fill={story.viewer_bookmarked ? "currentColor" : "none"} />
-          </button>
-          <button aria-label={t.share} onClick={share}
-            className="rounded-full border border-border p-2 transition-transform duration-150 ease-lm active:scale-95">
-            <Share2 size={16} />
-          </button>
-          <div className="ml-auto flex items-center gap-2">
-            {story.viewer_is_owner ? (
-              <button aria-label={t.deleteStory} onClick={() => setConfirming("delete")}
-                className="rounded-full border border-border p-2 text-[#E5484D] transition-transform duration-150 ease-lm active:scale-95">
-                <Trash2 size={16} />
-              </button>
-            ) : (
-              <button aria-label={t.report} disabled={!authenticated || report.isSuccess}
-                onClick={() => setConfirming("report")}
-                className="rounded-full border border-border p-2 text-muted transition-transform duration-150 ease-lm active:scale-95 disabled:opacity-50">
-                <Flag size={16} />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      </div>
 
-      {!confirming && (
-        <div className="flex items-center justify-between gap-2 border-t border-border pt-3 text-[13px] text-muted">
-          <span className="flex min-w-0 items-center gap-1 truncate"><MapPin size={13} />{story.location_precision === "approx" ? "≈" : ""}{story.lat.toFixed(3)}, {story.lon.toFixed(3)}</span>
-          {story.happened_on && <span className="shrink-0">{formatDate(story.happened_on)}</span>}
-        </div>
+      <div className="flex items-center justify-between gap-2 border-t border-border pt-3 text-[13px] text-muted">
+        <span className="flex min-w-0 items-center gap-1 truncate"><MapPin size={13} />{story.location_precision === "approx" ? "≈" : ""}{story.lat.toFixed(3)}, {story.lon.toFixed(3)}</span>
+        {story.happened_on && <span className="shrink-0">{formatDate(story.happened_on)}</span>}
+      </div>
+
+      {confirming && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <button type="button" aria-label={t.cancel} onClick={() => setConfirming(null)} className="absolute inset-0 bg-black/30 motion-safe:animate-fade-in" />
+          <div className="relative w-full max-w-sm rounded-sheet border border-border bg-bg p-5 shadow-[0_12px_40px_rgba(0,0,0,0.18)] motion-safe:animate-dialog-in">
+            <h2 className="mb-2 text-[17px] font-semibold">
+              {confirming === "delete" ? t.confirmDeleteTitle : t.confirmReportTitle}
+            </h2>
+            <p className="mb-5 text-[14px] leading-snug text-muted">
+              {confirming === "delete" ? t.confirmDeleteBody : t.confirmReportBody}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={deleteStory.isPending || report.isPending}
+                onClick={() => setConfirming(null)}
+                className="flex-1 rounded-xl border border-border px-3 py-2.5 text-[14px] font-medium text-muted transition-colors hover:bg-surface disabled:opacity-50"
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                disabled={deleteStory.isPending || report.isPending}
+                onClick={confirmAction}
+                className={`flex-1 rounded-xl px-3 py-2.5 text-[14px] font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-50 ${
+                  confirming === "delete" ? "bg-[#E5484D]" : "bg-accent text-accent-text"
+                }`}
+              >
+                {confirming === "delete" ? (deleteStory.isPending ? t.deleting : t.deleteStory) : t.report}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
 
     </div>

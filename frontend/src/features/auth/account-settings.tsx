@@ -502,7 +502,7 @@ export function AccountSettings({
     return <NameEditor user={user} inline onClose={closeNameEditor} />;
   }
 
-  if (deleteOpen) {
+  if (deleteOpen && sheet) {
     return <DeleteAccountForm onCancel={closeDelete} />;
   }
 
@@ -526,7 +526,6 @@ export function AccountSettings({
       {!error && returnNotice === "error" && <p role="alert" className="text-[13px] text-[var(--lm-danger,#dc2626)]">{t.genericError}</p>}
       {!error && returnNotice === "cancelled" && <p role="status" className="text-[13px] text-muted">{t.cancelled}</p>}
 
-      {!confirm && <>
       {showProfile && user && (
         <SettingsSection title={dict.profile}>
           <SettingsRow>
@@ -642,7 +641,6 @@ export function AccountSettings({
           </SettingsRow>
         </SettingsSection>
       )}
-      </>}
 
       {confirm && !sheet && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true">

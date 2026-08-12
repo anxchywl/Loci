@@ -90,12 +90,10 @@ describe("AccountSettings", () => {
 
     fireEvent.click(within(googleRow).getByRole("button", { name: "Remove" }));
     expect(unlinkIdentity).not.toHaveBeenCalled();
-    // the step takes over the panel: the sessions list is gone, the method named
-    expect(screen.queryByText("Active sessions")).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText("You will no longer be able to sign in this way.")).toBeInTheDocument();
-    expect(screen.getByText("Google")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Remove" }));
     await waitFor(() => expect(unlinkIdentity).toHaveBeenCalledOnce());
     expect(vi.mocked(unlinkIdentity).mock.calls[0]?.[0]).toBe("google");
   });
@@ -171,7 +169,7 @@ describe("AccountSettings", () => {
     fireEvent.click(within(sessionRow).getByRole("button", { name: "Remove" }));
     // confirmation step first, with the device it is about
     expect(screen.getByText("This device will be signed out immediately.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Remove" }));
 
     await waitFor(() => expect(revokeSession).toHaveBeenCalledOnce());
     expect(vi.mocked(revokeSession).mock.calls[0]?.[0]).toBe("session-2");
@@ -343,7 +341,7 @@ describe("AccountSettings", () => {
     const googleRow = (await screen.findByText("Google")).closest<HTMLElement>("div.flex.items-center");
     if (!googleRow) throw new Error("google identity row missing");
     fireEvent.click(within(googleRow).getByRole("button", { name: "Remove" }));
-    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Remove" }));
 
     await waitFor(() => expect(unlinkIdentity).toHaveBeenCalledOnce());
     // google falls back to an Add action once the refetched list drops it

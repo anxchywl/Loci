@@ -107,7 +107,7 @@ export function BottomSheet({
       />
       <div
         ref={scrollRef}
-        className={`absolute inset-x-0 bottom-0 max-h-[80dvh] overflow-y-auto rounded-t-sheet bg-bg pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_32px_rgba(0,0,0,0.18)] motion-safe:animate-sheet-up transition-[transform,max-height] duration-250 ease-lm lg:inset-0 lg:m-auto lg:max-h-[80dvh] lg:w-[calc(100%-2rem)] lg:max-w-[640px] lg:rounded-sheet lg:shadow-[0_12px_40px_rgba(0,0,0,0.18)] ${desktopModal ? "lg:motion-safe:animate-dialog-in" : ""} ${isEditing ? "keyboard-sheet-editing" : ""}`}
+        className={`absolute inset-x-0 bottom-0 max-h-[80dvh] overflow-y-auto rounded-t-sheet bg-bg pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_32px_rgba(0,0,0,0.18)] motion-safe:animate-sheet-up transition-[transform,max-height] duration-250 ease-lm lg:inset-0 lg:m-auto lg:max-h-[80dvh] lg:h-fit lg:w-[calc(100%-2rem)] lg:max-w-[640px] lg:rounded-sheet lg:shadow-[0_12px_40px_rgba(0,0,0,0.18)] ${desktopModal ? "lg:motion-safe:animate-dialog-in" : ""} ${isEditing ? "keyboard-sheet-editing" : ""}`}
         style={dragY > 0 ? { transform: `translateY(${dragY}px)`, transition: "none" } : undefined}
       >
         <div 

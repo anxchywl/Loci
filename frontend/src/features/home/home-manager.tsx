@@ -428,7 +428,7 @@ export function HomeManager() {
           </div>
 
           {/* Desktop: search anchored left + categories after */}
-          <div className="hidden min-w-0 items-start gap-3 overflow-hidden lg:flex">
+          <div className="hidden min-w-0 items-start gap-3 lg:flex">
             <div className="relative w-[320px] shrink-0">
               <div className="flex items-center gap-2 rounded-full border border-border bg-bg px-3.5 py-2 transition-colors focus-within:border-accent">
                 <Search size={16} className="shrink-0 text-muted" />
