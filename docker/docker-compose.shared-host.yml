@@ -1,5 +1,5 @@
 services:
-  web:
+  loci-web:
     networks:
       - wished-proxy
 

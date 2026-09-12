@@ -16,7 +16,7 @@ docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" \
 
 jq -e '
   (.services.api.mem_limit | tonumber) == 1073741824 and
-  (.services.web.mem_limit | tonumber) == 503316480 and
+  (.services["loci-web"].mem_limit | tonumber) == 503316480 and
   (.services.worker.mem_limit | tonumber) == 805306368 and
   (.services["worker-events"].mem_limit | tonumber) == 268435456 and
   (.services.beat.mem_limit | tonumber) == 134217728 and
@@ -49,7 +49,7 @@ jq -e '
   (.services.postgres.command | index("max_connections=50") != null) and
   (.services.redis.command | index("128mb") != null) and
   (.services.api.networks | has("wished-proxy")) and
-  (.services.web.networks | has("wished-proxy")) and
+  (.services["loci-web"].networks | has("wished-proxy")) and
   ([.services | to_entries[] | .value.ports // []] | add | length) == 0
 ' "$SHARED_MODEL" >/dev/null
 

@@ -87,13 +87,17 @@ services:
     depends_on:
       api:
         condition: service_healthy
-      web:
+      loci-web:
         condition: service_healthy
     networks:
       - loci-app
 
-  web:
+  loci-web:
     image: ghcr.io/${REGISTRY_OWNER:-anxchywl}/loci-web:latest
+    # named explicitly: this service shares a network with several other
+    # compose projects, and a bare `web` service name would collide with
+    # theirs in the shared DNS namespace
+    container_name: loci-web
     build:
       context: ..
       dockerfile: docker/frontend.Dockerfile

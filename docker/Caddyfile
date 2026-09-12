@@ -17,6 +17,6 @@
 	}
 
 	handle {
-		reverse_proxy web:3000
+		reverse_proxy loci-web:3000
 	}
 }
