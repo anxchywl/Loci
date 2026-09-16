@@ -21,9 +21,9 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
 
@@ -53,7 +53,7 @@ jobs:
         working-directory: backend
         run: uv run --frozen pytest
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "22"
           cache: npm
@@ -96,9 +96,9 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
 
@@ -171,9 +171,9 @@ jobs:
       REGISTRY_OWNER: anxchywl
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Prepare build environment
         env:
@@ -218,14 +218,14 @@ jobs:
 
       - name: Log in to GitHub Container Registry
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build production images
-        uses: docker/bake-action@v6
+        uses: docker/bake-action@5be5f02ff8819ecd3092ea6b2e6261c31774f2b4 # v6
         with:
           files: docker/docker-compose.prod.yml
           targets: |
@@ -248,7 +248,7 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Check SSH deployment configuration
         id: check_ssh
@@ -262,18 +262,33 @@ jobs:
 
       - name: Setup SSH keys
         if: steps.check_ssh.outputs.skip != 'true'
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387 # v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Trust the production host key
+        if: steps.check_ssh.outputs.skip != 'true'
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_HOST_KEYS: ${{ secrets.SSH_HOST_KEYS }}
+        run: |
+          mkdir -p ~/.ssh
+          # each secret line is "<type> <key>"; known_hosts needs the host in front
+          printf '%s\n' "$SSH_HOST_KEYS" | sed "s|^|$SSH_HOST |" >> ~/.ssh/known_hosts
 
       - name: Deploy to production server
         if: steps.check_ssh.outputs.skip != 'true'
         env:
           ENV_FILE_CONTENT: ${{ secrets.ENV_FILE }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET: ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}
         run: |
-          ssh -o StrictHostKeyChecking=no "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            "ENV_FILE_CONTENT='${ENV_FILE_CONTENT}' GITHUB_TOKEN='${{ secrets.GITHUB_TOKEN }}' GITHUB_ACTOR='${{ github.actor }}' bash -s" << 'EOF'
+          # secrets go over stdin so they never show up on the server's command line
+          printf '%s' "$ENV_FILE_CONTENT" | ssh -o StrictHostKeyChecking=yes "$TARGET" 'umask 077 && cat > ~/.loci-deploy-env'
+          printf '%s' "$REGISTRY_TOKEN" | ssh -o StrictHostKeyChecking=yes "$TARGET" 'docker login ghcr.io -u "${{ github.actor }}" --password-stdin'
+          ssh -o StrictHostKeyChecking=yes "$TARGET" bash -s << 'EOF'
             set -euo pipefail
+            trap 'rm -f ~/.loci-deploy-env' EXIT
             REPO="${{ secrets.SSH_PATH }}"
             if [ ! -d "$REPO/.git" ]; then
               mkdir -p "$(dirname "$REPO")"
@@ -286,13 +301,12 @@ jobs:
             git reset --hard origin/main
             if [ -f .env ]; then
               echo "preserving existing production environment"
-            elif [ -n "${ENV_FILE_CONTENT:-}" ]; then
-              printf '%s\n' "$ENV_FILE_CONTENT" > .env
+            elif [ -s ~/.loci-deploy-env ]; then
+              { cat ~/.loci-deploy-env; echo; } > .env
             else
               echo "error: .env is missing and ENV_FILE secret is empty" >&2
               exit 1
             fi
             chmod 600 .env
-            echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
             DEPLOYMENT_TARGET=shared-host DEPLOY_USE_PREBUILT=true deploy/deploy.sh
           EOF
