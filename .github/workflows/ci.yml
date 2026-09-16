@@ -230,14 +230,14 @@ jobs:
           files: docker/docker-compose.prod.yml
           targets: |
             api
-            web
+            loci-web
             backup
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           set: |
             *.cache-from=type=gha
             *.cache-to=type=gha,mode=max
             api.tags=ghcr.io/anxchywl/loci-api:latest
-            web.tags=ghcr.io/anxchywl/loci-web:latest
+            loci-web.tags=ghcr.io/anxchywl/loci-web:latest
             backup.tags=ghcr.io/anxchywl/loci-backup:latest
 
   deploy:
