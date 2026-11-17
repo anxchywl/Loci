@@ -145,3 +145,17 @@ async def mark_failed(db: AsyncSession, photo_id: uuid.UUID) -> None:
     if photo is not None:
         photo.status = PhotoStatus.failed
         await db.flush()
+
+
+async def has_inflight_uploads(db: AsyncSession, story_id: uuid.UUID, since: datetime) -> bool:
+    """True while a recent photo of the story is still uploading or processing."""
+    stmt = (
+        select(StoryPhoto.id)
+        .where(
+            StoryPhoto.story_id == story_id,
+            StoryPhoto.status == PhotoStatus.pending,
+            StoryPhoto.created_at >= since,
+        )
+        .limit(1)
+    )
+    return (await db.execute(stmt)).scalar_one_or_none() is not None

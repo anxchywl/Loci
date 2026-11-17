@@ -6,10 +6,15 @@ The actual send happens in ``app.workers.tasks.send_telegram_message``.
 """
 import enum
 import logging
+import uuid
 
 from app.core.config import Settings
 
 logger = logging.getLogger(__name__)
+
+# the admin ping waits this long so photos uploaded right after creation are in
+# the queue by the time a moderator opens it
+PENDING_REVIEW_DELAY_SECONDS = 60
 
 
 class StoryEvent(str, enum.Enum):
@@ -61,16 +66,41 @@ def dispatch(
     _enqueue(telegram_id, render_message(event, title, reason))
 
 
-def dispatch_admins_pending_review(
-    settings: Settings, *, title: str, author_label: str
-) -> None:
-    """Tell every configured admin that a story is waiting in the moderation
-    queue. Fire-and-forget, one message per admin telegram id."""
-    if not settings.notifications_enabled:
-        return
-    text = (
-        f"New story pending review: “{title}” by {author_label}. "
+def author_label(user, *, anonymous: bool = False) -> str:
+    if anonymous:
+        return "an anonymous author"
+    if user is None:
+        return "a user"
+    if user.display_name:
+        return user.display_name
+    return " ".join(part for part in (user.first_name, user.last_name) if part) or "a user"
+
+
+def render_admin_pending_review(title: str, label: str) -> str:
+    return (
+        f"New story pending review: “{title}” by {label}. "
         f"Open the moderation queue to approve or reject it."
     )
-    for admin_id in settings.admin_ids:
-        _enqueue(admin_id, text)
+
+
+def _enqueue_pending_review(story_id: str) -> None:
+    try:
+        from app.workers.celery_app import celery_app
+
+        # only the story id travels through the broker; the worker re-reads the
+        # story so an anonymous author never enters a task payload
+        celery_app.send_task(
+            "notifications.admin_pending_review",
+            args=[story_id],
+            countdown=PENDING_REVIEW_DELAY_SECONDS,
+        )
+    except Exception:  # pragma: no cover - broker failures must not break requests
+        logger.exception("failed to enqueue pending-review notification")
+
+
+def dispatch_admins_pending_review(settings: Settings, *, story_id: uuid.UUID) -> None:
+    """Schedule the admin ping for a story that entered the moderation queue.
+    The worker sends it once the story's photo uploads have settled."""
+    if not settings.notifications_enabled or not settings.admin_ids:
+        return
+    _enqueue_pending_review(str(story_id))

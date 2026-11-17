@@ -209,18 +209,22 @@ async def test_submission_notifies_admins_without_emoji(client, monkeypatch):
     from app.modules import notifications
 
     sent: list[tuple[int, str]] = []
+    scheduled: list[str] = []
     monkeypatch.setattr(get_settings(), "notifications_enabled", True)
     monkeypatch.setattr(notifications, "_enqueue", lambda tid, text: sent.append((tid, text)))
+    monkeypatch.setattr(notifications, "_enqueue_pending_review", scheduled.append)
 
-    await create_pending(client, telegram_id=1, title="Wow")
+    story_id = await create_pending(client, telegram_id=1, title="Wow")
 
-    # the author is notified, and every admin gets a pending-review ping
-    author_msgs = [text for tid, text in sent if tid != ADMIN_TG]
-    admin_msgs = [text for tid, text in sent if tid == ADMIN_TG]
-    assert author_msgs and "pending review" in author_msgs[0].lower()
-    assert admin_msgs and "pending review" in admin_msgs[0].lower()
+    # the author is notified at once; the admin ping is scheduled by story id so
+    # it can wait for photo uploads and never carries the author in its payload
+    assert sent and "pending review" in sent[0][1].lower()
+    assert all(tid != ADMIN_TG for tid, _ in sent)
+    assert scheduled == [story_id]
+    admin_text = notifications.render_admin_pending_review("Wow", "a user")
+    assert "pending review" in admin_text.lower()
     # no emoji anywhere in the outgoing text
-    assert all(ch.isascii() or ch in "“”—" for msg in sent for ch in msg[1])
+    assert all(ch.isascii() or ch in "“”—" for text in [admin_text, *(m[1] for m in sent)] for ch in text)
 
 
 async def test_viewer_is_owner_flag(client):

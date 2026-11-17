@@ -13,6 +13,7 @@ from app.core.observability import counter, log_event, observe
 from app.db.repositories import photos as photos_repo
 from app.db.repositories import stories as stories_repo
 from app.integrations import storage
+from app.modules import notifications
 from app.modules.stories.schemas import PhotoUploadResponse
 from app.modules.stories.service import StoryNotFound
 
@@ -108,8 +109,10 @@ async def complete_upload(
     upload_path: str | None = None,
     duration_ms: int | None = None,
     fallback_reason: str | None = None,
-) -> None:
-    """size check uploaded bytes and queue worker validation"""
+) -> bool:
+    """size check uploaded bytes and queue worker validation
+
+    returns True when the story left the map to be reviewed again"""
     # optimization is queued only after the client confirms the bytes are in the bucket
     story = await stories_repo.get_owned(db, story_id, author_id)
     if story is None:
@@ -155,6 +158,14 @@ async def complete_upload(
             detail="Photo processing is temporarily unavailable",
         ) from error
     _record_upload(upload_path, "queued", duration_ms)
+
+    # a photo added after approval was never reviewed, so the story goes back to
+    # the moderation queue before the new image can become public
+    requeued = await stories_repo.requeue_approved_for_review(db, story_id)
+    await db.commit()
+    if requeued:
+        notifications.dispatch_admins_pending_review(settings, story_id=story_id)
+    return requeued
 
 
 async def upload_stream(

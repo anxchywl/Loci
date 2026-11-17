@@ -22,6 +22,7 @@ from app.core.config import Settings
 from app.core.security.text import clean_line
 from app.db.models import Story
 from app.db.repositories import admin as admin_repo
+from app.db.repositories import media_deletion_jobs as media_deletion_jobs_repo
 from app.db.repositories import reports as reports_repo
 from app.db.repositories import stories as stories_repo
 from app.db.repositories import users as users_repo
@@ -188,6 +189,7 @@ async def resolve(
             "report_count": len(report_rows),
             "reasons": [r["report"].reason for r in report_rows if r["report"].reason],
         }
+        await media_deletion_jobs_repo.enqueue_for_story(db, story_id)
         await db.delete(story)
         await admin_repo.add_audit(
             db, admin_id=admin_id, action="deleted_reported_story",

@@ -129,8 +129,9 @@ async def user_stories(user_id: int, _admin: Annotated[User, Depends(get_current
 
 
 @router.delete("/stories/{story_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_any_story(story_id: uuid.UUID, payload: AdminStoryDeleteRequest, admin: Annotated[User, Depends(get_current_admin)], db: Annotated[AsyncSession, Depends(get_db_session)]) -> Response:
+async def delete_any_story(story_id: uuid.UUID, payload: AdminStoryDeleteRequest, admin: Annotated[User, Depends(get_current_admin)], db: Annotated[AsyncSession, Depends(get_db_session)], redis: Annotated[Redis, Depends(get_redis)]) -> Response:
     await admin_service.delete_story(db, admin.id, story_id, payload.reason)
+    await map_clusters_service.invalidate(redis)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

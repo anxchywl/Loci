@@ -2,10 +2,10 @@ import uuid
 from datetime import date, datetime
 
 from geoalchemy2 import Geography
-from sqlalchemy import Select, and_, cast, false, func, or_, select, tuple_, update
+from sqlalchemy import Select, and_, cast, false, func, or_, select, text, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Bookmark, Reaction, Story, StoryVisibility, User
+from app.db.models import Bookmark, PhotoStatus, Reaction, Story, StoryPhoto, StoryVisibility, User
 from app.db.models.story import LocationPrecision, ModerationStatus
 
 # location_exact is never selected on any read path; when precision is exact the
@@ -435,7 +435,19 @@ async def list_for_moderation(
     stmt = (
         select(*_QUEUE_COLUMNS)
         .outerjoin(User, User.id == Story.author_id)
-        .where(Story.moderation_status == status)
+        # private stories are never reviewed, so they must never surface to an admin
+        .where(Story.moderation_status == status, Story.visibility == StoryVisibility.public)
+        # hold a story back while its photos are still uploading, so a moderator
+        # never approves it before seeing them
+        .where(
+            ~select(StoryPhoto.id)
+            .where(
+                StoryPhoto.story_id == Story.id,
+                StoryPhoto.status == PhotoStatus.pending,
+                StoryPhoto.created_at >= func.now() - text("interval '15 minutes'"),
+            )
+            .exists()
+        )
     )
     if after is not None:
         stmt = stmt.where(tuple_(Story.created_at, Story.id) > after)
@@ -504,12 +516,37 @@ async def resubmit(db: AsyncSession, story_id: uuid.UUID, author_id: int) -> boo
 
 
 async def apply_update(db: AsyncSession, story: Story, changes: dict) -> None:
-    """Apply owner edits to a loaded story and send it back to review."""
+    """Apply owner edits to a loaded story and send public ones back to review."""
     for field, value in changes.items():
         setattr(story, field, value)
-    # any content edit re-enters moderation so changes are reviewed before going public
-    story.moderation_status = ModerationStatus.pending
+    # private stories are never discoverable, so they skip review exactly as on creation
+    story.moderation_status = (
+        ModerationStatus.approved
+        if story.visibility == StoryVisibility.private
+        else ModerationStatus.pending
+    )
     story.rejection_reason = None
     story.moderated_by = None
     story.moderated_at = None
     await db.flush()
+
+
+async def requeue_approved_for_review(db: AsyncSession, story_id: uuid.UUID) -> bool:
+    """Atomic approved -> pending for a public story whose content changed after
+    approval. Returns False when the story was not live, so callers can tell a
+    real transition from a no-op."""
+    stmt = (
+        update(Story)
+        .where(
+            Story.id == story_id,
+            Story.moderation_status == ModerationStatus.approved,
+            Story.visibility == StoryVisibility.public,
+        )
+        .values(
+            moderation_status=ModerationStatus.pending,
+            moderated_by=None,
+            moderated_at=None,
+        )
+        .returning(Story.id)
+    )
+    return (await db.execute(stmt)).scalar_one_or_none() is not None

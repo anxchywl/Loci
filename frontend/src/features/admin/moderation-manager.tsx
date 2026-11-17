@@ -15,20 +15,17 @@ export function ModerationManager() {
   const { data: categories = [] } = useCategories();
   // hold the queue fetch until auth completes, otherwise the request races the
   // token exchange and 401s ("Not authenticated") on a cold page load
-  const { items, loading, error, loadMore, hasMore, initialized } = useModerationQueue(
+  const { items, loading, error, loadMore, hasMore, initialized, remove } = useModerationQueue(
     status === "authenticated" && !!user?.is_admin,
   );
-  // once a story is approved/rejected, hide it from the list immediately
-  const [resolved, setResolved] = useState<Set<string>>(new Set());
-  const { approve, reject } = useModerate((id) =>
-    setResolved((prev) => new Set(prev).add(id)),
-  );
+  // once a story is approved/rejected, drop it from the list immediately
+  const { approve, reject } = useModerate(remove);
 
   if (status === "loading") return <p className="py-10 text-center text-[13px] text-muted">{t.loading}</p>;
   if (status === "signed-out") return <p className="py-10 text-center text-[13px] text-muted">{t.openInTelegram}</p>;
   if (user && !user.is_admin) return <p className="py-10 text-center text-[13px] text-muted">{t.adminOnly}</p>;
 
-  const visible = items.filter((item) => !resolved.has(item.id));
+  const visible = items;
 
   return (
     <div className="mx-auto max-w-2xl">
