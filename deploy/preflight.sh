@@ -78,7 +78,8 @@ case "$TARGET" in
   shared-host)
     [ "$(nproc)" -ge 2 ] || fail "at least 2 vCPUs are required"
     [ "$MEMORY_KB" -ge 3500000 ] || fail "at least 4 GiB RAM is required"
-    [ "$AVAILABLE_KB" -ge 20971520 ] || fail "at least 20 GiB disk space must remain free"
+    # the shared host has a 38 GB disk; a deploy pulls about 1 GB of images
+    [ "$AVAILABLE_KB" -ge 8388608 ] || fail "at least 8 GiB disk space must remain free"
     COMPOSE_ARGS=(-f "$COMPOSE_FILE" -f "$SHARED_COMPOSE_FILE")
     MAX_CONNECTIONS=50
     DEFAULT_WEB_CONCURRENCY=2

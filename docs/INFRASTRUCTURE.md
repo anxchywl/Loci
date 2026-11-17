@@ -291,6 +291,10 @@ start Prometheus, Grafana, or a second Caddy. Local validated PostgreSQL backups
 remain mandatory; encrypted R2 database backups are enabled when their five
 `BACKUP_*` values are present and become mandatory on the dedicated target.
 
+On the shared target the preflight requires 2 vCPUs, 4 GiB RAM, and 8 GiB of
+free disk; the host has a 38 GB disk shared with other projects, so the
+dedicated target's 40 GiB floor cannot apply there.
+
 The shared target is a compatibility stage, not evidence for the target-scale
 capacity claim. `deploy/deploy.sh` auto-detects the existing `wished-caddy`
 container when `DEPLOYMENT_TARGET` is absent, while CI sets the target explicitly.
