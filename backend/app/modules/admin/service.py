@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings
 from app.db.models import AuditLog, Story, User, UserModerationLog
 from app.db.repositories import admin as admin_repo
+from app.db.repositories import media_deletion_jobs as media_deletion_jobs_repo
 from app.db.repositories import refresh_tokens as refresh_repo
 from app.modules.admin.schemas import (
     AdminDashboardResponse,
@@ -130,6 +131,8 @@ async def delete_story(db: AsyncSession, admin_id: int, story_id: uuid.UUID, rea
     if story is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Story not found")
     target_user_id = story.author_id
+    # photo bytes outlive the cascade unless queued here, in the same transaction
+    await media_deletion_jobs_repo.enqueue_for_story(db, story_id)
     await db.delete(story)
     await admin_repo.add_audit(db, admin_id=admin_id, action="deleted_story", target_user_id=target_user_id, target_story_id=str(story_id), reason=reason)
     await db.commit()

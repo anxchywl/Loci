@@ -24,12 +24,22 @@ interface QueueState {
   // false until the first page settles, so the UI can avoid flashing an empty
   // state before the gated fetch has had a chance to run
   initialized: boolean;
+  // drop a story the admin just moderated; a later refresh brings it back only
+  // if it has genuinely re-entered review
+  remove: (storyId: string) => void;
+}
+
+export const MODERATION_QUEUE_REFRESH_MS = 30_000;
+
+function dedupe(items: ModerationQueueItem[]): ModerationQueueItem[] {
+  const seen = new Set<string>();
+  return items.filter((item) => (seen.has(item.id) ? false : (seen.add(item.id), true)));
 }
 
 /**
- * Cursor-paginated moderation queue. Keeps already-loaded pages and appends the
- * next one on demand, de-duplicating by id so a story can never appear twice
- * even if the underlying list shifts between page loads.
+ * Cursor-paginated moderation queue that stays live: it re-reads the pages
+ * already on screen every 30 seconds and whenever the tab regains focus, so new
+ * submissions appear without a reload and stories another admin handled drop out.
  */
 export function useModerationQueue(enabled = true): QueueState {
   const [items, setItems] = useState<ModerationQueueItem[]>([]);
@@ -38,38 +48,88 @@ export function useModerationQueue(enabled = true): QueueState {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
-  const started = useRef(false);
+  const fetching = useRef(false);
+  const loadedCount = useRef(0);
+  // bumped on every local change so a refresh that started earlier is discarded
+  const revision = useRef(0);
 
-  const load = useCallback(async (cursor: string | null) => {
-    setLoading(true);
-    setError(null);
+  const refresh = useCallback(async (initial: boolean) => {
+    if (fetching.current) return;
+    fetching.current = true;
+    const startedAt = revision.current;
+    if (initial) setLoading(true);
     try {
-      const page = await fetchModerationQueue("pending", cursor);
-      setItems((prev) => {
-        const seen = new Set(prev.map((i) => i.id));
-        return [...prev, ...page.items.filter((i) => !seen.has(i.id))];
-      });
-      setNextCursor(page.next_cursor);
-      setHasMore(page.next_cursor !== null);
+      const collected: ModerationQueueItem[] = [];
+      let cursor: string | null = null;
+      do {
+        const page = await fetchModerationQueue("pending", cursor);
+        collected.push(...page.items);
+        cursor = page.next_cursor;
+      } while (cursor && collected.length < loadedCount.current);
+      if (revision.current !== startedAt) return;
+      const next = dedupe(collected);
+      loadedCount.current = next.length;
+      setItems(next);
+      setNextCursor(cursor);
+      setHasMore(cursor !== null);
+      setError(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to load queue");
+      // a failed background refresh keeps the list the admin is working through
+      if (initial) setError(err instanceof ApiError ? err.message : "Failed to load queue");
     } finally {
-      setLoading(false);
-      setInitialized(true);
+      fetching.current = false;
+      if (initial) {
+        setLoading(false);
+        setInitialized(true);
+      }
     }
   }, []);
 
   useEffect(() => {
-    if (!enabled || started.current) return;
-    started.current = true;
-    void load(null);
-  }, [enabled, load]);
+    if (!enabled) return;
+    void refresh(true);
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") void refresh(false);
+    };
+    const timer = window.setInterval(refreshIfVisible, MODERATION_QUEUE_REFRESH_MS);
+    window.addEventListener("focus", refreshIfVisible);
+    document.addEventListener("visibilitychange", refreshIfVisible);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshIfVisible);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+    };
+  }, [enabled, refresh]);
 
   const loadMore = useCallback(() => {
-    if (!loading && nextCursor) void load(nextCursor);
-  }, [load, loading, nextCursor]);
+    if (fetching.current || !nextCursor) return;
+    fetching.current = true;
+    revision.current += 1;
+    setLoading(true);
+    setError(null);
+    fetchModerationQueue("pending", nextCursor)
+      .then((page) => {
+        setItems((prev) => {
+          const next = dedupe([...prev, ...page.items]);
+          loadedCount.current = next.length;
+          return next;
+        });
+        setNextCursor(page.next_cursor);
+        setHasMore(page.next_cursor !== null);
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load queue"))
+      .finally(() => {
+        fetching.current = false;
+        setLoading(false);
+      });
+  }, [nextCursor]);
 
-  return { items, nextCursor, loading, error, loadMore, hasMore, initialized };
+  const remove = useCallback((storyId: string) => {
+    revision.current += 1;
+    setItems((prev) => prev.filter((item) => item.id !== storyId));
+  }, []);
+
+  return { items, nextCursor, loading, error, loadMore, hasMore, initialized, remove };
 }
 
 export function useModerate(onDone: (storyId: string) => void) {

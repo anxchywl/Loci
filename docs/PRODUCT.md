@@ -91,6 +91,22 @@ badges, global stats.
   admin approves it. Private ("only me") stories skip review. Admins approve or
   reject from the review queue; rejection carries a private reason shown only to
   the author.
+- **What re-enters review.** Editing a public story, or switching a private
+  story to public, sets it back to pending. A photo whose upload completes on an
+  already-approved public story also sets it back to pending, so no image is
+  ever public without an admin having seen it. Editing a private story, or
+  switching a story to private, leaves it approved; private stories never appear
+  in the admin queue.
+- **Queue timing.** A story is held out of the review queue while one of its
+  photos is still uploading or processing (up to 15 minutes per photo), so a
+  moderator sees the story together with its photos. The admin Telegram ping is
+  sent about a minute after submission and waits the same way. It fires when a
+  story enters review (create, resubmit, edit of a non-pending story, photo
+  added after approval), never for repeated edits of a story already queued.
+  The admin panel re-reads the queue every 30 seconds and on tab focus.
+- **Admin deletes.** Deleting a story from the admin panel or the reported
+  queue records its photo objects in the durable media-deletion queue in the
+  same transaction, exactly as account erasure does.
 - `reports` exist for stories and comments. **One report per user per target**
   (partial unique index); duplicates are silently ignored; self-reports don't
   count.
@@ -279,7 +295,7 @@ re-check visibility on the server for every request.
 | `POST /api/v1/stories/{id}/report`, `POST /api/v1/comments/{id}/report` | One report per user per target; auto-hide at threshold of distinct non-author reporters |
 | `POST /api/v1/stories/{id}/photos` | Author only; ≤5 photos; returns single-key presigned PUT (10 min) |
 | `PUT /api/v1/stories/{id}/photos/{photo_id}/upload` | Backend proxy fallback when the direct presigned PUT can't reach storage; stores the raw bytes |
-| `POST /api/v1/stories/{id}/photos/{photo_id}/complete` | Author confirms upload; API size-checks and queues Celery validation + WebP re-encode (2048 px + thumb); invalid files are marked failed and never surface; original deleted after success |
+| `POST /api/v1/stories/{id}/photos/{photo_id}/complete` | Author confirms upload; API size-checks and queues Celery validation + WebP re-encode (2048 px + thumb); invalid files are marked failed and never surface; original deleted after success. On an approved public story this returns the story to pending review |
 | `DELETE /api/v1/stories/{id}/photos/{photo_id}` | Author only; deletes pending or ready photo metadata, every owned storage object, and cached presigned URLs. Replacement is delete followed by a new upload, which creates a new photo ID and browser-cache identity. |
 | `GET /api/v1/profile/me` · `/me/stories` · `/me/bookmarks` | Own profile; own list includes anonymous stories (only there) |
 
@@ -288,7 +304,7 @@ Admin-only (`is_admin`), all writing an immutable audit log:
 | Route | Behavior |
 |---|---|
 | `GET /api/v1/admin/dashboard` | User + moderation + report analytics for a date range |
-| `GET /api/v1/admin/moderation/queue` · `POST .../{id}/approve` · `.../{id}/reject` | Cursor-paginated review queue; atomic status transitions (409 on double-moderate) |
+| `GET /api/v1/admin/moderation/queue` · `POST .../{id}/approve` · `.../{id}/reject` | Cursor-paginated review queue of public stories only, excluding stories with a photo still uploading; atomic status transitions (409 on double-moderate) |
 | `GET /api/v1/admin/reports` | Reported-story queue; search, filter (all/pending/hidden/visible/resolved), sort (reports/newest/auto-hidden), pagination |
 | `GET /api/v1/admin/reports/{id}` | One story with its full report timeline (reporter, reason, state, resolution) |
 | `POST /api/v1/admin/reports/{id}/resolve` | `{action: restore\|keep_hidden\|delete\|ignore, reason?}`; resolves reports + records outcome |

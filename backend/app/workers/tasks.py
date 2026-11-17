@@ -13,7 +13,11 @@ from app.core.config import get_settings
 from app.core.observability import counter, observe
 from app.core.operational_metrics import record_worker_task
 from app.db.models import PhotoStatus
+from app.db.models.story import ModerationStatus, StoryVisibility
 from app.db.repositories import photos as photos_repo
+from app.db.repositories import stories as stories_repo
+from app.db.repositories import users as users_repo
+from app.modules import notifications
 from app.db.repositories import media_deletion_jobs as media_deletion_jobs_repo
 from app.db.repositories import refresh_tokens as refresh_tokens_repo
 from app.integrations import storage
@@ -203,6 +207,76 @@ def send_telegram_message(self, telegram_id: int, text: str) -> None:
             )
             raise
         raise self.retry(exc=error, countdown=min(30 * (2**self.request.retries), 300))
+
+
+PENDING_REVIEW_UPLOAD_GRACE = timedelta(minutes=15)
+PENDING_REVIEW_RECHECK_SECONDS = 30
+PENDING_REVIEW_MAX_RECHECKS = 20
+
+
+async def pending_review_message(
+    db, story_id: uuid.UUID, now: datetime, *, wait_for_uploads: bool = True
+) -> tuple[str, str | None]:
+    """decide whether the admin ping for a story is due
+
+    returns ("skip", None) when the story no longer needs review, ("wait", None)
+    while its photos are still uploading, or ("send", text) when it is ready"""
+    story = await stories_repo.get_owned_any(db, story_id)
+    if (
+        story is None
+        or story.moderation_status != ModerationStatus.pending
+        or story.visibility != StoryVisibility.public
+    ):
+        return "skip", None
+    if wait_for_uploads and await photos_repo.has_inflight_uploads(
+        db, story_id, now - PENDING_REVIEW_UPLOAD_GRACE
+    ):
+        return "wait", None
+    author = await users_repo.get_by_id(db, story.author_id) if story.author_id else None
+    label = notifications.author_label(author, anonymous=story.is_anonymous)
+    return "send", notifications.render_admin_pending_review(story.title, label)
+
+
+async def _notify_admins_pending_review(story_id: uuid.UUID, *, force: bool) -> str:
+    settings = get_settings()
+    engine = create_async_engine(settings.sqlalchemy_database_url)
+    try:
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        async with maker() as db:
+            # on the last recheck stop waiting for a stuck upload and send anyway
+            outcome, text = await pending_review_message(
+                db, story_id, datetime.now(UTC), wait_for_uploads=not force
+            )
+    finally:
+        await engine.dispose()
+    if outcome == "send" and text:
+        for admin_id in settings.admin_ids:
+            await _send_telegram(admin_id, text)
+    return outcome
+
+
+@celery_app.task(
+    bind=True,
+    name="notifications.admin_pending_review",
+    max_retries=PENDING_REVIEW_MAX_RECHECKS,
+)
+def notify_admins_pending_review(self, story_id: str) -> None:
+    started = time.perf_counter()
+    force = self.request.retries >= PENDING_REVIEW_MAX_RECHECKS
+    try:
+        outcome = asyncio.run(_notify_admins_pending_review(uuid.UUID(story_id), force=force))
+    except Exception as error:
+        if force:
+            record_worker_task(
+                "notifications.admin_pending_review", "failed", time.perf_counter() - started
+            )
+            raise
+        raise self.retry(exc=error, countdown=PENDING_REVIEW_RECHECK_SECONDS) from error
+    if outcome == "wait":
+        raise self.retry(countdown=PENDING_REVIEW_RECHECK_SECONDS)
+    record_worker_task(
+        "notifications.admin_pending_review", outcome, time.perf_counter() - started
+    )
 
 
 async def _cleanup_refresh_tokens() -> int:

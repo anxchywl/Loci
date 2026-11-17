@@ -30,16 +30,6 @@ class StoryNotFound(HTTPException):
         super().__init__(status_code=status.HTTP_404_NOT_FOUND, detail="Story not found")
 
 
-def _author_label(user, *, anonymous: bool = False) -> str:
-    if anonymous:
-        return "an anonymous author"
-    if user is None:
-        return "a user"
-    if user.display_name:
-        return user.display_name
-    return " ".join(part for part in (user.first_name, user.last_name) if part) or "a user"
-
-
 def _author_from_row(row) -> AuthorResponse | None:
     # anonymous stories must never expose the author id in any response path
     if row["is_anonymous"] or row["author_id"] is None:
@@ -139,11 +129,7 @@ async def create_story(
             telegram_id=author.telegram_id if author else None,
             title=payload.title,
         )
-        notifications.dispatch_admins_pending_review(
-            settings,
-            title=payload.title,
-            author_label=_author_label(author, anonymous=payload.is_anonymous),
-        )
+        notifications.dispatch_admins_pending_review(settings, story_id=story_id)
     return serialize_story(row, viewer_id=author_id)
 
 
@@ -162,12 +148,17 @@ async def update_story(
     if "category_id" in changes and not await categories_repo.exists(db, changes["category_id"]):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown category")
 
+    was_pending = story.moderation_status == ModerationStatus.pending
     await stories_repo.apply_update(db, story, changes)
     await db.commit()
 
     row = await stories_repo.get_for_viewer(db, story_id, author_id)
     if row is None:
         raise StoryNotFound()
+    # ping only on the transition into review, so repeated edits of a story that
+    # is already queued cannot flood the admins
+    if row["moderation_status"] == ModerationStatus.pending and not was_pending:
+        notifications.dispatch_admins_pending_review(settings, story_id=story_id)
     return serialize_story(row, await _photo_responses(db, story_id, settings), viewer_id=author_id)
 
 
@@ -194,11 +185,7 @@ async def resubmit_story(
         telegram_id=author.telegram_id if author else None,
         title=row["title"],
     )
-    notifications.dispatch_admins_pending_review(
-        settings,
-        title=row["title"],
-        author_label=_author_label(author, anonymous=row["is_anonymous"]),
-    )
+    notifications.dispatch_admins_pending_review(settings, story_id=story_id)
     return serialize_story(row, await _photo_responses(db, story_id, settings), viewer_id=author_id)
 
 

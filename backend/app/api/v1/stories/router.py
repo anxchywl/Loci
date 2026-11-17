@@ -421,7 +421,7 @@ async def complete_photo_upload(
 ) -> Response:
     await check_rate_limit(redis, "rl:upload", str(user.id), 3600, settings.upload_urls_per_hour)
     telemetry = telemetry or PhotoCompleteRequest()
-    await photos.complete_upload(
+    requeued = await photos.complete_upload(
         db,
         story_id,
         photo_id,
@@ -431,6 +431,8 @@ async def complete_photo_upload(
         duration_ms=telemetry.duration_ms,
         fallback_reason=telemetry.fallback_reason,
     )
+    if requeued:
+        await map_clusters_service.invalidate(redis)
     return Response(status_code=status.HTTP_202_ACCEPTED)
 
 
