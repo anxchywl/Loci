@@ -123,8 +123,8 @@ export function AddStorySheet() {
     createStory.mutate(
       {
         category_id: categoryId,
-        title: title.trim(),
-        body: body.trim(),
+        title: finalizeStoryText(title),
+        body: finalizeStoryText(body, true),
         lat: pickedLocation.lat,
         lon: pickedLocation.lon,
         location_precision: approx ? "approx" : "exact",
